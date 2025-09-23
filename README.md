@@ -98,7 +98,7 @@ Two workflows are supported. Choose the one that fits your setup. The actual app
    ```powershell
    pnpm --filter @bitby/client dev
    ```
-4. Open the client URL at [http://localhost:5173](http://localhost:5173) once Vite reports it is ready. The placeholder renders the chrome layout specified in the Master Spec while reserving the deterministic canvas for future commits.
+4. Open the client URL at [http://localhost:5173](http://localhost:5173) once Vite reports it is ready. The placeholder renders the chrome layout specified in the Master Spec while reserving the deterministic canvas for future commits. The current shell locks in the 500 px right panel packed with dense text sections and a slim divider beneath its header, the floating chat drawer with alternating rows that start flush under the **Chat Log** title and run edge-to-edge down to the base (native scrollbars hidden, timestamps revealed only after a 500 ms hover/focus delay, and system-message toggle tooltips that reflect the current mode), instant collapse/restore via the top-bar toggle or **‹ Log ›** handle (no inline close button), plus a pill-shaped, button-only admin bar that hovers just above the top status bar. In development builds that admin surface renders by default for quick screenshots/demos but remains toggleable via the bottom-bar **Admin** control. Support/Chat icon buttons persist on the top bar, and the bottom menu auto-resizes its buttons to fill the width regardless of count.
 
 > **Tip:** If you prefer WSL2 for better Node/Docker performance, clone the repo within the WSL filesystem (e.g., `/home/<user>/projbb`). GitHub Desktop can open the project in WSL by selecting “Open in Windows Terminal” and choosing a WSL profile.
 

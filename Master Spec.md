@@ -92,18 +92,21 @@ sy >= originY && (sy + tileH) <= (originY + gridH)
 ## 3) Core UX
 
 **Right panel**
-- Fixed width **500px**, full height; **not** slideable, with header copy tucked close to the top edge and placeholder content filling the column so the space formerly occupied by chat is still engaged.
-- Chat history renders in a freestanding, fully rounded card immediately to the panel’s right that stretches from the top status bar to the bottom menu. It opens by default, can be hidden via the card’s close affordance or the top-bar chat icon without shifting the canvas or panel, hides native scrollbars, surfaces a **“Back to top”** affordance only after scrolling, and delays timestamps until 500 ms hover/focus. Messages run edge-to-edge with a compact layout that tucks the actor label in the top-left corner to reclaim vertical space, and when collapsed the drawer leaves behind a floating **‹ Log ›** arrow handle aligned with the panel edge for quick restore.
+- Fixed width **500px**, full height; **not** slideable, with header copy tucked close to the top edge, a slim accent divider beneath the title, and dense text sections that stretch across the column so the footprint stays visually active without form fields.
+- Chat history renders in a freestanding, fully rounded card immediately to the panel’s right that stretches from the top status bar to the bottom menu. It opens by default and can be hidden only via the top-bar chat icon or the floating **‹ Log ›** handle without shifting the canvas or panel. Native scrollbars stay hidden while a **“Back to top”** affordance appears only after scrolling, timestamps wait 500 ms on hover/focus with the tooltip anchored to the hovered card, rows alternate colour, start flush beneath the header, and stretch edge-to-edge down to the drawer base. The chat header exposes an **!** toggle that instantly hides/shows system messages (with a tooltip reflecting the current state) without disturbing surrounding layout.
 - Item **Info** opens in the panel (no popups).
 
 **Primary menu bar**
-- Permanently attached beneath the playfield and panel with only the bottom corners rounded. Buttons stay compact (~36px tall) but span the full width of the canvas-plus-panel bar.
+- Permanently attached beneath the playfield and panel with only the bottom corners rounded. Buttons stay compact (~36px tall) and auto-resize to evenly fill the full width of the canvas-plus-panel bar regardless of button count.
 - Buttons: **Rooms, Shop, Log, Search, Quests, Settings, Admin**.
 - Menu cannot be collapsed or hidden; it remains fixed to the stage bottom.
 
 **Top status bar**
-- Flush with the stage top edge and shows player name, an accent-coloured single-line coins/level readout, plus a looping news ticker.
-- A chat bubble icon anchors on the far right to toggle the external chat log.
+- Flush with the stage top edge and shows player name, an accent-coloured single-line readout that lists **Level → coins** in that order, plus a looping news ticker.
+- Paired round icon buttons sit on the far right: a **? Support** button and a **chat bubble** toggle. Both surface labelled tooltips on hover/focus so their purpose remains clear.
+
+**Admin/debug bar**
+- A pill-shaped, button-only admin/debug bar floats outside the stage chrome, hugging the top status bar instead of consuming layout inside the stage. It only appears when the bottom-bar **Admin** button is active, lists quick actions (e.g., reload room, toggle grid, latency trace), sits on its own layer so no surrounding layout shifts when toggled, and will later gate to admin accounts. During development builds it spawns visible by default so screenshots/demos always capture the admin affordances.
 
 **Input precedence**
 1) **Left-click item** (painted rect/alpha) → open **Item Info** in panel.  
@@ -892,7 +895,7 @@ ads:
 
 - Header with title and optional subtitle/breadcrumb.  
 - **Sections**: Profile / Item Info / Chat Log (panel width locked at 500px; chat log keeps its footprint even when collapsed).
-- Chat log hides native scrollbars, surfaces a **“Back to top”** affordance only after scrolling, and reveals timestamps via tooltip after 500 ms hover/focus.  
+- Chat log hides native scrollbars, surfaces a **“Back to top”** affordance only after scrolling, lays alternating rows flush beneath the header all the way to the drawer base, and reveals timestamps via tooltip after 500 ms hover/focus.
 - Item Info replaces panel body; back affordance (chevron) returns to previous view.
 
 ## A.6 Context Menus
