@@ -91,9 +91,12 @@ sy >= originY && (sy + tileH) <= (originY + gridH)
 
 ## 3) Core UX
 
+**Stage frame**
+- Stage chrome is pinned to a fixed **1280 × 720** footprint so the top bar, canvas window, right panel, bottom dock, and chat drawer remain pixel-perfect even if the browser viewport shrinks. The layout anchors to the left gutter on desktop so the freestanding chat drawer stays within a 1920 × 1080 stage without introducing scrollbars.
+
 **Right panel**
 - Fixed width **500px**, full height; **not** slideable, with header copy tucked close to the top edge, a slim accent divider beneath the title, and dense text sections that stretch across the column so the footprint stays visually active without form fields.
-- Chat history renders in a freestanding, fully rounded card immediately to the panel’s right that stretches from the top status bar to the bottom menu. It opens by default and can be hidden only via the top-bar chat icon or the floating **‹ Log ›** handle without shifting the canvas or panel. Native scrollbars stay hidden while a **“Back to top”** affordance appears only after scrolling, timestamps wait 500 ms on hover/focus with the tooltip anchored to the hovered card, rows alternate colour, start flush beneath the header, and stretch edge-to-edge down to the drawer base. The chat header exposes an **!** toggle that instantly hides/shows system messages (with a tooltip reflecting the current state) without disturbing surrounding layout.
+- Chat history renders in a freestanding, fully rounded card immediately to the panel’s right with a fixed **5px** gutter separating them, stretching from the top status bar to the bottom menu. It opens by default and can be hidden only via the top-bar chat icon without shifting the canvas or panel. Native scrollbars stay hidden while a **“Back to top”** affordance appears only after scrolling, timestamps wait 500 ms on hover/focus with the tooltip anchored to the hovered card, rows alternate colour, start flush beneath the header, and now run edge-to-edge while the message copy sits inside a 3 px inset down to the drawer base. The chat header exposes an **!** toggle that instantly hides/shows system messages (with a tooltip reflecting the current state) without disturbing surrounding layout.
 - Item **Info** opens in the panel (no popups).
 
 **Primary menu bar**
@@ -105,8 +108,8 @@ sy >= originY && (sy + tileH) <= (originY + gridH)
 - Flush with the stage top edge and shows player name, an accent-coloured single-line readout that lists **Level → coins** in that order, plus a looping news ticker.
 - Paired round icon buttons sit on the far right: a **? Support** button and a **chat bubble** toggle. Both surface labelled tooltips on hover/focus so their purpose remains clear.
 
-**Admin/debug bar**
-- A pill-shaped, button-only admin/debug bar floats outside the stage chrome, hugging the top status bar instead of consuming layout inside the stage. It only appears when the bottom-bar **Admin** button is active, lists quick actions (e.g., reload room, toggle grid, latency trace), sits on its own layer so no surrounding layout shifts when toggled, and will later gate to admin accounts. During development builds it spawns visible by default so screenshots/demos always capture the admin affordances.
+**Admin quick menu**
+- A pill-shaped, button-only admin quick menu sits just below the bottom dock (outside the main stage container) with a nearly flush **2px** gap separating the two. It only appears when the bottom-bar **Admin** button is active, lists quick actions (e.g., reload room, toggle grid, latency trace), rests on its own layer so no surrounding layout shifts when toggled, and will later gate to admin accounts. During development builds it spawns visible by default so screenshots/demos always capture the admin affordances.
 
 **Input precedence**
 1) **Left-click item** (painted rect/alpha) → open **Item Info** in panel.  
