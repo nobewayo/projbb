@@ -92,14 +92,15 @@ sy >= originY && (sy + tileH) <= (originY + gridH)
 ## 3) Core UX
 
 **Right panel**
-- Fixed width **400px**, full height; **not** slideable.  
-- Bottom **chat log ≈ 400px** tall; bubbles appear in canvas **and** in this log.  
+- Fixed width **400px**, full height; **not** slideable.
+- Bottom chat log shows the latest **100** entries with a subtle separator line from the body copy, a compact header label, and a collapse/expand control so the log never hides the rest of the panel. It must always surface at least the last **10** chats/actions and allow scrolling for overflow.
 - Item **Info** opens in the panel (no popups).
 
 **Bottom dock**
-- Overlays canvas bottom, height **64px**; slides **left only**.  
-- **Right-edge tab** (28px) remains visible/clickable when collapsed.  
+- Overlays canvas bottom, height **64px**; slides **left only**.
+- **Right-edge tab** (28px) remains visible/clickable when collapsed.
 - Buttons: **Rooms, Shop, Log, Search, Quests, Settings, Admin**.
+- Default state keeps the dock expanded; collapsing is opt-in via the tab to keep the menu discoverable.
 
 **Input precedence**
 1) **Left-click item** (painted rect/alpha) → open **Item Info** in panel.  
