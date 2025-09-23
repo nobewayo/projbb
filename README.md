@@ -110,6 +110,7 @@ To start both the Fastify server and Vite client at once on Windows, run the hel
 ./start-windows.ps1
 ```
 
+
 The launcher now detects whether the workspace has been bootstrapped—if `node_modules` is missing it automatically runs `pnpm install` before spawning the dev servers. Pass `-InstallDependencies` at any time to force a fresh install.
 
 Prefer double-clicking? Use the companion batch file instead of opening PowerShell manually:
