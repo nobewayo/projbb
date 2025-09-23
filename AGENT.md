@@ -477,15 +477,28 @@ When implementing, **Codex should**:
 
 ## 23) Ready‑to‑Implement Tasks (First Sprint)
 
-1) Client grid renderer with top‑right anchor & diamond hit test; draw cell centers for dev overlay.  
-2) WS client with subprotocol, heartbeat, blocking reconnect overlay.  
-3) WS server endpoints: `auth`, `move`, `chat`; Redis room pub/sub skeleton.  
-4) Postgres schema & migrations; seed users/room.  
-5) Basic right panel and bottom dock (slide-left, tab).  
-6) Item click → panel info; pickup rule gating.  
-7) Metrics & health endpoints.  
+1) Client grid renderer with top‑right anchor & diamond hit test; draw cell centers for dev overlay.
+2) WS client with subprotocol, heartbeat, blocking reconnect overlay.
+3) WS server endpoints: `auth`, `move`, `chat`; Redis room pub/sub skeleton.
+4) Postgres schema & migrations; seed users/room.
+5) Basic right panel and bottom dock (slide-left, tab).
+6) Item click → panel info; pickup rule gating.
+7) Metrics & health endpoints.
 8) JSON Schemas for `auth`, `move`, `chat`; OpenAPI for `/auth` REST.
 
 ---
+
+## 24) Progress Snapshot — 2025-09-23
+
+- ✅ Client grid renderer + chrome are live with the spec-mandated blocking reconnect overlay driven by a reusable `useRealtimeConnection` hook.
+- ✅ Fastify WebSocket endpoint now enforces `bitby.v1`, handles stubbed `auth` + `ping` envelopes, and closes idle sockets after the 30 s heartbeat window.
+- ✅ Shared schema package backs both sides of the handshake so malformed envelopes are rejected before business logic runs.
+
+### Immediate Next Focus
+
+1. Swap the stubbed auth handshake for JWT verification, authoritative room snapshots, and movement/chat broadcast loops.
+2. Layer optimistic avatar movement on the client with snapback handling tied to the server acks.
+3. Stand up Postgres/Redis (local Docker) and wire the server to persist/load room state ahead of catalog/item work.
+4. Extend `@bitby/schemas` with per-op definitions (`auth:ok`, `pong`, `error:*`) so the server/client no longer rely on ad-hoc payload shapes.
 
 **End of AGENT.md**

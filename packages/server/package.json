@@ -13,6 +13,7 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
+    "@bitby/schemas": "workspace:*",
     "@fastify/websocket": "^7.0.1",
     "dotenv": "^16.4.5",
     "fastify": "^4.26.2",
@@ -20,6 +21,7 @@
     "zod": "^3.22.4"
   },
   "devDependencies": {
+    "@types/ws": "^8.5.10",
     "@types/node": "^20.12.7",
     "eslint": "^8.57.0",
     "prettier": "^3.2.5",
