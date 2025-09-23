@@ -102,7 +102,17 @@ Two workflows are supported. Choose the one that fits your setup. The actual app
 
 > **Tip:** If you prefer WSL2 for better Node/Docker performance, clone the repo within the WSL filesystem (e.g., `/home/<user>/projbb`). GitHub Desktop can open the project in WSL by selecting “Open in Windows Terminal” and choosing a WSL profile.
 
-### 4.2 Docker (database + cache services)
+### 4.2 Windows Quick Launcher (optional)
+
+To start both the Fastify server and Vite client at once on Windows, run the helper script from the repository root:
+
+```powershell
+./start-windows.ps1
+```
+
+Add the `-InstallDependencies` flag the first time to run `pnpm install` automatically. The script opens two new PowerShell windows—one for the server and one for the client—so logs remain easy to follow per the observability guidelines in the Master Spec.
+
+### 4.3 Docker (database + cache services)
 
 The initial Docker Compose stack located at `packages/infra/docker/docker-compose.yml` starts Postgres and Redis with development-safe defaults.
 
