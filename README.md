@@ -3,14 +3,14 @@
 
 This repository implements the Bitby platform following the **Master Spec v3.7**. The stack is now wired together as a pnpm monorepo with:
 
-- a Vite + React client shell that reserves the deterministic grid canvas, right panel, and bottom dock
+- a Vite + React client that now renders the deterministic top-right anchored grid preview with live hit-testing across the fixed 10-row field, while keeping the right panel and bottom dock chrome locked to the new stage footprint
 - a Fastify-based server skeleton with `/healthz`, `/readyz`, and a guarded WebSocket endpoint enforcing the `bitby.v1` subprotocol
 - shared schema utilities for the canonical WebSocket envelope
 - Docker Compose definitions for Postgres and Redis
 
 This guide explains how to clone, run, and test the project on a Windows PC using the GitHub Desktop GUI or Docker-based tooling.
 
-> **Note:** The deterministic grid canvas and realtime gameplay systems are still stubs. The scaffolding below ensures the required services boot with the correct guardrails so features can be layered in incrementally.
+> **Note:** The deterministic grid renderer now paints the full 10-row field (10 columns on even rows, 11 on odd rows) with a development HUD so geometry can be verified, while avatars, movement, and the remaining realtime systems are still stubs. The scaffolding below ensures the required services boot with the correct guardrails so features can be layered in incrementally.
 
 ---
 
@@ -64,7 +64,7 @@ projbb/
 ├─ package.json             # Root scripts (build, lint, dev, test)
 ├─ tsconfig.base.json       # Shared TypeScript compiler options
 ├─ packages/
-│  ├─ client/               # Vite + React client shell with placeholder canvas + chrome
+│  ├─ client/               # Vite + React client with deterministic grid preview + chrome
 │  ├─ server/               # Fastify API/WS skeleton enforcing spec guardrails
 │  ├─ schemas/              # Shared Zod schemas (e.g., WS envelope)
 │  └─ infra/                # Docker Compose and future deployment tooling
@@ -94,11 +94,11 @@ Two workflows are supported. Choose the one that fits your setup. The actual app
    - `GET /readyz` → `{ status: "ready" }` once the process is accepting traffic (503 otherwise)
    - `GET /ws` (WebSocket) → accepts only if the client specifies `bitby.v1`; immediately closes with `1012` until realtime handlers are implemented.
 
-3. **Launch the client dev server** (Vite + React placeholder UI) in a separate terminal:
+3. **Launch the client dev server** (Vite + React deterministic grid preview) in a separate terminal:
    ```powershell
    pnpm --filter @bitby/client dev
    ```
-4. Open the client URL at [http://localhost:5173](http://localhost:5173) once Vite reports it is ready. The placeholder renders the chrome layout specified in the Master Spec while reserving the deterministic canvas for future commits. The current shell locks the stage to a fixed 1280 × 720 footprint so the top bar, canvas window, 500 px right panel, and 340 px chat drawer stay pixel-perfect even when the browser shrinks. The chat drawer now hugs the right panel with a fixed 5 px gutter, keeps the alternating rows that start flush under the **Chat Log** title, and runs those cards edge-to-edge while nesting the message copy inside a tight 3 px inset (native scrollbars hidden, timestamps revealed only after a 500 ms hover/focus delay, and system-message toggle tooltips that reflect the current mode) while opening/closing exclusively via the top-bar chat toggle to avoid stray handles. The pill-shaped admin quick menu remains outside the stage container but now tucks just beneath the bottom dock with only a slim 2 px breathing gap, still toggleable through the bottom-bar **Admin** control. Support/Chat icon buttons persist on the top bar, and the bottom menu auto-resizes its buttons to fill the width regardless of count.
+4. Open the client URL at [http://localhost:5173](http://localhost:5173) once Vite reports it is ready. The client now renders the full 10-row deterministic grid (10 columns on even rows, 11 on odd rows) anchored to the canvas’ top-right corner, with a 50 px top gutter, 25 px gutters on the left/right, and no bottom padding so every diamond clears the chrome. It highlights the tile under the pointer via the canonical diamond hit test and overlays a development HUD displaying the tile coordinate, tile center, and pointer pixel location. Stage chrome stays pixel-perfect (875 px canvas + 500 px panel + 290 px chat drawer) while the chat drawer, admin quick menu, and primary menu continue to follow the Master Spec interactions outlined below. The canvas background stretches flush between the top status bar and bottom dock with no vertical whitespace, the bottom dock keeps only its bottom-left corner rounded while hugging the canvas width exactly, and the right panel now runs square corners except for the rounded bottom-right seam that meets the dock.
 
 > **Tip:** If you prefer WSL2 for better Node/Docker performance, clone the repo within the WSL filesystem (e.g., `/home/<user>/projbb`). GitHub Desktop can open the project in WSL by selecting “Open in Windows Terminal” and choosing a WSL profile.
 
@@ -196,7 +196,7 @@ Copy the template to `.env.local` (git-ignored) and adjust values for your machi
 ## 9. Next Steps in the Roadmap
 
 
-1. Implement deterministic grid renderer and movement loop per Master Spec §2–3 within the new client shell.
+1. Layer optimistic avatar movement + snapback logic on top of the deterministic grid renderer (Master Spec §2–3).
 2. Flesh out the WebSocket handshake (`auth`, heartbeats, move/chat ops) on top of the Fastify server (§1, §8).
 3. Bring up Postgres/Redis migrations and seed data via Docker Compose (§12, §13, §21).
 4. Establish automated testing harnesses (unit, integration, visual goldens) and CI workflows.
@@ -216,4 +216,4 @@ Progress will be tracked in future commits; this document will evolve with concr
 
 ---
 
-*Last updated: 2025-09-23 UTC*
+*Last updated: 2025-09-24 UTC*

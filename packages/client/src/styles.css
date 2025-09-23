@@ -5,9 +5,15 @@
   color: #0f141a;
   --right-panel-width: 500px;
   --chat-gap: 5px;
-  --stage-width: 1280px;
-  --stage-height: 720px;
-  --chat-width: 340px;
+  --top-bar-height: 72px;
+  --menu-height: 64px;
+  --canvas-width: 875px;
+  --canvas-height: 545px;
+  --stage-width: calc(var(--canvas-width) + var(--right-panel-width));
+  --stage-height: calc(
+    var(--top-bar-height) + var(--canvas-height) + var(--menu-height)
+  );
+  --chat-width: 290px;
 }
 
 * {
@@ -49,13 +55,13 @@ body {
   display: flex;
   align-items: center;
   gap: 18px;
-  min-height: 72px;
+  box-sizing: border-box;
+  height: var(--top-bar-height);
   padding: 12px 24px;
   background: linear-gradient(90deg, rgba(17, 24, 36, 0.96), rgba(17, 24, 36, 0.85));
   color: #eaf2ff;
-  border-bottom: 1px solid rgba(234, 242, 255, 0.16);
   border-radius: 14px 14px 0 0;
-  flex-shrink: 0;
+  flex: 0 0 var(--top-bar-height);
 }
 
 .top-bar__profile {
@@ -171,45 +177,84 @@ body {
 }
 
 .stage__content {
-  flex: 1 1 auto;
+  flex: 0 0 calc(var(--canvas-height) + var(--menu-height));
   min-height: 0;
+  height: calc(var(--canvas-height) + var(--menu-height));
   display: grid;
-  grid-template-columns: calc(var(--stage-width) - var(--right-panel-width)) var(--right-panel-width);
+  grid-template-columns: var(--canvas-width) var(--right-panel-width);
+  grid-template-rows: var(--canvas-height) var(--menu-height);
+  grid-template-areas:
+    'canvas panel'
+    'menu panel';
 }
 
 .canvas-area {
+  grid-area: canvas;
   position: relative;
-  background: radial-gradient(circle at top right, rgba(47, 128, 237, 0.16), transparent 60%);
-  padding: 32px 24px;
+  background: radial-gradient(circle at top right, rgba(47, 128, 237, 0.16), transparent 65%);
+  padding: 0;
   display: flex;
-  justify-content: center;
-  align-items: center;
+  justify-content: flex-start;
+  align-items: stretch;
   min-height: 0;
+  height: 100%;
 }
 
-.canvas-placeholder {
-  max-width: 420px;
-  text-align: center;
-  background-color: rgba(255, 255, 255, 0.88);
-  border: 1px dashed rgba(47, 128, 237, 0.4);
-  border-radius: 16px;
-  padding: 32px;
-  backdrop-filter: blur(4px);
+.grid-canvas {
+  position: relative;
+  width: var(--canvas-width);
+  height: var(--canvas-height);
+  border-radius: 0;
+  overflow: hidden;
+  box-shadow: 0 18px 36px rgba(0, 0, 0, 0.34);
+  border: 1px solid rgba(13, 26, 42, 0.65);
+  background: #0a1320;
 }
 
-.canvas-placeholder__title {
-  font-size: 20px;
+.grid-canvas__surface {
+  width: 100%;
+  height: 100%;
+  display: block;
+  cursor: crosshair;
+}
+
+.grid-canvas__hud {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  background: rgba(6, 12, 20, 0.82);
+  border: 1px solid rgba(122, 209, 255, 0.28);
+  border-radius: 14px;
+  color: #cde9ff;
+  font-size: 12px;
   font-weight: 600;
-  margin-bottom: 12px;
+  letter-spacing: 0.04em;
+  backdrop-filter: blur(6px);
+  pointer-events: none;
 }
 
-.canvas-placeholder__body {
-  font-size: 14px;
-  line-height: 1.6;
-  margin: 0;
+.grid-canvas__hud-column {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.grid-canvas__hud-label {
+  text-transform: uppercase;
+  font-size: 10px;
+  color: rgba(205, 233, 255, 0.62);
+}
+
+.grid-canvas__hud-value {
+  font-variant-numeric: tabular-nums;
 }
 
 .right-panel {
+  grid-area: panel;
   background-color: #111824;
   color: #eaf2ff;
   display: flex;
@@ -217,6 +262,8 @@ body {
   padding: 8px 12px 18px;
   gap: 10px;
   min-height: 0;
+  height: 100%;
+  border-radius: 0 0 14px 0;
 }
 
 .right-panel__header {
@@ -274,17 +321,19 @@ body {
 }
 
 .primary-menu {
+  grid-area: menu;
   display: grid;
   grid-template-columns: repeat(var(--menu-count), minmax(0, 1fr));
   gap: 8px;
+  box-sizing: border-box;
+  height: var(--menu-height);
   padding: 12px 18px 16px;
   background-color: rgba(17, 24, 36, 0.92);
-  border-radius: 0 0 14px 14px;
+  border-radius: 0 0 0 14px;
   box-shadow: 0 -6px 20px rgba(0, 0, 0, 0.16);
   backdrop-filter: blur(6px);
-  flex-shrink: 0;
-  min-height: 64px;
   align-items: center;
+  width: 100%;
 }
 
 .primary-menu button {

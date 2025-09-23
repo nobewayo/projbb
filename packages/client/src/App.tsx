@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
+import GridCanvas from './canvas/GridCanvas';
 import './styles.css';
 
 const dockButtons = [
@@ -242,15 +243,26 @@ const App = (): JSX.Element => {
           </div>
         </header>
         <div className="stage__content">
-        <main className="canvas-area" aria-label="Bitby room canvas placeholder">
-          <div className="canvas-placeholder" role="presentation">
-            <p className="canvas-placeholder__title">Bitby Grid Canvas</p>
-            <p className="canvas-placeholder__body">
-              Deterministic diamond grid rendering, avatars, and realtime movement will appear here as the
-              Master Spec milestones are implemented.
-            </p>
-          </div>
-        </main>
+          <main className="canvas-area" aria-label="Bitby room canvas">
+            <GridCanvas />
+          </main>
+          <nav
+            className="primary-menu"
+            aria-label="Primary actions"
+            style={primaryMenuStyle}
+          >
+            {dockButtons.map((label) => (
+              <button
+                key={label}
+                type="button"
+                onClick={() => handleMenuButtonClick(label)}
+                aria-pressed={label === 'Admin' ? isAdminPanelVisible : undefined}
+                data-active={label === 'Admin' ? isAdminPanelVisible : undefined}
+              >
+                {label}
+              </button>
+            ))}
+          </nav>
           <aside className="right-panel" aria-label="Right panel placeholder">
             <header className="right-panel__header">
               <h1>Right Panel</h1>
@@ -266,23 +278,6 @@ const App = (): JSX.Element => {
             </section>
           </aside>
         </div>
-        <nav
-          className="primary-menu"
-          aria-label="Primary actions"
-          style={primaryMenuStyle}
-        >
-          {dockButtons.map((label) => (
-            <button
-              key={label}
-              type="button"
-              onClick={() => handleMenuButtonClick(label)}
-              aria-pressed={label === 'Admin' ? isAdminPanelVisible : undefined}
-              data-active={label === 'Admin' ? isAdminPanelVisible : undefined}
-            >
-              {label}
-            </button>
-          ))}
-        </nav>
         <aside
           className={isChatVisible ? 'chat-drawer chat-drawer--open' : 'chat-drawer chat-drawer--collapsed'}
           aria-label="Chat history"

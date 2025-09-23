@@ -45,14 +45,18 @@
 ## 2) Grid Geometry (Deterministic & Unambiguous)
 
 **Constants**
-- `tileW = 75px`, `tileH = 90px`, `rowStep = tileH/2 = 45px`  
-- **Per-row columns:** even `y` → **15**, odd `y` → **14**.
+- `tileW = 75px`, `tileH = 90px`, `rowStep = tileH/2 = 45px`
+- **Per-row columns:** even `y` → **10**, odd `y` → **11**, across exactly **10 rows** (`y = 0…9`).
 
 **Anchoring (top-right)**
-- `rowRightSpan(y) = cols(y)*tileW + (y%2 ? tileW/2 : 0)`  
-- `Wmax = max_y(rowRightSpan(y))` across visible rows  
-- Canvas width `canvasW` **excludes** the right panel:  
-  `originX = max(0, canvasW - Wmax)`; `originY = topPadding` (e.g., 40)
+- `rowRightSpan(y) = cols(y)*tileW + (y%2 ? tileW/2 : 0)`
+- `Wmax = max_y(rowRightSpan(y))` across visible rows
+- Canvas width `canvasW` **excludes** the right panel but reserves fixed gutters:
+  - `gutterTop = 50`
+  - `gutterLeft = gutterRight = 25`
+  - `gutterBottom = 0`
+  - `originX = max(gutterLeft, canvasW - gutterRight - Wmax)`
+  - `originY = gutterTop`
 
 **Tile → screen**
 ```
@@ -73,7 +77,7 @@ abs(dx) + abs(dy) <= 1
 [sx,sy] = toScreen(x,y)
 sy >= originY && (sy + tileH) <= (originY + gridH)
 ```
-- With `tileH=90`, `rowStep=45`, use **`gridH=495`** → natural **10/9 vertical alternation** by parity (no special cases).  
+- With `tileH=90`, `rowStep=45`, use **`gridH=495`** to span the fixed **10-row** field → natural **10/9 vertical alternation** by parity (no special cases).
 - **Left gutter** remains empty to the canvas edge.
 
 **Per-tile flags (room config)**
@@ -92,15 +96,15 @@ sy >= originY && (sy + tileH) <= (originY + gridH)
 ## 3) Core UX
 
 **Stage frame**
-- Stage chrome is pinned to a fixed **1280 × 720** footprint so the top bar, canvas window, right panel, bottom dock, and chat drawer remain pixel-perfect even if the browser viewport shrinks. The layout anchors to the left gutter on desktop so the freestanding chat drawer stays within a 1920 × 1080 stage without introducing scrollbars.
+- Stage chrome is pinned to a fixed footprint defined by the design tokens so the top bar, canvas window, right panel, bottom dock, and chat drawer remain pixel-perfect even if the browser viewport shrinks. The layout anchors to the left gutter on desktop so the freestanding chat drawer stays within a 1920 × 1080 stage without introducing scrollbars, and the canvas surface must stretch from the status bar directly down to the bottom dock with no vertical whitespace.
 
 **Right panel**
-- Fixed width **500px**, full height; **not** slideable, with header copy tucked close to the top edge, a slim accent divider beneath the title, and dense text sections that stretch across the column so the footprint stays visually active without form fields.
+- Fixed width **500px**, full height; **not** slideable, with header copy tucked close to the top edge, a slim accent divider beneath the title, and dense text sections that stretch across the column so the footprint stays visually active without form fields. It spans the entire canvas + menu stack so the dock aligns beneath the playfield, and every corner stays square except for the rounded bottom-right junction.
 - Chat history renders in a freestanding, fully rounded card immediately to the panel’s right with a fixed **5px** gutter separating them, stretching from the top status bar to the bottom menu. It opens by default and can be hidden only via the top-bar chat icon without shifting the canvas or panel. Native scrollbars stay hidden while a **“Back to top”** affordance appears only after scrolling, timestamps wait 500 ms on hover/focus with the tooltip anchored to the hovered card, rows alternate colour, start flush beneath the header, and now run edge-to-edge while the message copy sits inside a 3 px inset down to the drawer base. The chat header exposes an **!** toggle that instantly hides/shows system messages (with a tooltip reflecting the current state) without disturbing surrounding layout.
 - Item **Info** opens in the panel (no popups).
 
 **Primary menu bar**
-- Permanently attached beneath the playfield and panel with only the bottom corners rounded. Buttons stay compact (~36px tall) and auto-resize to evenly fill the full width of the canvas-plus-panel bar regardless of button count.
+- Permanently attached beneath the playfield, matching the canvas width exactly with only the bottom-left corner rounded so it nests into the stage radius while all other corners stay square. Buttons stay compact (~36px tall) and auto-resize to evenly fill the available width regardless of button count.
 - Buttons: **Rooms, Shop, Log, Search, Quests, Settings, Admin**.
 - Menu cannot be collapsed or hidden; it remains fixed to the stage bottom.
 
@@ -571,7 +575,7 @@ CREATE TABLE audit_log (
 **Components**
 - Buttons: Primary (filled), Ghost (outlined); min hit 40×40.  
 - Context menu: z-index high; title “On this tile”; Info/Saml Op inline; click-through not allowed while open.  
-- Primary menu bar: fixed to the stage bottom, spans canvas + panel, cannot collapse, and only its bottom corners are rounded.
+- Primary menu bar: fixed to the stage bottom, spans canvas + panel, cannot collapse, and keeps only the bottom-left corner round while the remaining corners stay square.
 - A11y: focus ring 2px, contrast AA+, keyboardable; `Esc` closes menus; respect `prefers-reduced-motion`.  
 - Visual stability test: switching theme must **not** alter any canvas pixels (checksum render).
 

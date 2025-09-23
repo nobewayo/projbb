@@ -14,8 +14,8 @@
 
 2) **Top‑Right Anchored Diamond Grid**
    - Fixed tile geometry: `tileW=75`, `tileH=90`, `rowStep=45`.
-   - Columns per row: even `y` → 15, odd `y` → 14.
-   - Anchor: **top‑right** of the canvas (see §3 Grid Math).
+   - Columns per row: even `y` → 10, odd `y` → 11, across exactly **10** visible rows.
+   - Anchor: **top‑right** of the canvas (see §3 Grid Math) with a fixed 50px top gutter, 25px gutters on the left/right, and no bottom padding.
 
 3) **Movement Priority**
    - Fast & accurate tile movement is the **#1 priority**.
@@ -55,7 +55,7 @@
 
 1) **Core Canvas + Grid**
    - Implement geometric anchor and diamond hit testing.
-   - Draw full field (15/14 columns by row; vertical containment by `gridH=495`).
+   - Draw the full 10-row field (10/11 columns by row; vertical containment by `gridH=495`).
 
 2) **WS Skeleton + Auth**
    - Envelope + `auth/auth:ok` frames, JWT, subprotocol `bitby.v1`, ping/pong.
@@ -90,19 +90,23 @@
 tileW = 75
 tileH = 90
 rowStep = tileH/2 = 45
-cols(y) = (y % 2 === 0) ? 15 : 14
+cols(y) = (y % 2 === 0) ? 10 : 11
 ```
 
 **Anchoring (top‑right)**
 ```
 rowRightSpan(y) = cols(y)*tileW + (y%2 ? tileW/2 : 0)
 Wmax = max_y(rowRightSpan(y))
-originX = max(0, canvasW - Wmax)   // canvasW excludes right panel
-originY = topPadding               // e.g., 40
+gutterTop = 50
+gutterRight = 25
+gutterLeft = 25
+originX = max(gutterLeft, canvasW - gutterRight - Wmax)   // canvasW excludes right panel
+originY = gutterTop
 ```
 
 **Tile → Screen**
 ```
+rowCount = 10
 sx = originX + x*tileW + (y%2 ? tileW/2 : 0)
 sy = originY + y*rowStep
 ```
@@ -186,9 +190,10 @@ Each proto has `weight` (1–10). Sum ≤ maxWeight.
 - **Blocking reconnect overlay** on network loss until `auth:ok` + room resync.
 
 **Chrome layout**
-- Lock the stage chrome to a fixed **1280 × 720** footprint anchored to the left gutter so the canvas window, right panel, bottom dock, and chat drawer never shrink when the viewport does.
-- Right panel fixed **500px** (not slideable) with header copy tucked close to the top edge and dense text sections that run nearly full width so the column stays visually active without form fields. Chat history lives in a freestanding, fully rounded card hugging the panel’s right edge with only a slender gutter, spans from the status bar to the bottom menu, opens by default, hides native scrollbars, reveals a **“Back to top”** control only after scrolling, and toggles solely via the top-bar chat icon without shifting the surrounding layout. Messages pack tightly with alternating row colours, stretch almost edge-to-edge with only a hairline inset, hug the drawer bottom even with short transcripts, and show timestamps only after 500 ms hover/focus with the tooltip anchored to the hovered card. An **!** control in the chat header toggles system messages on/off and updates its tooltip to match the active state.
-- Primary menu stays permanently attached to the bottom edge of the stage, spans the canvas and panel, uses compact (~36px) buttons, cannot collapse, auto-distributes button widths to fill the bar regardless of count, and only its bottom corners are rounded.
+- Lock the stage chrome to a fixed footprint anchored to the left gutter so the canvas window, right panel, bottom dock, and chat drawer never shrink when the viewport does. The exact dimensions are dictated by shared design tokens (currently an 875 px canvas paired with the 500 px panel, a 50 px top gutter, 25 px gutters on the left/right, zero bottom padding, and fixed top-bar/menu heights).
+- Ensure the canvas fills the entire stage span between the top status bar and bottom dock with no whitespace; the diamond grid must sit flush beneath the top bar and extend to the dock and right panel edges.
+- Right panel fixed **500px** (not slideable) with header copy tucked close to the top edge and dense text sections that run nearly full width so the column stays visually active without form fields. It spans the full canvas + menu stack so the dock lines up beneath the playfield while every corner stays square except for the rounded bottom-right seam. Chat history lives in a freestanding, fully rounded card hugging the panel’s right edge with only a slender gutter, spans from the status bar to the bottom menu, opens by default, hides native scrollbars, reveals a **“Back to top”** control only after scrolling, and toggles solely via the top-bar chat icon without shifting the surrounding layout. Messages pack tightly with alternating row colours, stretch almost edge-to-edge with only a hairline inset, hug the drawer bottom even with short transcripts, and show timestamps only after 500 ms hover/focus with the tooltip anchored to the hovered card. An **!** control in the chat header toggles system messages on/off and updates its tooltip to match the active state.
+- Primary menu stays permanently attached to the bottom edge of the stage, matches the canvas width exactly with a rounded bottom-left corner (all other corners square), uses compact (~36px) buttons, cannot collapse, auto-distributes button widths to fill the bar regardless of count, and sits flush against the right panel.
 - Add a persistent top bar bonded to the stage with player stats (name plus a single-line, accent-coloured coins/level readout), a looping news ticker, and paired round icon buttons on the far right: a **? Support** shortcut and the chat bubble toggle. Each button must surface a labelled tooltip on hover/focus.
 - A pill-shaped, button-only admin quick menu sits directly beneath the bottom dock (outside the main stage container) with only a minimal gutter between them. It only appears after pressing the bottom-bar **Admin** button, lists quick actions (reload room, toggle grid, latency trace), and stays on its own layer without moving surrounding UI when toggled. This surface will later gate to admin accounts.
 - Themes affect only chrome; **never** the canvas.
@@ -373,9 +378,9 @@ Each proto has `weight` (1–10). Sum ≤ maxWeight.
 ## 17) UI/Theme Rules (Chrome Only)
 
 - Theme tokens from Master Spec §16. **Never** modify canvas visuals.
-- Stage chrome stays fixed at **1280 × 720** and anchors to the left gutter; do not responsively scale the canvas, panel, chat drawer, or bottom dock.
-- Primary menu is permanently attached to the bottom edge of the stage, spans the playfield plus panel, auto-distributes button widths to fill the bar regardless of count, and only its bottom corners are rounded.
-- Right panel fixed width (500px) with header copy tight to the top edge, a slim accent divider below the title, and stacked highlight cards filling the column. Chat history lives in a freestanding, fully rounded card hugging the panel’s right edge with a fixed **5px** gutter, spans from the status bar to the bottom dock, opens by default, hides native scrollbars, surfaces a **“Back to top”** affordance only after scrolling, keeps alternating row colours, delays timestamps until 500 ms hover/focus with the tooltip anchored to the hovered card, and runs each row edge-to-edge while the copy sits inside a 3 px inset down to the drawer base. When collapsed it leaves no side handle; the top-bar chat icon is the sole control for restoring it without shifting the surrounding layout. The chat header exposes an **!** toggle that hides/shows system messages instantly without reflowing the surrounding chrome and updates its tooltip to reflect the active mode.
+- Stage chrome stays fixed to the defined design footprint and anchors to the left gutter; do not responsively scale the canvas, panel, chat drawer, or bottom dock.
+- Primary menu is permanently attached to the bottom edge of the stage, spans the playfield plus panel, auto-distributes button widths to fill the bar regardless of count, and keeps only the bottom-left corner rounded while the other corners stay square.
+- Right panel fixed width (500px) with header copy tight to the top edge, a slim accent divider below the title, and stacked highlight cards filling the column. Chat history lives in a freestanding, fully rounded card hugging the panel’s right edge with a fixed **5px** gutter, spans from the status bar to the bottom dock, opens by default, hides native scrollbars, surfaces a **“Back to top”** affordance only after scrolling, keeps alternating row colours, delays timestamps until 500 ms hover/focus with the tooltip anchored to the hovered card, and runs each row edge-to-edge while the copy sits inside a 3 px inset down to the drawer base. When collapsed it leaves no side handle; the top-bar chat icon is the sole control for restoring it without shifting the surrounding layout. The chat header exposes an **!** toggle that hides/shows system messages instantly without reflowing the surrounding chrome and updates its tooltip to reflect the active mode, and only the bottom-right corner of the panel may be rounded.
 - The admin quick menu sits directly beneath the bottom dock (outside the main stage container) with a near-flush **2px** gutter between them and should default to visible in development builds (for screenshots/demos) while remaining toggleable via the bottom **Admin** control; production keeps it hidden until summoned.
 - Context menus follow rules in §6; keyboard accessible.  
 - Accessibility: AA+ contrast, focus rings, keyboard nav.
