@@ -1,5 +1,6 @@
 # Bitby Project Setup & Running Guide (Windows)
 
+
 This repository implements the Bitby platform following the **Master Spec v3.7**. The stack is now wired together as a pnpm monorepo with:
 
 - a Vite + React client shell that reserves the deterministic grid canvas, right panel, and bottom dock
@@ -47,7 +48,9 @@ pnpm -v
 4. Pick a local path (e.g., `C:\Projects\bitby`) and click **Clone**.
 5. After cloning, click **Open in Visual Studio Code** (optional) or use Windows Terminal to navigate into the repository folder.
 
+
 Whenever updates are pushed, use **Fetch origin** → **Pull** inside GitHub Desktop to stay current. After pulling, run `pnpm install` to sync dependencies if any package manifests changed.
+
 
 ---
 
@@ -132,6 +135,7 @@ pnpm typecheck
 # Run package builds (emits dist/ for server + schemas)
 pnpm build
 ```
+
 When Docker-based services are required (e.g., Postgres), Compose files will include seeded data. Integration tests will automatically connect to those containers when run via `pnpm test`.
 
 ---
@@ -172,11 +176,13 @@ Copy the template to `.env.local` (git-ignored) and adjust values for your machi
 
 ## 9. Next Steps in the Roadmap
 
+
 1. Implement deterministic grid renderer and movement loop per Master Spec §2–3 within the new client shell.
 2. Flesh out the WebSocket handshake (`auth`, heartbeats, move/chat ops) on top of the Fastify server (§1, §8).
 3. Bring up Postgres/Redis migrations and seed data via Docker Compose (§12, §13, §21).
 4. Establish automated testing harnesses (unit, integration, visual goldens) and CI workflows.
 5. Expand the schemas package with JSON Schemas/OpenAPI definitions covering the realtime and REST protocols (§23).
+
 
 Progress will be tracked in future commits; this document will evolve with concrete commands as they become available.
 
