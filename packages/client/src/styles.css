@@ -70,6 +70,10 @@ body {
   gap: 24px;
 }
 
+.right-panel__header {
+  flex-shrink: 0;
+}
+
 .right-panel h1 {
   margin: 0 0 8px;
   font-size: 24px;
@@ -79,6 +83,10 @@ body {
   font-size: 14px;
   line-height: 1.7;
   color: rgba(234, 242, 255, 0.88);
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 .dock {
@@ -95,6 +103,8 @@ body {
   border-radius: 18px;
   box-shadow: 0 10px 28px rgba(0, 0, 0, 0.2);
   backdrop-filter: blur(6px);
+  transition: transform 220ms ease;
+  will-change: transform;
 }
 
 .dock button {
@@ -107,7 +117,7 @@ body {
   color: #ffffff;
   font-weight: 600;
   cursor: pointer;
-  transition: background 150ms ease;
+  transition: background 150ms ease, opacity 220ms ease;
 }
 
 .dock button:hover,
@@ -119,6 +129,15 @@ body {
 
 .dock button:focus-visible {
   outline: 2px solid #2f80ed;
+}
+
+.dock--collapsed {
+  transform: translateX(-100%);
+  pointer-events: none;
+}
+
+.dock--collapsed button {
+  opacity: 0;
 }
 
 .dock-tab {
@@ -137,6 +156,72 @@ body {
   align-items: center;
   justify-content: center;
   box-shadow: 0 4px 16px rgba(47, 128, 237, 0.35);
+}
+
+.dock-tab:focus-visible {
+  outline: 2px solid #f2f8ff;
+  outline-offset: 3px;
+}
+
+.chat-log {
+  margin-top: auto;
+  background: rgba(10, 16, 26, 0.86);
+  border-radius: 18px;
+  padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  height: 400px;
+  min-height: 400px;
+  max-height: 400px;
+  box-shadow: inset 0 0 0 1px rgba(47, 128, 237, 0.18);
+}
+
+.chat-log__header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.chat-log__header h2 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.chat-log__status {
+  font-size: 12px;
+  color: rgba(234, 242, 255, 0.64);
+}
+
+.chat-log__messages {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-right: 4px;
+}
+
+.chat-log__messages article {
+  background: rgba(47, 128, 237, 0.12);
+  border-radius: 12px;
+  padding: 12px 16px;
+}
+
+.chat-log__messages h3 {
+  margin: 0 0 6px;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: rgba(166, 198, 255, 0.88);
+}
+
+.chat-log__messages p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: rgba(234, 242, 255, 0.9);
 }
 
 a {
