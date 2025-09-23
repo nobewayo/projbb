@@ -4,7 +4,8 @@
   in separate PowerShell windows so the full stack matches the Master Spec scaffolding.
 .DESCRIPTION
   - Verifies that pnpm is available on PATH.
-  - Optionally runs `pnpm install` when invoked with `-InstallDependencies`.
+  - Automatically runs `pnpm install` if the workspace has not been bootstrapped yet.
+  - Supports `-InstallDependencies` to force a fresh install even when dependencies exist.
   - Starts the Fastify server (`pnpm --filter @bitby/server dev`).
   - Starts the Vite client shell (`pnpm --filter @bitby/client dev`).
   Each process inherits its own window to preserve readable logs per spec §18 observability guidance.
@@ -26,37 +27,65 @@ function Assert-PnpmExists {
   }
 }
 
-function Invoke-WorkspaceInstall {
+function Get-PowerShellExecutable {
+  $pwsh = Get-Command pwsh -ErrorAction SilentlyContinue
+  if ($pwsh) {
+    return $pwsh.Source
+  }
+
+  $windowsPowerShell = Get-Command powershell -ErrorAction SilentlyContinue
+  if ($windowsPowerShell) {
+    return $windowsPowerShell.Source
+  }
+
+  throw 'Unable to find PowerShell (pwsh) or Windows PowerShell on PATH. Install PowerShell 7 or ensure powershell.exe is available.'
+}
+
+function Test-DependenciesPresent {
   param(
     [string]$RepoRoot
   )
 
-  Write-Host 'Installing workspace dependencies with pnpm install...' -ForegroundColor Cyan
-  pnpm install --dir $RepoRoot
+  $nodeModules = Join-Path $RepoRoot 'node_modules'
+  $modulesMarker = Join-Path $nodeModules '.modules.yaml'
+
+  return (Test-Path $nodeModules -PathType Container) -and (Test-Path $modulesMarker -PathType Leaf)
+}
+
+function Ensure-WorkspaceDependencies {
+  param(
+    [string]$RepoRoot,
+    [switch]$Force
+  )
+
+  if ($Force -or -not (Test-DependenciesPresent -RepoRoot $RepoRoot)) {
+    Write-Host 'Installing workspace dependencies with pnpm install...' -ForegroundColor Cyan
+    pnpm install --dir $RepoRoot
+  }
+  else {
+    Write-Host 'Dependencies already present. Skipping pnpm install.' -ForegroundColor DarkGray
+  }
 }
 
 function Start-BitbyProcess {
   param(
     [string]$Title,
     [string]$Command,
-    [string]$RepoRoot
+    [string]$RepoRoot,
+    [string]$ShellPath
   )
 
-  $escapedRoot = $RepoRoot.Replace('`', '``')
-  $fullCommand = "Set-Location `\"$escapedRoot`\"; $Command"
-
   Write-Host "Starting $Title..." -ForegroundColor Green
-  Start-Process -FilePath pwsh -ArgumentList '-NoExit', '-Command', $fullCommand -WorkingDirectory $RepoRoot
+  Start-Process -FilePath $ShellPath -ArgumentList '-NoExit', '-Command', $Command -WorkingDirectory $RepoRoot
 }
 
 $repoRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
+$shellPath = Get-PowerShellExecutable
+
 Assert-PnpmExists
+Ensure-WorkspaceDependencies -RepoRoot $repoRoot -Force:$InstallDependencies
 
-if ($InstallDependencies) {
-  Invoke-WorkspaceInstall -RepoRoot $repoRoot
-}
-
-Start-BitbyProcess -Title 'Bitby server (Fastify + WS)' -Command 'pnpm --filter @bitby/server dev' -RepoRoot $repoRoot
-Start-BitbyProcess -Title 'Bitby client (Vite)' -Command 'pnpm --filter @bitby/client dev' -RepoRoot $repoRoot
+Start-BitbyProcess -Title 'Bitby server (Fastify + WS)' -Command 'pnpm --filter @bitby/server dev' -RepoRoot $repoRoot -ShellPath $shellPath
+Start-BitbyProcess -Title 'Bitby client (Vite)' -Command 'pnpm --filter @bitby/client dev' -RepoRoot $repoRoot -ShellPath $shellPath
 
 Write-Host 'Server and client processes launched. Check the new PowerShell windows for logs.' -ForegroundColor Yellow

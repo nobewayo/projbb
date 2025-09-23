@@ -110,7 +110,16 @@ To start both the Fastify server and Vite client at once on Windows, run the hel
 ./start-windows.ps1
 ```
 
-Add the `-InstallDependencies` flag the first time to run `pnpm install` automatically. The script opens two new PowerShell windows—one for the server and one for the client—so logs remain easy to follow per the observability guidelines in the Master Spec.
+
+The launcher now detects whether the workspace has been bootstrapped—if `node_modules` is missing it automatically runs `pnpm install` before spawning the dev servers. Pass `-InstallDependencies` at any time to force a fresh install.
+
+Prefer double-clicking? Use the companion batch file instead of opening PowerShell manually:
+
+```batch
+start-windows.bat
+```
+
+Both entry points open two new PowerShell windows—one for the server and one for the client—so logs remain easy to follow per the observability guidelines in the Master Spec.
 
 ### 4.3 Docker (database + cache services)
 
