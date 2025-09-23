@@ -6,6 +6,8 @@
   - Verifies that pnpm is available on PATH.
   - Automatically runs `pnpm install` if the workspace has not been bootstrapped yet.
   - Supports `-InstallDependencies` to force a fresh install even when dependencies exist.
+  - Prebuilds the shared `@bitby/schemas` package so Vite can resolve workspace imports on cold clones.
+  - Starts the schema TypeScript watcher (`pnpm --filter @bitby/schemas dev`).
   - Starts the Fastify server (`pnpm --filter @bitby/server dev`).
   - Starts the Vite client shell (`pnpm --filter @bitby/client dev`).
   Each process inherits its own window to preserve readable logs per spec §18 observability guidance.
@@ -61,9 +63,25 @@ function Ensure-WorkspaceDependencies {
   if ($Force -or -not (Test-DependenciesPresent -RepoRoot $RepoRoot)) {
     Write-Host 'Installing workspace dependencies with pnpm install...' -ForegroundColor Cyan
     pnpm install --dir $RepoRoot
+    if ($LASTEXITCODE -ne 0) {
+      throw "pnpm install failed with exit code $LASTEXITCODE."
+    }
   }
   else {
     Write-Host 'Dependencies already present. Skipping pnpm install.' -ForegroundColor DarkGray
+  }
+}
+
+function Invoke-ExternalCommand {
+  param(
+    [string]$FilePath,
+    [string[]]$ArgumentList
+  )
+
+  & $FilePath @ArgumentList
+  if ($LASTEXITCODE -ne 0) {
+    $joinedArgs = ($ArgumentList -join ' ')
+    throw "Command '$FilePath $joinedArgs' failed with exit code $LASTEXITCODE."
   }
 }
 
@@ -85,7 +103,11 @@ $shellPath = Get-PowerShellExecutable
 Assert-PnpmExists
 Ensure-WorkspaceDependencies -RepoRoot $repoRoot -Force:$InstallDependencies
 
+Write-Host 'Prebuilding shared schema package (@bitby/schemas)...' -ForegroundColor Cyan
+Invoke-ExternalCommand -FilePath 'pnpm' -ArgumentList @('--dir', $repoRoot, '--filter', '@bitby/schemas', 'build')
+
+Start-BitbyProcess -Title 'Bitby schemas (TypeScript watch)' -Command 'pnpm --filter @bitby/schemas dev' -RepoRoot $repoRoot -ShellPath $shellPath
 Start-BitbyProcess -Title 'Bitby server (Fastify + WS)' -Command 'pnpm --filter @bitby/server dev' -RepoRoot $repoRoot -ShellPath $shellPath
 Start-BitbyProcess -Title 'Bitby client (Vite)' -Command 'pnpm --filter @bitby/client dev' -RepoRoot $repoRoot -ShellPath $shellPath
 
-Write-Host 'Server and client processes launched. Check the new PowerShell windows for logs.' -ForegroundColor Yellow
+Write-Host 'Schema watcher, server, and client processes launched. Check the new PowerShell windows for logs.' -ForegroundColor Yellow
