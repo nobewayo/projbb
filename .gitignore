@@ -1,0 +1,14 @@
+node_modules/
+.pnpm-store/
+dist/
+build/
+.DS_Store
+.env*
+coverage/
+*.log
+.tsbuildinfo
+.vite/
+.vscode/
+.idea/
+.tmp/
+.cache/

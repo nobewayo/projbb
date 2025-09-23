@@ -1,9 +1,23 @@
 # Server Package (Planned)
 
-This package will host the Node.js (TypeScript) API and WebSocket authority for Bitby. It must enforce the `bitby.v1` subprotocol, JWT auth, movement validation, catalog distribution, and Redis-backed room state as described in Master Spec v3.7 §§1, 8–15, 17–18.
+This package hosts the Node.js (TypeScript) API/WebSocket authority for Bitby. The current skeleton wires up Fastify with:
+
+- `/healthz` and `/readyz` endpoints aligned with the Master Spec observability guardrails (§17)
+- a WebSocket endpoint at `/ws` that enforces the `bitby.v1` subprotocol, caps payloads at 64 KB, and gracefully closes with `1012` until realtime handlers land (§1)
+- readiness tracking so orchestrators can mark the instance unavailable before shutdown
+
+## Scripts
+
+```bash
+pnpm --filter @bitby/server dev      # Fastify dev server with tsx watcher
+pnpm --filter @bitby/server build    # Emit compiled JS + type declarations to dist/
+pnpm --filter @bitby/server test     # Run Vitest (no specs yet)
+pnpm --filter @bitby/server lint     # ESLint for server sources
+pnpm --filter @bitby/server typecheck
+```
 
 ## Upcoming Tasks
-- Scaffold REST `/auth/login` and WebSocket handlers with JSON Schema validation.
-- Integrate Postgres schema and Redis presence caches defined in §12–13.
-- Implement movement, chat, and item ops with roomSeq tracking and rate limits.
-- Expose health checks, Prometheus metrics, and graceful restart hooks.
+- Implement REST `/auth/login` with JWT issuance and secure password hashing (§1).
+- Stand up Redis + Postgres integrations for room state, catalog, and persistence (§12–13).
+- Add realtime handlers for `auth`, `move`, `chat`, and catalog ops with full schema validation (§8).
+- Expose Prometheus metrics and graceful restart workflows, including blocking reconnect overlays (§17–18).

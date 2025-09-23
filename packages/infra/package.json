@@ -1,0 +1,14 @@
+{
+  "name": "@bitby/infra",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "lint": "eslint . --ext .ts || echo 'no TypeScript files yet'",
+    "test": "echo 'no infra tests yet'"
+  },
+  "devDependencies": {
+    "eslint": "^8.57.0",
+    "prettier": "^3.2.5"
+  }
+}

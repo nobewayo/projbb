@@ -1,8 +1,16 @@
 # Bitby Project Setup & Running Guide (Windows)
 
-This repository implements the Bitby platform following the **Master Spec v3.7**. The codebase is still in its early scaffolding phase; this guide explains how to clone, run, and test the project on a Windows PC using either the GitHub Desktop GUI or Docker-based tooling as features come online.
 
-> **Note:** The deterministic grid canvas and gameplay systems described in the Master Spec are not yet fully implemented. The steps below prepare your environment so you can pull updates and run services as they are added.
+This repository implements the Bitby platform following the **Master Spec v3.7**. The stack is now wired together as a pnpm monorepo with:
+
+- a Vite + React client shell that reserves the deterministic grid canvas, right panel, and bottom dock
+- a Fastify-based server skeleton with `/healthz`, `/readyz`, and a guarded WebSocket endpoint enforcing the `bitby.v1` subprotocol
+- shared schema utilities for the canonical WebSocket envelope
+- Docker Compose definitions for Postgres and Redis
+
+This guide explains how to clone, run, and test the project on a Windows PC using the GitHub Desktop GUI or Docker-based tooling.
+
+> **Note:** The deterministic grid canvas and realtime gameplay systems are still stubs. The scaffolding below ensures the required services boot with the correct guardrails so features can be layered in incrementally.
 
 ---
 
@@ -40,7 +48,9 @@ pnpm -v
 4. Pick a local path (e.g., `C:\Projects\bitby`) and click **Clone**.
 5. After cloning, click **Open in Visual Studio Code** (optional) or use Windows Terminal to navigate into the repository folder.
 
-Whenever updates are pushed, use **Fetch origin** → **Pull** inside GitHub Desktop to stay current.
+
+Whenever updates are pushed, use **Fetch origin** → **Pull** inside GitHub Desktop to stay current. After pulling, run `pnpm install` to sync dependencies if any package manifests changed.
+
 
 ---
 
@@ -50,15 +60,18 @@ Whenever updates are pushed, use **Fetch origin** → **Pull** inside GitHub Des
 projbb/
 ├─ Master Spec.md           # Canonical product & technical spec (do not modify without approval)
 ├─ README.md                # This setup guide
-├─ packages/                # (planned) workspace packages for client, server, schemas, infra
-│  ├─ client/               # (pending) Web client canvas + UI implementation
-│  ├─ server/               # (pending) Node.js API + WebSocket authority
-│  ├─ schemas/              # (pending) JSON Schemas & OpenAPI definitions
-│  └─ infra/                # (pending) Docker Compose & deployment tooling
-└─ ... (additional files will be added as milestones progress)
+├─ pnpm-workspace.yaml      # Workspace definition (packages/*)
+├─ package.json             # Root scripts (build, lint, dev, test)
+├─ tsconfig.base.json       # Shared TypeScript compiler options
+├─ packages/
+│  ├─ client/               # Vite + React client shell with placeholder canvas + chrome
+│  ├─ server/               # Fastify API/WS skeleton enforcing spec guardrails
+│  ├─ schemas/              # Shared Zod schemas (e.g., WS envelope)
+│  └─ infra/                # Docker Compose and future deployment tooling
+└─ ... (assets, migrations, and feature modules will land in future commits)
 ```
 
-As development advances, `pnpm` workspaces will manage the monorepo with shared tooling (ESLint, TypeScript configs, etc.).
+The repository uses `pnpm` workspaces to manage dependencies consistently across packages.
 
 ---
 
@@ -68,55 +81,59 @@ Two workflows are supported. Choose the one that fits your setup. The actual app
 
 ### 4.1 pnpm (Native Windows or WSL)
 
-1. **Install dependencies** (once `package.json` files land):
+1. **Install dependencies** (run from the repository root after cloning or pulling):
    ```powershell
    pnpm install
    ```
-2. **Build TypeScript** (placeholder command; will be defined in workspace package scripts):
+2. **Start the API/WebSocket server** (Fastify + `@fastify/websocket` skeleton):
    ```powershell
-   pnpm build
-   ```
-3. **Start services**:
-   ```powershell
-   # Launch the API/WS server (planned script name)
    pnpm --filter @bitby/server dev
+   ```
+   The server listens on `http://localhost:3001` by default and exposes:
+   - `GET /healthz` → `{ status: "ok" }`
+   - `GET /readyz` → `{ status: "ready" }` once the process is accepting traffic (503 otherwise)
+   - `GET /ws` (WebSocket) → accepts only if the client specifies `bitby.v1`; immediately closes with `1012` until realtime handlers are implemented.
 
-   # In a separate terminal, run the client dev server (planned script name)
+3. **Launch the client dev server** (Vite + React placeholder UI) in a separate terminal:
+   ```powershell
    pnpm --filter @bitby/client dev
    ```
-4. Open the client URL (typically `http://localhost:5173`) in your browser once the client dev server reports it is ready.
+4. Open the client URL at [http://localhost:5173](http://localhost:5173) once Vite reports it is ready. The placeholder renders the chrome layout specified in the Master Spec while reserving the deterministic canvas for future commits.
 
 > **Tip:** If you prefer WSL2 for better Node/Docker performance, clone the repo within the WSL filesystem (e.g., `/home/<user>/projbb`). GitHub Desktop can open the project in WSL by selecting “Open in Windows Terminal” and choosing a WSL profile.
 
-### 4.2 Docker (Recommended once services exist)
+### 4.2 Docker (database + cache services)
 
-Docker Compose files will live under `packages/infra/docker/`.
+The initial Docker Compose stack located at `packages/infra/docker/docker-compose.yml` starts Postgres and Redis with development-safe defaults.
 
 1. Ensure Docker Desktop is running.
 2. From Windows Terminal (PowerShell) in the repo root, run:
    ```powershell
    cd packages\infra\docker
-   docker compose up --build
+   docker compose up -d
    ```
-3. Compose will launch Postgres, Redis, API, and client containers using the configurations defined in upcoming commits.
-4. Press `Ctrl+C` to stop. Use `docker compose down -v` to remove containers and volumes if you need a clean slate.
+3. Services start with the credentials shown in the compose file (`bitby/bitby`). When you are done, stop them with:
+   ```powershell
+   docker compose down
+   ```
+4. To wipe persistent volumes, run `docker compose down -v`.
+
+Future updates will add API, WebSocket, and client containers that bind to the same network for end-to-end testing.
 
 ---
 
 ## 5. Testing
 
-Testing harnesses will be added in tandem with each milestone. Expect the following commands to become available:
+Testing harnesses are gradually rolling out. The current scripts already wire up TypeScript builds, Vitest, and ESLint across packages:
 
 ```powershell
-# Run all unit and integration tests across the workspace
 pnpm test
 
-# Lint + TypeScript checks
 pnpm lint
 pnpm typecheck
 
-# Future: Visual regression / golden tests for deterministic canvas
-pnpm test:visual
+# Run package builds (emits dist/ for server + schemas)
+pnpm build
 ```
 
 When Docker-based services are required (e.g., Postgres), Compose files will include seeded data. Integration tests will automatically connect to those containers when run via `pnpm test`.
@@ -159,11 +176,13 @@ Copy the template to `.env.local` (git-ignored) and adjust values for your machi
 
 ## 9. Next Steps in the Roadmap
 
-1. Scaffold `pnpm` workspace with shared configurations.
-2. Implement deterministic grid renderer and movement loop per Master Spec §2–3.
-3. Add WebSocket skeleton with `auth` handshake and heartbeat per §1.
-4. Bring up Postgres/Redis via Docker Compose and seed baseline data (§12, §13, §21).
-5. Establish testing harness (unit, integration, visual goldens) and CI workflows.
+
+1. Implement deterministic grid renderer and movement loop per Master Spec §2–3 within the new client shell.
+2. Flesh out the WebSocket handshake (`auth`, heartbeats, move/chat ops) on top of the Fastify server (§1, §8).
+3. Bring up Postgres/Redis migrations and seed data via Docker Compose (§12, §13, §21).
+4. Establish automated testing harnesses (unit, integration, visual goldens) and CI workflows.
+5. Expand the schemas package with JSON Schemas/OpenAPI definitions covering the realtime and REST protocols (§23).
+
 
 Progress will be tracked in future commits; this document will evolve with concrete commands as they become available.
 
