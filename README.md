@@ -3,14 +3,14 @@
 
 This repository implements the Bitby platform following the **Master Spec v3.7**. The stack is now wired together as a pnpm monorepo with:
 
-- a Vite + React client that now renders the deterministic top-right anchored grid preview with live hit-testing across the fixed 10-row field, while keeping the right panel and bottom dock chrome locked to the new stage footprint
-- a Fastify-based server skeleton with `/healthz`, `/readyz`, and a guarded WebSocket endpoint enforcing the `bitby.v1` subprotocol
-- shared schema utilities for the canonical WebSocket envelope
+- a Vite + React client that now renders the deterministic top-right anchored grid preview with live hit-testing across the fixed 10-row field, keeps the right panel and bottom dock chrome locked to the new stage footprint, and surfaces a blocking reconnect overlay driven by the realtime WebSocket hook
+- a Fastify-based server skeleton with `/healthz`, `/readyz`, and a guarded WebSocket endpoint enforcing the `bitby.v1` subprotocol while responding to `auth` and `ping` operations with stubbed payloads so the client can exercise the heartbeat loop end to end
+- shared schema utilities for the canonical WebSocket envelope (consumed by both client + server during the handshake)
 - Docker Compose definitions for Postgres and Redis
 
 This guide explains how to clone, run, and test the project on a Windows PC using the GitHub Desktop GUI or Docker-based tooling.
 
-> **Note:** The deterministic grid renderer now paints the full 10-row field (10 columns on even rows, 11 on odd rows) with a development HUD so geometry can be verified, while avatars, movement, and the remaining realtime systems are still stubs. The scaffolding below ensures the required services boot with the correct guardrails so features can be layered in incrementally.
+> **Note:** The deterministic grid renderer now paints the full 10-row field (10 columns on even rows, 11 on odd rows) with a development HUD so geometry can be verified. A realtime hook connects to the Fastify server, performs the stubbed `auth` + `ping` handshake, and shows the blocking reconnect overlay mandated by the spec whenever the socket drops. Avatars, movement, and authoritative room state are still stubs—the scaffolding below exists so those features can be layered in incrementally without violating the guardrails.
 
 ---
 
@@ -92,13 +92,13 @@ Two workflows are supported. Choose the one that fits your setup. The actual app
    The server listens on `http://localhost:3001` by default and exposes:
    - `GET /healthz` → `{ status: "ok" }`
    - `GET /readyz` → `{ status: "ready" }` once the process is accepting traffic (503 otherwise)
-   - `GET /ws` (WebSocket) → accepts only if the client specifies `bitby.v1`; immediately closes with `1012` until realtime handlers are implemented.
+   - `GET /ws` (WebSocket) → accepts only if the client specifies `bitby.v1`; responds with development `system:hello` guidance, echoes `auth:ok` with a stub profile, and answers `ping` with `pong` while enforcing a 30 s heartbeat timeout. Future iterations will swap the stubbed payloads for authoritative room state.
 
 3. **Launch the client dev server** (Vite + React deterministic grid preview) in a separate terminal:
    ```powershell
    pnpm --filter @bitby/client dev
    ```
-4. Open the client URL at [http://localhost:5173](http://localhost:5173) once Vite reports it is ready. The client now renders the full 10-row deterministic grid (10 columns on even rows, 11 on odd rows) anchored to the canvas’ top-right corner, with a 50 px top gutter, 25 px gutters on the left/right, and no bottom padding so every diamond clears the chrome. It highlights the tile under the pointer via the canonical diamond hit test and overlays a development HUD displaying the tile coordinate, tile center, and pointer pixel location. Stage chrome stays pixel-perfect (875 px canvas + 500 px panel + 290 px chat drawer) while the chat drawer, admin quick menu, and primary menu continue to follow the Master Spec interactions outlined below. The canvas background stretches flush between the top status bar and bottom dock with no vertical whitespace, the bottom dock keeps only its bottom-left corner rounded while hugging the canvas width exactly, and the right panel now runs square corners except for the rounded bottom-right seam that meets the dock.
+4. Open the client URL at [http://localhost:5173](http://localhost:5173) once Vite reports it is ready. The client now renders the full 10-row deterministic grid (10 columns on even rows, 11 on odd rows) anchored to the canvas’ top-right corner, with a 50 px top gutter, 25 px gutters on the left/right, and no bottom padding so every diamond clears the chrome. It highlights the tile under the pointer via the canonical diamond hit test and overlays a development HUD displaying the tile coordinate, tile center, and pointer pixel location. Stage chrome stays pixel-perfect (875 px canvas + 500 px panel + 290 px chat drawer) while the chat drawer, admin quick menu, and primary menu continue to follow the Master Spec interactions outlined below. The canvas background stretches flush between the top status bar and bottom dock with no vertical whitespace, the bottom dock keeps only its bottom-left corner rounded while hugging the canvas width exactly, and the right panel now runs square corners except for the rounded bottom-right seam that meets the dock. If the realtime socket drops, the spec-mandated blocking overlay covers the entire stage until the authenticated connection is restored.
 
 > **Tip:** If you prefer WSL2 for better Node/Docker performance, clone the repo within the WSL filesystem (e.g., `/home/<user>/projbb`). GitHub Desktop can open the project in WSL by selecting “Open in Windows Terminal” and choosing a WSL profile.
 
@@ -121,7 +121,16 @@ start-windows.bat
 
 Both entry points open two new PowerShell windows—one for the server and one for the client—so logs remain easy to follow per the observability guidelines in the Master Spec.
 
-### 4.3 Docker (database + cache services)
+### 4.3 Realtime client configuration (development)
+
+The React client reads two environment variables when booting the Vite dev server:
+
+- `VITE_BITBY_WS_URL` — optional override for the WebSocket endpoint. Defaults to `ws://localhost:3001/ws` when unset.
+- `VITE_BITBY_DEV_TOKEN` — placeholder token forwarded in the `auth` envelope. Defaults to `local-development-token`.
+
+Set them in a `.env.local` file at the repository root or prefix them inline when running `pnpm --filter @bitby/client dev`.
+
+### 4.4 Docker (database + cache services)
 
 The initial Docker Compose stack located at `packages/infra/docker/docker-compose.yml` starts Postgres and Redis with development-safe defaults.
 
@@ -168,6 +177,8 @@ POSTGRES_URL=postgres://bitby:bitby@localhost:5432/bitby
 REDIS_URL=redis://localhost:6379
 JWT_SECRET=<development-only-secret>
 ASSET_CDN_BASE=http://localhost:8080/assets
+VITE_BITBY_WS_URL=ws://localhost:3001/ws
+VITE_BITBY_DEV_TOKEN=local-development-token
 ```
 
 Copy the template to `.env.local` (git-ignored) and adjust values for your machine.
@@ -197,10 +208,10 @@ Copy the template to `.env.local` (git-ignored) and adjust values for your machi
 
 
 1. Layer optimistic avatar movement + snapback logic on top of the deterministic grid renderer (Master Spec §2–3).
-2. Flesh out the WebSocket handshake (`auth`, heartbeats, move/chat ops) on top of the Fastify server (§1, §8).
+2. Replace the stubbed realtime handshake with JWT-backed auth, authoritative room snapshots, and movement/chat broadcast loops (§1, §3, §8).
 3. Bring up Postgres/Redis migrations and seed data via Docker Compose (§12, §13, §21).
-4. Establish automated testing harnesses (unit, integration, visual goldens) and CI workflows.
-5. Expand the schemas package with JSON Schemas/OpenAPI definitions covering the realtime and REST protocols (§23).
+4. Establish automated testing harnesses (unit, integration, visual goldens) and CI workflows that exercise the heartbeat + reconnect flow.
+5. Expand the schemas package with JSON Schemas/OpenAPI definitions covering realtime operations and REST endpoints (§23).
 
 
 Progress will be tracked in future commits; this document will evolve with concrete commands as they become available.
@@ -216,4 +227,4 @@ Progress will be tracked in future commits; this document will evolve with concr
 
 ---
 
-*Last updated: 2025-09-24 UTC*
+*Last updated: 2025-09-23 UTC*

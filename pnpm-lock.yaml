@@ -29,6 +29,9 @@ importers:
 
   packages/client:
     dependencies:
+      '@bitby/schemas':
+        specifier: workspace:*
+        version: link:../schemas
       react:
         specifier: ^18.2.0
         version: 18.3.1
@@ -103,6 +106,9 @@ importers:
 
   packages/server:
     dependencies:
+      '@bitby/schemas':
+        specifier: workspace:*
+        version: link:../schemas
       '@fastify/websocket':
         specifier: ^7.0.1
         version: 7.2.0
@@ -122,6 +128,9 @@ importers:
       '@types/node':
         specifier: ^20.12.7
         version: 20.19.17
+      '@types/ws':
+        specifier: ^8.5.10
+        version: 8.18.1
       eslint:
         specifier: ^8.57.0
         version: 8.57.1
@@ -1274,6 +1283,12 @@ packages:
 
   /@types/semver@7.7.1:
     resolution: {integrity: sha512-FmgJfu+MOcQ370SD0ev7EI8TlCAfKYU+B4m5T3yXc1CiRN94g/SZPtsCkk506aUDtlMnFZvasDwHHUcZUEaYuA==}
+    dev: true
+
+  /@types/ws@8.18.1:
+    resolution: {integrity: sha512-ThVF6DCVhA8kUGy+aazFQ4kXQ7E1Ty7A3ypFOe0IcJV8O/M511G99AW24irKrW56Wt44yG9+ij8FaqoBGkuBXg==}
+    dependencies:
+      '@types/node': 20.19.17
     dev: true
 
   /@typescript-eslint/eslint-plugin@6.21.0(@typescript-eslint/parser@6.21.0)(eslint@8.57.1)(typescript@5.9.2):
