@@ -1,4 +1,5 @@
-import { CSSProperties, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import type { CSSProperties } from 'react';
 import './styles.css';
 
 const dockButtons = [
@@ -321,8 +322,10 @@ const App = (): JSX.Element => {
                       data-time={message.time}
                       tabIndex={0}
                     >
-                      <span className="chat-log__actor">{message.actor}</span>
-                      <span className="chat-log__body">{message.body}</span>
+                      <div className="chat-log__message-inner">
+                        <span className="chat-log__actor">{message.actor}</span>
+                        <span className="chat-log__body">{message.body}</span>
+                      </div>
                     </li>
                   ))}
                 </ol>
@@ -343,32 +346,23 @@ const App = (): JSX.Element => {
               </div>
             </div>
           </div>
-          {!isChatVisible ? (
-            <button
-              type="button"
-              className="chat-drawer__handle"
-              onClick={() => setIsChatVisible(true)}
-              aria-label="Show chat log"
-            >
-              <span aria-hidden="true">‹</span>
-              <span>Log</span>
-              <span aria-hidden="true">›</span>
-            </button>
-          ) : null}
         </aside>
       </div>
       <nav
-        className={isAdminPanelVisible ? 'admin-panel admin-panel--open' : 'admin-panel'}
-        aria-label="Admin shortcuts"
+        className={
+          isAdminPanelVisible
+            ? 'admin-quick-menu admin-quick-menu--visible'
+            : 'admin-quick-menu'
+        }
+        aria-label="Admin quick menu"
         aria-hidden={!isAdminPanelVisible}
+        role="group"
       >
-        <div className="admin-panel__inner" role="group" aria-label="Admin quick actions">
-          {adminShortcuts.map((item) => (
-            <button key={item} type="button" className="admin-panel__button">
-              {item}
-            </button>
-          ))}
-        </div>
+        {adminShortcuts.map((item) => (
+          <button key={item} type="button" className="admin-quick-menu__button">
+            {item}
+          </button>
+        ))}
       </nav>
     </div>
   );
