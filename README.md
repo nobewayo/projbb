@@ -236,4 +236,4 @@ Progress will be tracked in future commits; this document will evolve with concr
 
 ---
 
-*Last updated: 2025-09-24 UTC*
+*Last updated: 2025-09-23 UTC*
