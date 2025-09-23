@@ -3,27 +3,30 @@ import type { SocketStream } from '@fastify/websocket';
 import type { RawData } from 'ws';
 import { messageEnvelopeSchema, type MessageEnvelope } from '@bitby/schemas';
 import { z } from 'zod';
+import type { ServerConfig } from '../config.js';
+import { decodeToken } from '../auth/jwt.js';
+import type { AuthenticatedUser, RoomSnapshot } from '../auth/types.js';
 
 const HEARTBEAT_INTERVAL_MS = 15_000;
 const HEARTBEAT_GRACE_MS = HEARTBEAT_INTERVAL_MS * 2;
+const DEVELOPMENT_ROOM_ID = 'dev-room';
+const DEVELOPMENT_ROOM_NAME = 'Development Plaza';
 
 interface ConnectionContext {
   app: FastifyInstance;
   stream: SocketStream;
   requestId: string;
+  config: ServerConfig;
 }
 
 type AuthOkPayload = EnvelopeData & {
-  user: {
-    id: string;
-    username: string;
-    roles: string[];
-  };
+  user: AuthenticatedUser;
   room: {
     id: string;
     name: string;
   };
   heartbeatIntervalMs: number;
+  roomSnapshot: RoomSnapshot;
 };
 
 const authPayloadSchema = z.object({
@@ -33,6 +36,29 @@ const authPayloadSchema = z.object({
 type EnvelopeData = Record<string, unknown>;
 
 type Envelope = MessageEnvelope<EnvelopeData>;
+
+const buildDevelopmentRoomSnapshot = (user: AuthenticatedUser): RoomSnapshot => ({
+  id: DEVELOPMENT_ROOM_ID,
+  name: DEVELOPMENT_ROOM_NAME,
+  occupants: [
+    {
+      id: user.id,
+      username: user.username,
+      roles: [...user.roles],
+      position: { x: 5, y: 4 },
+    },
+    {
+      id: 'npc-guide',
+      username: 'Guide Bot',
+      roles: ['npc'],
+      position: { x: 6, y: 4 },
+    },
+  ],
+  tiles: [
+    { x: 2, y: 8, locked: false, noPickup: true },
+    { x: 7, y: 3, locked: true, noPickup: false },
+  ],
+});
 
 const toUnixTimestamp = () => Math.floor(Date.now() / 1000);
 
@@ -82,7 +108,9 @@ const handleAuth = (
   logger: FastifyBaseLogger,
   stream: SocketStream,
   envelope: Envelope,
-): AuthOkPayload | null => {
+  config: ServerConfig,
+  closeWithReason: (code: number, reason: string) => void,
+): AuthenticatedUser | null => {
   const parsed = authPayloadSchema.safeParse(envelope.data);
   if (!parsed.success) {
     acknowledge(logger, stream, envelope, 'error:auth_invalid', {
@@ -92,35 +120,48 @@ const handleAuth = (
     return null;
   }
 
+  let authenticatedUser: AuthenticatedUser;
+  try {
+    authenticatedUser = decodeToken(parsed.data.token, config);
+  } catch (error) {
+    logger.warn({ err: error }, 'Rejected realtime auth token');
+    acknowledge(logger, stream, envelope, 'error:auth_invalid', {
+      message: 'Authentication failed: invalid token',
+    });
+    closeWithReason(4003, 'Invalid auth token');
+    return null;
+  }
+
+  const snapshot = buildDevelopmentRoomSnapshot(authenticatedUser);
   const payload: AuthOkPayload = {
-    user: {
-      id: 'dev-user',
-      username: 'Development User',
-      roles: ['user'],
-    },
+    user: authenticatedUser,
     room: {
-      id: 'dev-room',
-      name: 'Development Plaza',
+      id: snapshot.id,
+      name: snapshot.name,
     },
     heartbeatIntervalMs: HEARTBEAT_INTERVAL_MS,
+    roomSnapshot: snapshot,
   };
 
   acknowledge(logger, stream, envelope, 'auth:ok', payload);
 
   emitSystemMessage(logger, stream, 'system:room_snapshot', {
-    message: 'Realtime room snapshot will stream from the authority server in future iterations.',
+    message: 'Authoritative snapshot streaming is stubbed; using development fixtures.',
+    occupants: snapshot.occupants,
   });
 
-  return payload;
+  return authenticatedUser;
 };
 
 export const handleRealtimeConnection = ({
   app,
   stream,
   requestId,
+  config,
 }: ConnectionContext): void => {
   const logger = app.log.child({ scope: 'ws', requestId });
   let isAuthenticated = false;
+  let sessionUser: AuthenticatedUser | null = null;
   let lastHeartbeatAt = Date.now();
 
   const closeWithReason = (code: number, reason: string): void => {
@@ -191,10 +232,12 @@ export const handleRealtimeConnection = ({
           return;
         }
 
-        const result = handleAuth(logger, stream, envelope);
-        if (result) {
+        const user = handleAuth(logger, stream, envelope, config, closeWithReason);
+        if (user) {
           isAuthenticated = true;
-          logger.info({ userId: result.user.id }, 'Client authenticated');
+          sessionUser = user;
+          lastHeartbeatAt = Date.now();
+          logger.info({ userId: user.id }, 'Client authenticated');
         }
         return;
       }
@@ -215,7 +258,10 @@ export const handleRealtimeConnection = ({
 
   stream.socket.on('close', (code: number, reason: Buffer) => {
     clearInterval(heartbeatMonitor);
-    logger.info({ code, reason: reason.toString() }, 'WebSocket connection closed');
+    logger.info(
+      { code, reason: reason.toString(), userId: sessionUser?.id ?? null },
+      'WebSocket connection closed',
+    );
   });
 
   stream.socket.on('error', (error: Error) => {

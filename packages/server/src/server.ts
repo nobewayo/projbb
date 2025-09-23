@@ -1,10 +1,12 @@
 import Fastify, { type FastifyInstance, type FastifyPluginOptions } from 'fastify';
+import cors from '@fastify/cors';
 import websocketPlugin from '@fastify/websocket';
 import type { SocketStream } from '@fastify/websocket';
 import type { IncomingMessage, OutgoingHttpHeaders } from 'http';
 import type { ReadinessController } from './readiness.js';
 import type { ServerConfig } from './config.js';
 import { handleRealtimeConnection } from './ws/connection.js';
+import { authRoutes } from './api/auth.js';
 
 const SUPPORTED_SUBPROTOCOL = 'bitby.v1';
 const MAX_WS_MESSAGE_BYTES = 64 * 1024;
@@ -67,6 +69,12 @@ export const createServer = async ({
   } satisfies FastifyPluginOptions);
 
   app.decorate('readiness', readiness);
+  await app.register(cors, {
+    origin: config.CLIENT_ORIGIN,
+    credentials: true
+  });
+
+  await app.register(authRoutes, { config });
 
   app.get('/healthz', async () => ({ status: 'ok' }));
 
@@ -84,7 +92,8 @@ export const createServer = async ({
     handleRealtimeConnection({
       app,
       stream: connection,
-      requestId: request.id
+      requestId: request.id,
+      config
     });
   });
 

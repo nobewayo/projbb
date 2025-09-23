@@ -4,13 +4,13 @@
 This repository implements the Bitby platform following the **Master Spec v3.7**. The stack is now wired together as a pnpm monorepo with:
 
 - a Vite + React client that now renders the deterministic top-right anchored grid preview with live hit-testing across the fixed 10-row field, keeps the right panel and bottom dock chrome locked to the new stage footprint, and surfaces a blocking reconnect overlay driven by the realtime WebSocket hook
-- a Fastify-based server skeleton with `/healthz`, `/readyz`, and a guarded WebSocket endpoint enforcing the `bitby.v1` subprotocol while responding to `auth` and `ping` operations with stubbed payloads so the client can exercise the heartbeat loop end to end
+- a Fastify-based server that now issues short-lived JWTs from `/auth/login`, seeds Argon2-hashed development users, and exposes a guarded `/ws` endpoint enforcing the `bitby.v1` subprotocol while validating tokens, streaming a development room snapshot, and servicing the heartbeat loop end to end
 - shared schema utilities for the canonical WebSocket envelope (consumed by both client + server during the handshake)
 - Docker Compose definitions for Postgres and Redis
 
 This guide explains how to clone, run, and test the project on a Windows PC using the GitHub Desktop GUI or Docker-based tooling.
 
-> **Note:** The deterministic grid renderer now paints the full 10-row field (10 columns on even rows, 11 on odd rows) with a development HUD so geometry can be verified. A realtime hook connects to the Fastify server, performs the stubbed `auth` + `ping` handshake, and shows the blocking reconnect overlay mandated by the spec whenever the socket drops. Avatars, movement, and authoritative room state are still stubs—the scaffolding below exists so those features can be layered in incrementally without violating the guardrails.
+> **Note:** The deterministic grid renderer now paints the full 10-row field (10 columns on even rows, 11 on odd rows) with a development HUD so geometry can be verified. The realtime hook authenticates with the server using the new `/auth/login` JWT flow, receives a stubbed-but-structured room snapshot (player seed plus NPC + tile flags), and shows the blocking reconnect overlay mandated by the spec whenever the socket drops. Avatars, movement, and authoritative state streaming remain placeholders so subsequent milestones can build atop the verified geometry and auth loop without breaking the guardrails.
 
 ---
 
@@ -85,14 +85,23 @@ Two workflows are supported. Choose the one that fits your setup. The actual app
    ```powershell
    pnpm install
    ```
-2. **Start the API/WebSocket server** (Fastify + `@fastify/websocket` skeleton):
+2. **Start the API/WebSocket server** (Fastify + JSON Web Tokens + `@fastify/websocket`):
    ```powershell
    pnpm --filter @bitby/server dev
    ```
    The server listens on `http://localhost:3001` by default and exposes:
    - `GET /healthz` → `{ status: "ok" }`
    - `GET /readyz` → `{ status: "ready" }` once the process is accepting traffic (503 otherwise)
-   - `GET /ws` (WebSocket) → accepts only if the client specifies `bitby.v1`; responds with development `system:hello` guidance, echoes `auth:ok` with a stub profile, and answers `ping` with `pong` while enforcing a 30 s heartbeat timeout. Future iterations will swap the stubbed payloads for authoritative room state.
+   - `POST /auth/login` → accepts `{ "username": "test", "password": "password123" }` style payloads, verifies the Argon2id hash for that seeded user (`test`, `test2`, `test3`, `test4` all share the development password), and returns `{ token, expiresIn, user }` where `token` is an HS256 JWT signed with the development secret
+   - `GET /ws` (WebSocket) → only accepts connections that negotiate the `bitby.v1` subprotocol. The server validates the provided JWT, replies with `auth:ok` containing the seed profile, heartbeat interval, and a development room snapshot (player + NPC occupant, plus flagged tiles), answers `ping` with `pong`, and terminates idle sessions once the 30 s heartbeat window elapses.
+
+   The React client now requests a token automatically when no `VITE_BITBY_DEV_TOKEN` override is supplied, but you can inspect the login response manually via PowerShell:
+
+   ```powershell
+   Invoke-RestMethod -Method Post -Uri http://localhost:3001/auth/login -Body (@{ username = 'test'; password = 'password123' } | ConvertTo-Json) -ContentType 'application/json'
+   ```
+
+   The returned `token` value can be copied into `.env.local` as `VITE_BITBY_DEV_TOKEN` if you want to bypass the automatic login.
 
 3. **Launch the client dev server** (Vite + React deterministic grid preview) in a separate terminal:
    ```powershell
@@ -163,6 +172,9 @@ Future updates will add API, WebSocket, and client containers that bind to the s
 Testing harnesses are gradually rolling out. The current scripts already wire up TypeScript builds, Vitest, and ESLint across packages:
 
 ```powershell
+# Ensure generated schema typings exist before type checking
+pnpm --filter @bitby/schemas build
+
 pnpm test
 
 pnpm lint
@@ -186,10 +198,13 @@ REDIS_URL=redis://localhost:6379
 JWT_SECRET=<development-only-secret>
 ASSET_CDN_BASE=http://localhost:8080/assets
 VITE_BITBY_WS_URL=ws://localhost:3001/ws
-VITE_BITBY_DEV_TOKEN=local-development-token
+VITE_BITBY_HTTP_URL=http://localhost:3001
+VITE_BITBY_DEV_USERNAME=test
+VITE_BITBY_DEV_PASSWORD=password123
+VITE_BITBY_DEV_TOKEN=
 ```
 
-Copy the template to `.env.local` (git-ignored) and adjust values for your machine.
+Copy the template to `.env.local` (git-ignored) and adjust values for your machine. Leaving `VITE_BITBY_DEV_TOKEN` blank instructs the client to call `/auth/login` with the provided username/password; populate it only if you want to force a pre-issued JWT instead of using the automatic login helper.
 
 ---
 

@@ -491,15 +491,16 @@ When implementing, **Codex should**:
 ## 24) Progress Snapshot — 2025-09-24
 
 - ✅ Client grid renderer + chrome are live with the spec-mandated blocking reconnect overlay driven by a reusable `useRealtimeConnection` hook.
-- ✅ Fastify WebSocket endpoint now enforces `bitby.v1`, handles stubbed `auth` + `ping` envelopes, and closes idle sockets after the 30 s heartbeat window.
+- ✅ Fastify WebSocket endpoint now enforces `bitby.v1`, validates HS256 JWTs issued from `/auth/login`, returns a development room snapshot inside `auth:ok`, and closes idle sockets after the 30 s heartbeat window.
 - ✅ Shared schema package backs both sides of the handshake so malformed envelopes are rejected before business logic runs.
 - ✅ Client dev workflow automatically rebuilds `@bitby/schemas` before Vite starts (with a dedicated `pnpm --filter @bitby/schemas dev` watcher) so the workspace no longer crashes on fresh clones when resolving shared envelopes.
+- ✅ React client now performs the `/auth/login` flow automatically, surfaces heartbeat-driven reconnect status, and keeps the stage chrome deterministic while waiting for authoritative state streaming.
 
 ### Immediate Next Focus
 
-1. Swap the stubbed auth handshake for JWT verification, authoritative room snapshots, and movement/chat broadcast loops.
-2. Layer optimistic avatar movement on the client with snapback handling tied to the server acks.
-3. Stand up Postgres/Redis (local Docker) and wire the server to persist/load room state ahead of catalog/item work.
-4. Extend `@bitby/schemas` with per-op definitions (`auth:ok`, `pong`, `error:*`) so the server/client no longer rely on ad-hoc payload shapes.
+1. Layer optimistic avatar movement on the client with snapback handling tied to the server acks and the JWT-backed session context.
+2. Stand up Postgres/Redis (local Docker) and wire the server to persist/load room state ahead of catalog/item work.
+3. Extend `@bitby/schemas` with per-op definitions (`auth:ok`, `room:snapshot`, `error:*`) so the server/client no longer rely on ad-hoc payload shapes.
+4. Implement movement/chat broadcast loops that hydrate the room snapshot and drive client state updates beyond the current fixtures.
 
 **End of AGENT.md**

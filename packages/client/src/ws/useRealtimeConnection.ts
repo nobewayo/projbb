@@ -4,6 +4,8 @@ import { messageEnvelopeSchema, type MessageEnvelope } from '@bitby/schemas';
 const WS_SUBPROTOCOL = 'bitby.v1';
 const DEFAULT_HEARTBEAT_MS = 15_000;
 const MAX_RECONNECT_DELAY_MS = 15_000;
+const LOGIN_USERNAME_FALLBACK = 'test';
+const LOGIN_PASSWORD_FALLBACK = 'password123';
 
 export type ConnectionStatus =
   | 'connecting'
@@ -38,6 +40,25 @@ const resolveWebSocketUrl = (): string => {
   return `${protocol}://${window.location.hostname}:3001/ws`;
 };
 
+const resolveHttpBaseUrl = (): string => {
+  if (import.meta.env.VITE_BITBY_HTTP_URL) {
+    return import.meta.env.VITE_BITBY_HTTP_URL.replace(/\/$/, '');
+  }
+
+  const protocol = window.location.protocol === 'https:' ? 'https' : 'http';
+  return `${protocol}://${window.location.hostname}:3001`;
+};
+
+const getExplicitToken = (): string | null => {
+  const token = import.meta.env.VITE_BITBY_DEV_TOKEN;
+  return typeof token === 'string' && token.trim().length > 0 ? token : null;
+};
+
+const getDevCredentials = (): { username: string; password: string } => ({
+  username: import.meta.env.VITE_BITBY_DEV_USERNAME ?? LOGIN_USERNAME_FALLBACK,
+  password: import.meta.env.VITE_BITBY_DEV_PASSWORD ?? LOGIN_PASSWORD_FALLBACK,
+});
+
 export const useRealtimeConnection = (): RealtimeConnectionState => {
   const [state, setState] = useState<RealtimeConnectionState>({
     status: 'connecting',
@@ -53,10 +74,12 @@ export const useRealtimeConnection = (): RealtimeConnectionState => {
   const countdownTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const reconnectAttemptsRef = useRef(0);
   const disposedRef = useRef(false);
+  const tokenRef = useRef<string | null>(getExplicitToken());
+  const loginPromiseRef = useRef<Promise<string> | null>(null);
+  const loginAbortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     const url = resolveWebSocketUrl();
-    const token = import.meta.env.VITE_BITBY_DEV_TOKEN ?? 'local-development-token';
 
     const clearPingTimer = () => {
       if (pingTimerRef.current) {
@@ -70,6 +93,14 @@ export const useRealtimeConnection = (): RealtimeConnectionState => {
         clearInterval(countdownTimerRef.current);
         countdownTimerRef.current = null;
       }
+    };
+
+    const abortLogin = () => {
+      if (loginAbortRef.current) {
+        loginAbortRef.current.abort();
+        loginAbortRef.current = null;
+      }
+      loginPromiseRef.current = null;
     };
 
     const startPingTimer = (intervalMs: number) => {
@@ -93,6 +124,101 @@ export const useRealtimeConnection = (): RealtimeConnectionState => {
         ...previous,
         ...partial,
       }));
+    };
+
+    const requestAuthToken = async (): Promise<string> => {
+      if (disposedRef.current) {
+        throw new Error('Realtime connection disposed');
+      }
+
+      const explicit = getExplicitToken();
+      if (explicit) {
+        tokenRef.current = explicit;
+        return explicit;
+      }
+
+      if (tokenRef.current) {
+        return tokenRef.current;
+      }
+
+      if (loginPromiseRef.current) {
+        return loginPromiseRef.current;
+      }
+
+      const { username, password } = getDevCredentials();
+      const baseUrl = resolveHttpBaseUrl();
+
+      if (loginAbortRef.current) {
+        loginAbortRef.current.abort();
+      }
+
+      const controller = new AbortController();
+      loginAbortRef.current = controller;
+
+      const promise = fetch(`${baseUrl}/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password }),
+        credentials: 'include',
+        signal: controller.signal,
+      })
+        .then(async (response) => {
+          if (!response.ok) {
+            const clone = response.clone();
+            let message = `Login failed (${response.status})`;
+            try {
+              const errorJson = await clone.json();
+              if (errorJson && typeof errorJson.message === 'string') {
+                message = `${message}: ${errorJson.message}`;
+              }
+            } catch {
+              const errorText = await clone.text().catch(() => '');
+              if (errorText) {
+                message = `${message}: ${errorText}`;
+              }
+            }
+            throw new Error(message);
+          }
+
+          let payload: unknown;
+          try {
+            payload = await response.json();
+          } catch (error) {
+            throw new Error('Unable to parse login response');
+          }
+
+          if (!payload || typeof payload !== 'object') {
+            throw new Error('Login response missing token');
+          }
+
+          const tokenValue = (payload as { token?: unknown }).token;
+          if (typeof tokenValue !== 'string' || tokenValue.length === 0) {
+            throw new Error('Login response missing token');
+          }
+
+          tokenRef.current = tokenValue;
+          return tokenValue;
+        });
+
+      loginPromiseRef.current = promise
+        .catch((error) => {
+          tokenRef.current = null;
+          throw error;
+        })
+        .finally(() => {
+          if (loginPromiseRef.current === promise) {
+            loginPromiseRef.current = null;
+          }
+          if (loginAbortRef.current === controller) {
+            loginAbortRef.current = null;
+          }
+        });
+
+      if (!loginPromiseRef.current) {
+        throw new Error('Failed to initialise login flow');
+      }
+
+      return loginPromiseRef.current;
     };
 
     const handleEnvelope = (envelope: MessageEnvelope) => {
@@ -127,6 +253,12 @@ export const useRealtimeConnection = (): RealtimeConnectionState => {
               typeof envelope.data?.message === 'string'
                 ? envelope.data.message
                 : 'Realtime error received';
+            if (
+              envelope.op === 'error:auth_invalid' ||
+              envelope.op === 'error:not_authenticated'
+            ) {
+              tokenRef.current = null;
+            }
             updateState({ lastError: message });
           }
         }
@@ -136,6 +268,7 @@ export const useRealtimeConnection = (): RealtimeConnectionState => {
     const scheduleReconnect = () => {
       clearPingTimer();
       clearCountdownTimer();
+      abortLogin();
 
       reconnectAttemptsRef.current += 1;
       const attempt = reconnectAttemptsRef.current;
@@ -163,11 +296,11 @@ export const useRealtimeConnection = (): RealtimeConnectionState => {
       reconnectTimerRef.current = setTimeout(() => {
         clearCountdownTimer();
         updateState({ retryInSeconds: null });
-        connect();
+        void connect();
       }, delay);
     };
 
-    const connect = () => {
+    const connect = async () => {
       if (disposedRef.current) {
         return;
       }
@@ -182,6 +315,20 @@ export const useRealtimeConnection = (): RealtimeConnectionState => {
       updateState({
         status: 'connecting',
       });
+
+      let token: string;
+      try {
+        token = await requestAuthToken();
+      } catch (error) {
+        if (disposedRef.current) {
+          return;
+        }
+        const message =
+          error instanceof Error ? error.message : 'Failed to fetch auth token';
+        updateState({ lastError: message });
+        scheduleReconnect();
+        return;
+      }
 
       const socket = new WebSocket(url, WS_SUBPROTOCOL);
       socketRef.current = socket;
@@ -231,6 +378,10 @@ export const useRealtimeConnection = (): RealtimeConnectionState => {
           return;
         }
 
+        if (event.code === 4003 || event.code === 4401) {
+          tokenRef.current = null;
+        }
+
         const reason = event.reason || 'Connection closed';
         updateState({ lastError: `${reason} (code ${event.code})` });
         socketRef.current = null;
@@ -246,12 +397,13 @@ export const useRealtimeConnection = (): RealtimeConnectionState => {
       });
     };
 
-    connect();
+    void connect();
 
     return () => {
       disposedRef.current = true;
       clearPingTimer();
       clearCountdownTimer();
+      abortLogin();
       if (reconnectTimerRef.current) {
         clearTimeout(reconnectTimerRef.current);
       }
