@@ -6,7 +6,10 @@
     "jsx": "react-jsx",
     "baseUrl": ".",
     "paths": {
-      "@bitby/schemas": ["../schemas/src/index.ts"]
+      "@bitby/schemas": [
+        "../schemas/dist/index.d.ts",
+        "../schemas/dist/index.js"
+      ]
     },
     "types": ["vite/client"]
   },
