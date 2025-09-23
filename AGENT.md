@@ -186,8 +186,9 @@ Each proto has `weight` (1–10). Sum ≤ maxWeight.
 - **Blocking reconnect overlay** on network loss until `auth:ok` + room resync.
 
 **Chrome layout**
-- Right panel fixed **400px** (not slideable). Bottom chat log ≈ 400px high.  
-- Bottom dock (64px) slides **left only**; right‑edge tab (28px) always visible.  
+- Right panel fixed **500px** (not slideable) with header copy tucked close to the top edges and placeholder content that fills the column. Chat history lives in a freestanding, fully rounded card offset to the panel’s right, spans from the status bar to the bottom menu, opens by default, hides native scrollbars, reveals a **“Back to top”** control only after scrolling, delays timestamps until 500 ms hover/focus, and can be hidden via the card close button or the top-bar chat icon without shifting the surrounding layout. When collapsed it leaves behind a floating **‹ Log ›** handle aligned with the panel edge. Messages pack tightly, fill the full width, and place the actor label in the card’s top-left corner to minimise wasted space.
+- Primary menu stays permanently attached to the bottom edge of the stage, spans the canvas and panel, uses compact (~36px) buttons, cannot collapse, and only its bottom corners are rounded.
+- Add a persistent top bar bonded to the stage with player stats (name plus a single-line, accent-coloured coins/level readout), a looping news ticker, and a chat bubble icon on the far right that toggles the external chat log.
 - Themes affect only chrome; **never** the canvas.
 
 ---
@@ -370,8 +371,8 @@ Each proto has `weight` (1–10). Sum ≤ maxWeight.
 ## 17) UI/Theme Rules (Chrome Only)
 
 - Theme tokens from Master Spec §16. **Never** modify canvas visuals.  
-- Bottom dock slides **left only**; right‑edge tab always visible.  
-- Right panel fixed width (400px) with chat log at bottom (~400px).  
+- Primary menu is permanently attached to the bottom edge of the stage, spans the playfield plus panel, and only its bottom corners are rounded.
+- Right panel fixed width (500px) with header copy tight to the top edge and text content that fills the column. Chat history lives in a freestanding, fully rounded card offset to the panel’s right that spans from the status bar to the bottom dock, opens by default, hides native scrollbars, surfaces a **“Back to top”** affordance only after scrolling, delays timestamps until 500 ms hover/focus, and when collapsed leaves a **‹ Log ›** arrow handle aligned with the panel edge while the top-bar chat icon or the handle can restore it without shifting the surrounding layout.
 - Context menus follow rules in §6; keyboard accessible.  
 - Accessibility: AA+ contrast, focus rings, keyboard nav.
 
