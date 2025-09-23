@@ -4,7 +4,7 @@
     "outDir": "dist",
     "moduleResolution": "NodeNext",
     "module": "NodeNext",
-    "types": ["node"],
+    "types": ["node", "ws"],
     "noEmit": true
   },
   "include": ["src/**/*.ts", "src/**/*.d.ts"],

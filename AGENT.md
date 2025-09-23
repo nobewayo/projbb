@@ -488,11 +488,12 @@ When implementing, **Codex should**:
 
 ---
 
-## 24) Progress Snapshot — 2025-09-23
+## 24) Progress Snapshot — 2025-09-24
 
 - ✅ Client grid renderer + chrome are live with the spec-mandated blocking reconnect overlay driven by a reusable `useRealtimeConnection` hook.
 - ✅ Fastify WebSocket endpoint now enforces `bitby.v1`, handles stubbed `auth` + `ping` envelopes, and closes idle sockets after the 30 s heartbeat window.
 - ✅ Shared schema package backs both sides of the handshake so malformed envelopes are rejected before business logic runs.
+- ✅ Client dev workflow automatically rebuilds `@bitby/schemas` before Vite starts (with a dedicated `pnpm --filter @bitby/schemas dev` watcher) so the workspace no longer crashes on fresh clones when resolving shared envelopes.
 
 ### Immediate Next Focus
 

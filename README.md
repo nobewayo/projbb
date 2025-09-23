@@ -98,6 +98,14 @@ Two workflows are supported. Choose the one that fits your setup. The actual app
    ```powershell
    pnpm --filter @bitby/client dev
    ```
+   The client script now runs a pre-step that builds the shared `@bitby/schemas` workspace before Vite boots. This guarantees the
+   generated `dist/index.js` exists even on fresh clones or after dependency churn, eliminating the "Failed to resolve
+   import '@bitby/schemas'" error that Vite reported previously. If you are iterating on schema definitions, start a watcher in a
+   third terminal so edits rebuild automatically:
+   ```powershell
+   pnpm --filter @bitby/schemas dev
+   ```
+   Leave the watcher running while the client is open so TypeScript output stays in sync.
 4. Open the client URL at [http://localhost:5173](http://localhost:5173) once Vite reports it is ready. The client now renders the full 10-row deterministic grid (10 columns on even rows, 11 on odd rows) anchored to the canvas’ top-right corner, with a 50 px top gutter, 25 px gutters on the left/right, and no bottom padding so every diamond clears the chrome. It highlights the tile under the pointer via the canonical diamond hit test and overlays a development HUD displaying the tile coordinate, tile center, and pointer pixel location. Stage chrome stays pixel-perfect (875 px canvas + 500 px panel + 290 px chat drawer) while the chat drawer, admin quick menu, and primary menu continue to follow the Master Spec interactions outlined below. The canvas background stretches flush between the top status bar and bottom dock with no vertical whitespace, the bottom dock keeps only its bottom-left corner rounded while hugging the canvas width exactly, and the right panel now runs square corners except for the rounded bottom-right seam that meets the dock. If the realtime socket drops, the spec-mandated blocking overlay covers the entire stage until the authenticated connection is restored.
 
 > **Tip:** If you prefer WSL2 for better Node/Docker performance, clone the repo within the WSL filesystem (e.g., `/home/<user>/projbb`). GitHub Desktop can open the project in WSL by selecting “Open in Windows Terminal” and choosing a WSL profile.
@@ -201,6 +209,7 @@ Copy the template to `.env.local` (git-ignored) and adjust values for your machi
 | Ports already in use | Stop conflicting services (`Get-Process -Id (Get-NetTCPConnection -LocalPort <port>).OwningProcess`). |
 | Docker WSL integration errors | Enable **Use the WSL 2 based engine** in Docker Desktop settings and ensure your Linux distro is checked under **Resources → WSL Integration**. |
 | File permission mismatch between Windows & WSL | Prefer keeping the project within WSL’s filesystem for Node/Docker workloads. |
+| Vite fails to resolve `@bitby/schemas` | Start the client via `pnpm --filter @bitby/client dev` so the automatic prebuild runs, or run `pnpm --filter @bitby/schemas build` manually once. |
 
 ---
 
