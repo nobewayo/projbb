@@ -1,167 +1,131 @@
-# Bitby Project Setup & Running Guide (Windows)
+# Bitby Developer Guide
 
+This monorepo tracks the Bitby implementation described in **Master Spec v3.7**. It now includes:
 
-This repository implements the Bitby platform following the **Master Spec v3.7**. The stack is now wired together as a pnpm monorepo with:
+- a Vite + React client that renders the deterministic, top-right anchored 10-row grid preview with diamond hit-testing and HUD readouts
+- a Fastify-based API/WebSocket skeleton that enforces the `bitby.v1` subprotocol, readiness gates, and health endpoints
+- shared schema utilities that expose the canonical WebSocket envelope via Zod
+- Docker Compose tooling for local Postgres + Redis services
 
-- a Vite + React client that now renders the deterministic top-right anchored grid preview with live hit-testing across the fixed 10-row field, while keeping the right panel and bottom dock chrome locked to the new stage footprint
-- a Fastify-based server skeleton with `/healthz`, `/readyz`, and a guarded WebSocket endpoint enforcing the `bitby.v1` subprotocol
-- shared schema utilities for the canonical WebSocket envelope
-- Docker Compose definitions for Postgres and Redis
-
-This guide explains how to clone, run, and test the project on a Windows PC using the GitHub Desktop GUI or Docker-based tooling.
-
-> **Note:** The deterministic grid renderer now paints the full 10-row field (10 columns on even rows, 11 on odd rows) with a development HUD so geometry can be verified, while avatars, movement, and the remaining realtime systems are still stubs. The scaffolding below ensures the required services boot with the correct guardrails so features can be layered in incrementally.
+> **Status note:** Movement, catalog, chat, and avatar compositing are not implemented yet. The current build focuses on geometry correctness, layout fidelity, and server guardrails so that realtime features can be layered on without breaking the Master Spec’s non-negotiables.
 
 ---
 
 ## 1. Prerequisites
 
-### 1.1 Hardware & OS
-- Windows 10/11 64-bit with administrator access.
-- At least 16 GB RAM recommended (for running API, WebSocket, Postgres, and Redis locally).
+### Operating systems
 
-### 1.2 Required Software
+- macOS 13+/Linux (native or WSL2) with Node.js 20 LTS
+- Windows 10/11 (PowerShell 7+ recommended). WSL2 is strongly encouraged for Docker workloads.
 
-| Tool | Purpose | Download |
-| --- | --- | --- |
-| [GitHub Desktop](https://desktop.github.com/) | GUI Git client for cloning/pulling/committing. | Install via official installer |
-| [Windows Terminal](https://www.microsoft.com/en-us/p/windows-terminal/9n0dx20hk701) or PowerShell | Shell for running local commands. | Microsoft Store |
-| [Node.js 20 LTS](https://nodejs.org/en/download/) | Runtime for client & server packages. Includes `npm`. | Windows `.msi` installer |
-| [pnpm](https://pnpm.io/installation) | Preferred package manager (`npm`-compatible). | `npm install -g pnpm` |
-| [Docker Desktop](https://www.docker.com/products/docker-desktop/) *(optional but recommended)* | Runs Postgres, Redis, and other services in containers. | Install via official installer |
-| [Visual Studio Code](https://code.visualstudio.com/) *(optional)* | Editor with TypeScript tooling. | Official installer |
+### Required tooling
 
-Ensure that after installing Node.js, running `node -v` and `npm -v` in PowerShell returns version numbers, then install pnpm globally:
+| Tool | Purpose |
+| --- | --- |
+| [Node.js 20 LTS](https://nodejs.org/) | Runtime for all packages. Includes `npm`.
+| [pnpm 8](https://pnpm.io/installation) | Workspace package manager. Install with `npm install -g pnpm` after Node.
+| [Git](https://git-scm.com/) | Version control. Any GUI/CLI client is fine.
+| [Docker Desktop](https://www.docker.com/products/docker-desktop/) *(optional for now)* | Provides Postgres + Redis containers used later in the roadmap.
 
-```powershell
-npm install -g pnpm
+Verify your environment once installed:
+
+```bash
+node -v
 pnpm -v
 ```
 
 ---
 
-## 2. Cloning the Repository via GitHub Desktop
-
-1. Open **GitHub Desktop** and sign in with your GitHub account.
-2. Click **File → Clone Repository…** and choose the **URL** tab.
-3. Enter the repository URL (e.g., `https://github.com/<your-org>/projbb.git`).
-4. Pick a local path (e.g., `C:\Projects\bitby`) and click **Clone**.
-5. After cloning, click **Open in Visual Studio Code** (optional) or use Windows Terminal to navigate into the repository folder.
-
-
-Whenever updates are pushed, use **Fetch origin** → **Pull** inside GitHub Desktop to stay current. After pulling, run `pnpm install` to sync dependencies if any package manifests changed.
-
-
----
-
-## 3. Project Structure (in progress)
+## 2. Repository Layout (2025-09)
 
 ```
 projbb/
-├─ Master Spec.md           # Canonical product & technical spec (do not modify without approval)
-├─ README.md                # This setup guide
-├─ pnpm-workspace.yaml      # Workspace definition (packages/*)
-├─ package.json             # Root scripts (build, lint, dev, test)
-├─ tsconfig.base.json       # Shared TypeScript compiler options
+├─ Master Spec.md           # Canonical product & technical spec (read-only)
+├─ AGENT.md                 # Execution guardrails + status notes
+├─ README.md                # You are here
+├─ package.json             # Root scripts (lint/test/build/dev wrappers)
+├─ pnpm-workspace.yaml      # Workspace definition
 ├─ packages/
-│  ├─ client/               # Vite + React client with deterministic grid preview + chrome
-│  ├─ server/               # Fastify API/WS skeleton enforcing spec guardrails
-│  ├─ schemas/              # Shared Zod schemas (e.g., WS envelope)
-│  └─ infra/                # Docker Compose and future deployment tooling
-└─ ... (assets, migrations, and feature modules will land in future commits)
+│  ├─ client/               # Vite + React deterministic grid preview
+│  ├─ server/               # Fastify API/WS skeleton with guardrails
+│  ├─ schemas/              # Shared Zod schemas (WS envelope)
+│  └─ infra/                # Docker Compose for Postgres + Redis
+└─ start-windows.*          # Helper launchers for Windows
 ```
 
-The repository uses `pnpm` workspaces to manage dependencies consistently across packages.
+All packages are TypeScript-first and share compiler settings via `tsconfig.base.json`.
 
 ---
 
-## 4. Running the Stack Locally (future-ready)
+## 3. First-Time Setup
 
-Two workflows are supported. Choose the one that fits your setup. The actual application code will introduce the commands referenced here.
-
-### 4.1 pnpm (Native Windows or WSL)
-
-1. **Install dependencies** (run from the repository root after cloning or pulling):
-   ```powershell
+1. Clone the repository and `cd projbb`.
+2. Install dependencies from the repo root:
+   ```bash
    pnpm install
    ```
-2. **Start the API/WebSocket server** (Fastify + `@fastify/websocket` skeleton):
-   ```powershell
-   pnpm --filter @bitby/server dev
-   ```
-   The server listens on `http://localhost:3001` by default and exposes:
-   - `GET /healthz` → `{ status: "ok" }`
-   - `GET /readyz` → `{ status: "ready" }` once the process is accepting traffic (503 otherwise)
-   - `GET /ws` (WebSocket) → accepts only if the client specifies `bitby.v1`; immediately closes with `1012` until realtime handlers are implemented.
-
-3. **Launch the client dev server** (Vite + React deterministic grid preview) in a separate terminal:
-   ```powershell
-   pnpm --filter @bitby/client dev
-   ```
-4. Open the client URL at [http://localhost:5173](http://localhost:5173) once Vite reports it is ready. The client now renders the full 10-row deterministic grid (10 columns on even rows, 11 on odd rows) anchored to the canvas’ top-right corner, with a 50 px top gutter, 25 px gutters on the left/right, and no bottom padding so every diamond clears the chrome. It highlights the tile under the pointer via the canonical diamond hit test and overlays a development HUD displaying the tile coordinate, tile center, and pointer pixel location. Stage chrome stays pixel-perfect (875 px canvas + 500 px panel + 290 px chat drawer) while the chat drawer, admin quick menu, and primary menu continue to follow the Master Spec interactions outlined below. The canvas background stretches flush between the top status bar and bottom dock with no vertical whitespace, the bottom dock keeps only its bottom-left corner rounded while hugging the canvas width exactly, and the right panel now runs square corners except for the rounded bottom-right seam that meets the dock.
-
-> **Tip:** If you prefer WSL2 for better Node/Docker performance, clone the repo within the WSL filesystem (e.g., `/home/<user>/projbb`). GitHub Desktop can open the project in WSL by selecting “Open in Windows Terminal” and choosing a WSL profile.
-
-### 4.2 Windows Quick Launcher (optional)
-
-To start both the Fastify server and Vite client at once on Windows, run the helper script from the repository root:
-
-```powershell
-./start-windows.ps1
-```
-
-
-The launcher now detects whether the workspace has been bootstrapped—if `node_modules` is missing it automatically runs `pnpm install` before spawning the dev servers. Pass `-InstallDependencies` at any time to force a fresh install.
-
-Prefer double-clicking? Use the companion batch file instead of opening PowerShell manually:
-
-```batch
-start-windows.bat
-```
-
-Both entry points open two new PowerShell windows—one for the server and one for the client—so logs remain easy to follow per the observability guidelines in the Master Spec.
-
-### 4.3 Docker (database + cache services)
-
-The initial Docker Compose stack located at `packages/infra/docker/docker-compose.yml` starts Postgres and Redis with development-safe defaults.
-
-1. Ensure Docker Desktop is running.
-2. From Windows Terminal (PowerShell) in the repo root, run:
-   ```powershell
-   cd packages\infra\docker
+3. (Optional) Start the database/cache stack if you need Postgres/Redis:
+   ```bash
+   cd packages/infra/docker
    docker compose up -d
    ```
-3. Services start with the credentials shown in the compose file (`bitby/bitby`). When you are done, stop them with:
-   ```powershell
-   docker compose down
-   ```
-4. To wipe persistent volumes, run `docker compose down -v`.
+   Credentials: Postgres `bitby/bitby`; Redis uses the default DB with `volatile-lru` eviction.
 
-Future updates will add API, WebSocket, and client containers that bind to the same network for end-to-end testing.
+The workspace is now ready for the dev servers below.
 
 ---
 
-## 5. Testing
+## 4. Running the Dev Servers
 
-Testing harnesses are gradually rolling out. The current scripts already wire up TypeScript builds, Vitest, and ESLint across packages:
+Open two terminals from the repository root:
 
-```powershell
-pnpm test
+```bash
+# Terminal A – Fastify API/WebSocket skeleton
+pnpm --filter @bitby/server dev
 
-pnpm lint
-pnpm typecheck
-
-# Run package builds (emits dist/ for server + schemas)
-pnpm build
+# Terminal B – Vite client
+pnpm --filter @bitby/client dev
 ```
 
-When Docker-based services are required (e.g., Postgres), Compose files will include seeded data. Integration tests will automatically connect to those containers when run via `pnpm test`.
+- The server listens on `http://localhost:3001`.
+  - `GET /healthz` → `{ status: "ok" }`
+  - `GET /readyz` → `{ status: "ready" }` once startup completes; otherwise 503 with `{ status: "starting" }`
+  - `GET /ws` requires the `bitby.v1` subprotocol, echoes a placeholder system message, and closes with code `1012` until realtime handlers ship.
+- The client dev server runs at [http://localhost:5173](http://localhost:5173). It renders:
+  - the anchored 10-row diamond grid with the canonical hit-test
+  - a HUD showing tile indices, tile centers, and pointer coordinates
+  - fixed chrome (top bar, right panel, bottom dock, chat drawer, admin pill) matching the Master Spec layout tokens
+
+### Windows helpers
+
+PowerShell users can launch both processes via:
+
+```powershell
+./start-windows.ps1         # detects missing node_modules and installs automatically
+```
+
+Or double-click `start-windows.bat`, which spawns two PowerShell windows (server + client).
 
 ---
 
-## 6. Environment Variables & Secrets
+## 5. Testing & Quality Gates
 
-Once server packages are committed, sample `.env.example` files will be added. Typical variables include:
+Run workspace-wide checks from the repo root:
+
+```bash
+pnpm lint        # ESLint across all packages
+pnpm typecheck   # Strict TypeScript builds
+pnpm test        # Vitest placeholders (pass with no specs)
+pnpm build       # Package builds (server+schemas emit to dist/)
+```
+
+Individual packages expose the same commands behind `pnpm --filter <name>`.
+
+---
+
+## 6. Environment Variables
+
+Realtime features will require environment configuration. Expect the following keys once those modules land:
 
 ```
 POSTGRES_URL=postgres://bitby:bitby@localhost:5432/bitby
@@ -170,49 +134,49 @@ JWT_SECRET=<development-only-secret>
 ASSET_CDN_BASE=http://localhost:8080/assets
 ```
 
-Copy the template to `.env.local` (git-ignored) and adjust values for your machine.
+Sample `.env.example` files will be added alongside the relevant packages when the variables are consumed.
 
 ---
 
-## 7. Keeping in Sync with the Master Spec
+## 7. Current Implementation Snapshot
 
-- The **Master Spec.md** file in the repository root is the authoritative design document. Review it before contributing changes.
-- Non-negotiable requirements—grid determinism, top-right anchoring, WSS subprotocol enforcement, server authority—must be preserved in every feature.
-- Deviations must be explicitly approved and noted via code comments referencing the request.
+- ✅ Deterministic grid renderer with diamond hit-testing, HUD, and anchored chrome
+- ✅ Fastify API skeleton with readiness gating, health endpoints, and strict WebSocket subprotocol enforcement
+- ✅ Shared Zod schema for the realtime message envelope
+- ✅ Docker Compose stack for Postgres + Redis (no application services yet)
+- 🚧 Movement, catalog, chat, paper-doll rendering, and persistence remain unimplemented.
 
 ---
 
-## 8. Troubleshooting Tips (Windows)
+## 8. Immediate Next Steps
+
+1. Implement the optimistic movement loop (client prediction + server validation + snapback) per Master Spec §§2–3.
+2. Flesh out the WebSocket handshake (`auth`, heartbeat, `move`, `chat`) with JSON Schema validation (§§1, 8, 23).
+3. Introduce Postgres/Redis integrations with migrations, seeds, and room authority plumbing (§§12–13, 21).
+4. Expand the schemas package with operation-specific Zod/JSON Schemas and OpenAPI definitions for `/auth/login` (§23).
+5. Add automated test coverage (grid math unit tests, server integration tests, visual goldens) and wire into CI (§18).
+
+Keep the README updated as milestones land so the next engineer has an accurate handoff.
+
+---
+
+## 9. Troubleshooting
 
 | Issue | Resolution |
 | --- | --- |
-| `pnpm` not recognized | Reopen your terminal after `npm install -g pnpm`, or ensure `C:\Users\<you>\AppData\Roaming\npm` is on the PATH. |
-| Ports already in use | Stop conflicting services (`Get-Process -Id (Get-NetTCPConnection -LocalPort <port>).OwningProcess`). |
-| Docker WSL integration errors | Enable **Use the WSL 2 based engine** in Docker Desktop settings and ensure your Linux distro is checked under **Resources → WSL Integration**. |
-| File permission mismatch between Windows & WSL | Prefer keeping the project within WSL’s filesystem for Node/Docker workloads. |
+| `pnpm` command missing | Re-open your shell after global install or ensure your global npm bin dir is on `PATH`. |
+| Ports already in use | Kill the conflicting process (`lsof -i :5173` on macOS/Linux or `Get-NetTCPConnection` on Windows). |
+| Docker fails on Windows | Enable the WSL 2 backend in Docker Desktop and ensure your distro is checked under **Resources → WSL Integration**. |
+| Node dependency drift | Re-run `pnpm install` after pulling new changes; lockfile is authoritative. |
 
 ---
 
-## 9. Next Steps in the Roadmap
+## 10. Contributing
 
-
-1. Layer optimistic avatar movement + snapback logic on top of the deterministic grid renderer (Master Spec §2–3).
-2. Flesh out the WebSocket handshake (`auth`, heartbeats, move/chat ops) on top of the Fastify server (§1, §8).
-3. Bring up Postgres/Redis migrations and seed data via Docker Compose (§12, §13, §21).
-4. Establish automated testing harnesses (unit, integration, visual goldens) and CI workflows.
-5. Expand the schemas package with JSON Schemas/OpenAPI definitions covering the realtime and REST protocols (§23).
-
-
-Progress will be tracked in future commits; this document will evolve with concrete commands as they become available.
-
----
-
-## 10. Support & Contribution Guidelines
-
-- Use GitHub issues to track tasks aligned with Master Spec milestones.
-- Submit pull requests referencing the relevant sections of the spec.
-- Run the documented tests before opening a PR; attach logs to the PR description.
-- Follow the coding guidelines in `AGENT.md` and comment intent for non-obvious logic (especially around grid math and server authority).
+- Review **Master Spec.md** and `AGENT.md` before coding. Non-negotiables (grid determinism, server authority, subprotocol enforcement) must never regress.
+- Prefer small, well-scoped commits that reference relevant spec sections.
+- Run the quality gates above before opening a PR and attach logs to the PR description.
+- Document intent in code when implementing tricky geometry, snapback logic, or security-sensitive flows.
 
 ---
 

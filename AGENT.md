@@ -477,14 +477,48 @@ When implementing, **Codex should**:
 
 ## 23) Ready‑to‑Implement Tasks (First Sprint)
 
-1) Client grid renderer with top‑right anchor & diamond hit test; draw cell centers for dev overlay.  
-2) WS client with subprotocol, heartbeat, blocking reconnect overlay.  
-3) WS server endpoints: `auth`, `move`, `chat`; Redis room pub/sub skeleton.  
-4) Postgres schema & migrations; seed users/room.  
-5) Basic right panel and bottom dock (slide-left, tab).  
-6) Item click → panel info; pickup rule gating.  
-7) Metrics & health endpoints.  
+1) Client grid renderer with top‑right anchor & diamond hit test; draw cell centers for dev overlay.
+2) WS client with subprotocol, heartbeat, blocking reconnect overlay.
+3) WS server endpoints: `auth`, `move`, `chat`; Redis room pub/sub skeleton.
+4) Postgres schema & migrations; seed users/room.
+5) Basic right panel and bottom dock (slide-left, tab).
+6) Item click → panel info; pickup rule gating.
+7) Metrics & health endpoints.
 8) JSON Schemas for `auth`, `move`, `chat`; OpenAPI for `/auth` REST.
+
+---
+
+## 24) Status Checkpoint (2025-09-24)
+
+- ✅ Deterministic 10-row canvas preview renders via React + `<canvas>` with canonical hit-testing, HUD overlays, and fixed chrome (top bar, right panel, bottom dock, chat drawer, admin pill) matching the Master Spec layout tokens.
+- ✅ Fastify server boots with `/healthz`, `/readyz`, readiness gating, and a WebSocket endpoint that enforces `bitby.v1`, caps payloads at 64 KB, and currently closes with `1012` after emitting `system:not_ready`.
+- ✅ `@bitby/schemas` exposes the canonical WS envelope via Zod for reuse across client/server packages.
+- ✅ `packages/infra/docker` starts Postgres + Redis for future persistence layers (no application containers yet).
+- 🚧 Outstanding: optimistic movement loop, auth handshake, chat, catalog deltas, Postgres/Redis integration, asset pipeline, visual regression tests.
+
+---
+
+## 25) Workflow Notes
+
+- Install dependencies once per clone with `pnpm install` (root). All packages share the pnpm lockfile; never mix npm/yarn.
+- Run the dev loop with two terminals: `pnpm --filter @bitby/server dev` (Fastify + WS) and `pnpm --filter @bitby/client dev` (Vite). Windows users can call `./start-windows.ps1` to spawn both.
+- Quality gates before committing/PRs:
+  - `pnpm lint`
+  - `pnpm typecheck`
+  - `pnpm test`
+  - `pnpm build`
+- Keep the canvas renderer deterministic—avoid device-pixel-ratio drift by using the helper in `GridCanvas.tsx` and do not introduce theme-dependent rendering inside the playfield.
+- Document intentional deviations from the Master Spec directly in code comments and surface the approval source in PR descriptions.
+
+---
+
+## 26) Next Engineering Milestones
+
+1) Implement the WS auth handshake (`auth` → `auth:ok`) with JWT validation and room bootstrap snapshot.
+2) Layer the optimistic movement loop: client prediction → server validation → broadcast/snapback; respect tile locks and `noPickup` flags.
+3) Expand `@bitby/schemas` with operation-specific Zod builders + JSON Schema emission for `auth`, `move`, `chat`, and catalog deltas; consume them on server routes.
+4) Introduce Postgres migrations + Redis presence caches via the infra package; seed default room/users (`test*` accounts with 1M coins).
+5) Add automated tests: grid math unit suite, server integration smoke (healthz/readyz/ws handshake), and begin planning visual goldens for the canvas.
 
 ---
 
