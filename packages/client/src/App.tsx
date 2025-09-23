@@ -20,86 +20,68 @@ type ChatMessage = {
 
 const placeholderChatHistory: ChatMessage[] = [
   {
-    id: 'system-0',
-    actor: 'system',
-    body: 'Welcome to Bitby. Realtime chat will populate this log.',
-    time: '08:00',
-  },
-  {
     id: 'system-1',
-    actor: 'system',
-    body: 'Daily quests rotate at midnight UTC. Claim rewards before the reset!',
-    time: '08:02',
-  },
-  {
-    id: 'test-0',
-    actor: 'test',
-    body: 'Movement loop placeholder: walking toward tile (5, 8).',
-    time: '08:04',
+    actor: 'System',
+    body: 'Welcome to Bitby. Realtime chat will populate this log.',
+    time: '17:58',
   },
   {
     id: 'system-2',
-    actor: 'system',
-    body: 'Admin: Spawned a practice bot near the fountain for collision testing.',
-    time: '08:05',
+    actor: 'System',
+    body: 'Daily quests rotate at midnight UTC. Claim rewards before the reset!',
+    time: '17:59',
   },
   {
-    id: 'test2-0',
-    actor: 'test2',
-    body: 'Inventory sync placeholder: picked up a wooden stool.',
-    time: '08:07',
+    id: 'player-0',
+    actor: 'Player',
+    body: 'Movement loop placeholder: walking toward tile (5, 8).',
+    time: '18:00',
   },
   {
     id: 'system-3',
-    actor: 'system',
-    body: 'Room broadcast: Lighting preset changed to dusk ambience.',
-    time: '08:08',
+    actor: 'System',
+    body: 'Admin: Spawned a practice bot near the fountain for collision testing.',
+    time: '18:01',
   },
   {
-    id: 'test-1',
-    actor: 'test',
-    body: 'Chat placeholder: “Can someone open the quest panel?”',
-    time: '08:10',
+    id: 'player-1',
+    actor: 'Player',
+    body: 'Quest tracker placeholder: Completed “Arrange the lounge chairs.”',
+    time: '18:02',
   },
   {
     id: 'system-4',
-    actor: 'system',
+    actor: 'System',
     body: 'Economy update placeholder: Daily coin stipend delivered.',
-    time: '08:12',
-  },
-  {
-    id: 'test3-0',
-    actor: 'test3',
-    body: 'Quest tracker placeholder: Completed “Arrange the lounge chairs.”',
-    time: '08:14',
-  },
-  {
-    id: 'test4-0',
-    actor: 'test4',
-    body: 'Movement placeholder: teleport anchor verified.',
-    time: '08:16',
+    time: '18:03',
   },
   {
     id: 'system-5',
-    actor: 'system',
+    actor: 'System',
     body: 'Room presence placeholder: 8 visitors online in the plaza.',
-    time: '08:18',
+    time: '18:04',
+  },
+  {
+    id: 'player-2',
+    actor: 'Player',
+    body: 'Hey folks, checking the plaza lighting real quick.',
+    time: '18:05',
   },
   {
     id: 'system-6',
-    actor: 'system',
+    actor: 'System',
     body: 'Reminder: Chat history shows the latest 100 entries. Older logs archive to the server.',
-    time: '08:20',
+    time: '18:06',
   },
 ];
 
 const App = (): JSX.Element => {
   const [isDockCollapsed, setIsDockCollapsed] = useState(false);
   const [isChatCollapsed, setIsChatCollapsed] = useState(false);
-  const chatMessagesRef = useRef<HTMLDivElement | null>(null);
+  const chatMessagesRef = useRef<HTMLOListElement | null>(null);
 
   const chatLogEntries = useMemo(
-    () => placeholderChatHistory.slice(-100),
+    () => placeholderChatHistory.slice(-100).reverse(),
     [],
   );
 
@@ -110,7 +92,7 @@ const App = (): JSX.Element => {
 
     const container = chatMessagesRef.current;
     if (container) {
-      container.scrollTop = container.scrollHeight;
+      container.scrollTop = 0;
     }
   }, [isChatCollapsed, chatLogEntries]);
 
@@ -120,7 +102,7 @@ const App = (): JSX.Element => {
   );
 
   const chatToggleLabel = useMemo(
-    () => (isChatCollapsed ? 'Expand chat log' : 'Collapse chat log'),
+    () => (isChatCollapsed ? 'Expand chat history' : 'Collapse chat history'),
     [isChatCollapsed],
   );
 
@@ -160,7 +142,7 @@ const App = (): JSX.Element => {
       <aside className="right-panel" aria-label="Right panel placeholder">
         <header className="right-panel__header">
           <h1>Right Panel</h1>
-          <p>Chat log, item info, and profile views will render here.</p>
+          <p>Chat history, item info, and profile views will render here.</p>
         </header>
         <section className="panel-body">
           <p>
@@ -174,37 +156,29 @@ const App = (): JSX.Element => {
         </section>
         <section
           className={isChatCollapsed ? 'chat-log chat-log--collapsed' : 'chat-log'}
-          aria-label="Chat log placeholder"
+          aria-label="Chat history"
         >
-          <header className="chat-log__header">
-            <div className="chat-log__title">
-              <h2>Chat log</h2>
-              <p className="chat-log__status">
-                Showing last {chatLogEntries.length} of {placeholderChatHistory.length} updates
-              </p>
-            </div>
-            <button
-              type="button"
-              className="chat-log__toggle"
-              onClick={() => setIsChatCollapsed((prev) => !prev)}
-              aria-expanded={!isChatCollapsed}
-              aria-controls="chat-log-messages"
-              aria-label={chatToggleLabel}
-            >
-              {isChatCollapsed ? 'Expand' : 'Collapse'}
-            </button>
-          </header>
-          <div id="chat-log-messages" className="chat-log__messages" ref={chatMessagesRef}>
-            {chatLogEntries.map((message) => (
-              <article key={message.id}>
-                <header>
-                  <h3>{message.actor}</h3>
-                  <time dateTime={message.time}>{message.time}</time>
-                </header>
-                <p>{message.body}</p>
-              </article>
-            ))}
-          </div>
+          {isChatCollapsed ? null : (
+            <ol id="chat-log-messages" className="chat-log__messages" ref={chatMessagesRef}>
+              {chatLogEntries.map((message) => (
+                <li key={message.id}>
+                  <span className="chat-log__time">({message.time})</span>
+                  <span className="chat-log__actor">{message.actor}:</span>
+                  <span className="chat-log__body">{message.body}</span>
+                </li>
+              ))}
+            </ol>
+          )}
+          <button
+            type="button"
+            className={isChatCollapsed ? 'chat-log__toggle chat-log__toggle--collapsed' : 'chat-log__toggle'}
+            onClick={() => setIsChatCollapsed((prev) => !prev)}
+            aria-expanded={!isChatCollapsed}
+            aria-controls="chat-log-messages"
+          >
+            <span aria-hidden="true">{isChatCollapsed ? '▲' : '▼'}</span>
+            <span className="sr-only">{chatToggleLabel}</span>
+          </button>
         </section>
       </aside>
     </div>

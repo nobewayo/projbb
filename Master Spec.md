@@ -93,7 +93,7 @@ sy >= originY && (sy + tileH) <= (originY + gridH)
 
 **Right panel**
 - Fixed width **400px**, full height; **not** slideable.
-- Bottom chat log shows the latest **100** entries with a subtle separator line from the body copy, a compact header label, and a collapse/expand control so the log never hides the rest of the panel. It must always surface at least the last **10** chats/actions and allow scrolling for overflow.
+- Bottom chat log shows the latest **100** entries with a subtle separator line from the body copy, alternating row backgrounds, and each line formatted like `(18:02) System: This happened.` so the newest activity stays at the top. The collapse control tucks the history down to a single arrow anchored at the bottom without shifting the dock, and expanding restores a scrollable view that always surfaces at least the last **10** chats/actions.
 - Item **Info** opens in the panel (no popups).
 
 **Bottom dock**
