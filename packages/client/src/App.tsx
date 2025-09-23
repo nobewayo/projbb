@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import GridCanvas from './canvas/GridCanvas';
 import './styles.css';
+import { useRealtimeConnection } from './ws/useRealtimeConnection';
 
 const dockButtons = [
   'Rooms',
@@ -109,6 +110,7 @@ const App = (): JSX.Element => {
   const [showSystemMessages, setShowSystemMessages] = useState(true);
   const [showBackToTop, setShowBackToTop] = useState(false);
   const chatMessagesRef = useRef<HTMLOListElement | null>(null);
+  const connection = useRealtimeConnection();
 
   const chatLogEntries = useMemo(() => {
     const baseLog = showSystemMessages
@@ -181,6 +183,41 @@ const App = (): JSX.Element => {
     : 'Show system messages';
   const systemToggleTooltip = showSystemMessages ? 'Hide System Logs' : 'Show System Logs';
 
+  const overlayCopy = useMemo(() => {
+    switch (connection.status) {
+      case 'connecting':
+        return {
+          title: 'Connecting to Bitby…',
+          message: 'Establishing a secure realtime channel to the authority server.',
+        } as const;
+      case 'authenticating':
+        return {
+          title: 'Authenticating…',
+          message:
+            'Validating the development session token before streaming the room snapshot.',
+        } as const;
+      case 'reconnecting': {
+        const retryFragment =
+          connection.retryInSeconds !== null
+            ? `Retrying in ${connection.retryInSeconds}s…`
+            : 'Attempting to restore the realtime session…';
+        const errorFragment = connection.lastError ?? null;
+
+        const segments = [errorFragment, retryFragment].filter(
+          (segment): segment is string => Boolean(segment),
+        );
+
+        return {
+          title: 'Connection lost',
+          message: segments.join(' · '),
+        } as const;
+      }
+      case 'connected':
+      default:
+        return { title: '', message: '' } as const;
+    }
+  }, [connection.lastError, connection.retryInSeconds, connection.status]);
+
   const handleMenuButtonClick = (label: string): void => {
     if (label === 'Admin') {
       setIsAdminPanelVisible((prev) => !prev);
@@ -189,6 +226,24 @@ const App = (): JSX.Element => {
 
   return (
     <div className="stage-shell">
+      {connection.status !== 'connected' ? (
+        <div
+          className="reconnect-overlay"
+          role="alertdialog"
+          aria-live="assertive"
+          aria-modal="true"
+        >
+          <div className="reconnect-overlay__panel">
+            <span className="reconnect-overlay__spinner" aria-hidden="true" />
+            <div className="reconnect-overlay__copy">
+              <h2 className="reconnect-overlay__title">{overlayCopy.title}</h2>
+              {overlayCopy.message ? (
+                <p className="reconnect-overlay__message">{overlayCopy.message}</p>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      ) : null}
       <div className="stage">
         <header className="stage__top-bar" aria-label="Player overview and news">
           <div className="top-bar__profile" aria-label="Player overview">

@@ -4,6 +4,7 @@ import type { SocketStream } from '@fastify/websocket';
 import type { IncomingMessage, OutgoingHttpHeaders } from 'http';
 import type { ReadinessController } from './readiness.js';
 import type { ServerConfig } from './config.js';
+import { handleRealtimeConnection } from './ws/connection.js';
 
 const SUPPORTED_SUBPROTOCOL = 'bitby.v1';
 const MAX_WS_MESSAGE_BYTES = 64 * 1024;
@@ -60,8 +61,8 @@ export const createServer = async ({
         info: { req: IncomingMessage },
         next: VerifyClientNext
       ): void => enforceSubprotocol(info.req, next),
-      handleProtocols: (protocols: string[]): string | false =>
-        protocols.includes(SUPPORTED_SUBPROTOCOL) ? SUPPORTED_SUBPROTOCOL : false
+      handleProtocols: (protocols: Set<string>): string | false =>
+        protocols.has(SUPPORTED_SUBPROTOCOL) ? SUPPORTED_SUBPROTOCOL : false
     }
   } satisfies FastifyPluginOptions);
 
@@ -79,14 +80,12 @@ export const createServer = async ({
     return { status: 'ready' };
   });
 
-  app.get('/ws', { websocket: true }, (connection: SocketStream) => {
-    connection.socket.send(
-      JSON.stringify({
-        op: 'system:not_ready',
-        data: { message: 'Realtime protocol not implemented yet' }
-      })
-    );
-    connection.socket.close(1012, 'Protocol scaffolding pending');
+  app.get('/ws', { websocket: true }, (connection: SocketStream, request) => {
+    handleRealtimeConnection({
+      app,
+      stream: connection,
+      requestId: request.id
+    });
   });
 
   return app;
