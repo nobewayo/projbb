@@ -92,15 +92,21 @@ sy >= originY && (sy + tileH) <= (originY + gridH)
 ## 3) Core UX
 
 **Right panel**
-- Fixed width **400px**, full height; **not** slideable.
-- Bottom chat log shows the latest **100** entries with a subtle separator line from the body copy, alternating row backgrounds, and each line formatted like `(18:02) System: This happened.` so the newest activity stays at the top. The collapse control tucks the history down to a single arrow anchored at the bottom without shifting the dock, and expanding restores a scrollable view that always surfaces at least the last **10** chats/actions.
+- Fixed width **500px**, full height; **not** slideable, with header copy tucked close to the top edge, a slim accent divider beneath the title, and dense text sections that stretch across the column so the footprint stays visually active without form fields.
+- Chat history renders in a freestanding, fully rounded card immediately to the panel’s right that stretches from the top status bar to the bottom menu. It opens by default and can be hidden only via the top-bar chat icon or the floating **‹ Log ›** handle without shifting the canvas or panel. Native scrollbars stay hidden while a **“Back to top”** affordance appears only after scrolling, timestamps wait 500 ms on hover/focus with the tooltip anchored to the hovered card, rows alternate colour, start flush beneath the header, and stretch edge-to-edge down to the drawer base. The chat header exposes an **!** toggle that instantly hides/shows system messages (with a tooltip reflecting the current state) without disturbing surrounding layout.
 - Item **Info** opens in the panel (no popups).
 
-**Bottom dock**
-- Overlays canvas bottom, height **64px**; slides **left only**.
-- **Right-edge tab** (28px) remains visible/clickable when collapsed.
+**Primary menu bar**
+- Permanently attached beneath the playfield and panel with only the bottom corners rounded. Buttons stay compact (~36px tall) and auto-resize to evenly fill the full width of the canvas-plus-panel bar regardless of button count.
 - Buttons: **Rooms, Shop, Log, Search, Quests, Settings, Admin**.
-- Default state keeps the dock expanded; collapsing is opt-in via the tab to keep the menu discoverable.
+- Menu cannot be collapsed or hidden; it remains fixed to the stage bottom.
+
+**Top status bar**
+- Flush with the stage top edge and shows player name, an accent-coloured single-line readout that lists **Level → coins** in that order, plus a looping news ticker.
+- Paired round icon buttons sit on the far right: a **? Support** button and a **chat bubble** toggle. Both surface labelled tooltips on hover/focus so their purpose remains clear.
+
+**Admin/debug bar**
+- A pill-shaped, button-only admin/debug bar floats outside the stage chrome, hugging the top status bar instead of consuming layout inside the stage. It only appears when the bottom-bar **Admin** button is active, lists quick actions (e.g., reload room, toggle grid, latency trace), sits on its own layer so no surrounding layout shifts when toggled, and will later gate to admin accounts. During development builds it spawns visible by default so screenshots/demos always capture the admin affordances.
 
 **Input precedence**
 1) **Left-click item** (painted rect/alpha) → open **Item Info** in panel.  
@@ -562,7 +568,7 @@ CREATE TABLE audit_log (
 **Components**
 - Buttons: Primary (filled), Ghost (outlined); min hit 40×40.  
 - Context menu: z-index high; title “On this tile”; Info/Saml Op inline; click-through not allowed while open.  
-- Bottom dock: slides **left only**; right-edge tab remains visible.  
+- Primary menu bar: fixed to the stage bottom, spans canvas + panel, cannot collapse, and only its bottom corners are rounded.
 - A11y: focus ring 2px, contrast AA+, keyboardable; `Esc` closes menus; respect `prefers-reduced-motion`.  
 - Visual stability test: switching theme must **not** alter any canvas pixels (checksum render).
 
@@ -862,7 +868,7 @@ ads:
 
 ## A.1 Layout & Anchoring (Chrome around the grid)
 
-- **Stage container (fixed)**: A fixed-size “stage” holds: **grid canvas** (anchored **top-right**), **right panel** (fixed 400px), **bottom dock** (overlays canvas bottom). If the browser window is smaller than the stage, allow natural clipping—**never** reflow the canvas.
+- **Stage container (fixed)**: A fixed-size “stage” holds: **top status bar**, **grid canvas** (anchored **top-right**), **right panel** (fixed 500px), and a **primary menu bar** bonded to the bottom edge. If the browser window is smaller than the stage, allow natural clipping—**never** reflow the canvas.
 - **Safe areas**: Maintain 8–12px gutters between canvas edges and overlay chrome (dock, debug badges).
 - **Scroll**: Right panel scrolls internally; stage never scrolls the canvas.
 
@@ -878,18 +884,18 @@ ads:
 - Ghost/Outline: 1px outline (token `outline`), hover raises to 2px with slight background tint (token primary at 6%).
 - Icon buttons: 40×40 min target; tooltip on hover after 600ms.
 
-## A.4 Bottom Dock (Slide-Left)
+## A.4 Primary Menu Bar (Fixed)
 
-- Dock height **64px**; slides fully off-canvas to the **left**.  
-- **Right-edge tab** width **28px** always visible; displays chevron indicating state; click → slide-in/out with 220ms ease-in-out.
-- Button order: **Rooms, Shop, Log, Search, Quests, Settings, Admin**. Use consistent icons; labels visible.
-- Dock must never occlude the right-edge tab itself; z-index above canvas but below context menus.
+- Height **64px**; spans the entire stage width beneath the playfield and panel with top corners flush and bottom corners rounded 14px.
+- Always visible; no collapse, slide, or hide affordance.
+- Button order: **Rooms, Shop, Log, Search, Quests, Settings, Admin**. Keep icons+labels visible.
+- Z-index above the canvas chrome but below context menus; integrates with the stage shadow without overlap.
 
 ## A.5 Right Panel
 
 - Header with title and optional subtitle/breadcrumb.  
-- **Sections**: Profile / Item Info / Chat Log (fixed ≈ 400px at bottom).  
-- Chat log uses the same bubble style as canvas, but without position tails; timestamps right-aligned in subtle mono (12px).  
+- **Sections**: Profile / Item Info / Chat Log (panel width locked at 500px; chat log keeps its footprint even when collapsed).
+- Chat log hides native scrollbars, surfaces a **“Back to top”** affordance only after scrolling, lays alternating rows flush beneath the header all the way to the drawer base, and reveals timestamps via tooltip after 500 ms hover/focus.
 - Item Info replaces panel body; back affordance (chevron) returns to previous view.
 
 ## A.6 Context Menus

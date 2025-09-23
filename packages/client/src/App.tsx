@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { CSSProperties, useEffect, useMemo, useRef, useState } from 'react';
 import './styles.css';
 
 const dockButtons = [
@@ -9,6 +9,12 @@ const dockButtons = [
   'Quests',
   'Settings',
   'Admin',
+];
+
+const adminShortcuts = [
+  'Reload room',
+  'Toggle grid',
+  'Latency trace',
 ];
 
 type ChatMessage = {
@@ -75,112 +81,295 @@ const placeholderChatHistory: ChatMessage[] = [
   },
 ];
 
+const panelSections = [
+  {
+    title: 'Room overview',
+    body:
+      'Live occupants, furniture states, and queued moderation events surface here once the realtime feeds are connected. Expect inline moderation cards, visitor summaries, and streaming alerts to pack this column so admins never lose context while monitoring rooms.',
+  },
+  {
+    title: 'Quest tracker',
+    body:
+      'Track daily quests, event timers, and party tasks. Progress updates from the authoritative server stream directly into this stack, keeping collaborators aligned on milestones without needing to leave the canvas or pop additional dialogs.',
+  },
+  {
+    title: 'Pinned threads',
+    body:
+      'Moderators can pin essential announcements or support replies for quick reference without leaving the canvas. Long-form guidance, policy notes, and escalation timelines can all live here as fully formatted text blocks.',
+  },
+];
+
 const App = (): JSX.Element => {
-  const [isDockCollapsed, setIsDockCollapsed] = useState(false);
-  const [isChatCollapsed, setIsChatCollapsed] = useState(false);
+  const [isChatVisible, setIsChatVisible] = useState(true);
+  const [isAdminPanelVisible, setIsAdminPanelVisible] = useState(
+    () => import.meta.env.DEV,
+  );
+  const [showSystemMessages, setShowSystemMessages] = useState(true);
+  const [showBackToTop, setShowBackToTop] = useState(false);
   const chatMessagesRef = useRef<HTMLOListElement | null>(null);
 
-  const chatLogEntries = useMemo(
-    () => placeholderChatHistory.slice(-100).reverse(),
+  const chatLogEntries = useMemo(() => {
+    const baseLog = showSystemMessages
+      ? placeholderChatHistory
+      : placeholderChatHistory.filter((message) => message.actor !== 'System');
+
+    return baseLog.slice(-100);
+  }, [showSystemMessages]);
+
+  const primaryMenuStyle = useMemo(
+    () => ({ '--menu-count': dockButtons.length } as CSSProperties),
     [],
   );
 
   useEffect(() => {
-    if (isChatCollapsed) {
+    if (!isChatVisible) {
+      setShowBackToTop(false);
       return;
     }
 
     const container = chatMessagesRef.current;
     if (container) {
-      container.scrollTop = 0;
+      container.scrollTop = container.scrollHeight;
+      setShowBackToTop(false);
     }
-  }, [isChatCollapsed, chatLogEntries]);
+  }, [isChatVisible, chatLogEntries]);
 
-  const dockTabLabel = useMemo(
-    () => (isDockCollapsed ? 'Expand primary dock' : 'Collapse primary dock'),
-    [isDockCollapsed],
-  );
+  useEffect(() => {
+    if (!isChatVisible) {
+      return;
+    }
 
-  const chatToggleLabel = useMemo(
-    () => (isChatCollapsed ? 'Expand chat history' : 'Collapse chat history'),
-    [isChatCollapsed],
+    const container = chatMessagesRef.current;
+    if (!container) {
+      return;
+    }
+
+    const handleScroll = (): void => {
+      const distanceFromBottom =
+        container.scrollHeight - container.scrollTop - container.clientHeight;
+
+      setShowBackToTop(distanceFromBottom > 4);
+    };
+
+    handleScroll();
+    container.addEventListener('scroll', handleScroll, { passive: true });
+
+    return () => {
+      container.removeEventListener('scroll', handleScroll);
+    };
+  }, [isChatVisible]);
+
+  const username = 'TestUser';
+  const coinBalance = 1280;
+  const level = 12;
+  const newsTicker = useMemo(
+    () => [
+      'Server maintenance scheduled for 02:00 UTC.',
+      'New plaza furniture pack arrives tomorrow.',
+      'Beta invitations expand to wave three next week.',
+    ],
+    [],
   );
+  const marqueeEntries = useMemo(() => newsTicker.concat(newsTicker), [newsTicker]);
+  const chatToggleLabel = isChatVisible ? 'Hide chat log' : 'Show chat log';
+  const chatToggleTooltip = 'Chat Log';
+  const supportTooltip = 'Support';
+  const systemToggleLabel = showSystemMessages
+    ? 'Hide system messages'
+    : 'Show system messages';
+  const systemToggleTooltip = showSystemMessages ? 'Hide System Logs' : 'Show System Logs';
+
+  const handleMenuButtonClick = (label: string): void => {
+    if (label === 'Admin') {
+      setIsAdminPanelVisible((prev) => !prev);
+    }
+  };
 
   return (
-    <div className="stage">
-      <main className="canvas-area" aria-label="Bitby room canvas placeholder">
-        <div className="canvas-placeholder" role="presentation">
-          <p className="canvas-placeholder__title">Bitby Grid Canvas</p>
-          <p className="canvas-placeholder__body">
-            Deterministic diamond grid rendering, avatars, and realtime movement will appear here as the
-            Master Spec milestones are implemented.
-          </p>
+    <div className="stage-shell">
+      <div className="stage">
+        <header className="stage__top-bar" aria-label="Player overview and news">
+          <div className="top-bar__profile" aria-label="Player overview">
+            <span className="top-bar__username">{username}</span>
+            <span className="top-bar__meta">
+              <span className="top-bar__level">Level {level}</span>
+              <span className="top-bar__divider" aria-hidden="true">
+                •
+              </span>
+              <span className="top-bar__coins">{coinBalance.toLocaleString()} coins</span>
+            </span>
+          </div>
+          <div className="top-bar__news" aria-label="Latest news" role="presentation">
+            <div className="top-bar__news-track">
+              {marqueeEntries.map((entry, index) => (
+                <span key={`${entry}-${index}`} className="top-bar__news-item">
+                  {entry}
+                </span>
+              ))}
+            </div>
+          </div>
+          <div className="top-bar__actions">
+            <button
+              type="button"
+              className="top-bar__icon-button has-tooltip top-bar__support-button"
+              aria-label={supportTooltip}
+              data-tooltip={supportTooltip}
+            >
+              <svg viewBox="0 0 24 24" role="presentation" aria-hidden="true">
+                <path
+                  fill="currentColor"
+                  d="M12 2a10 10 0 1 0 10 10A10.011 10.011 0 0 0 12 2Zm.75 14.5a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0ZM12 13a.75.75 0 0 1-.75-.75A2.252 2.252 0 0 1 12.7 10a1.5 1.5 0 1 0-2.45-1.15.75.75 0 0 1-1.5 0 3 3 0 1 1 4.5 2.6 1.5 1.5 0 0 0-.75 1.3.75.75 0 0 1-.75.75Z"
+                />
+              </svg>
+            </button>
+            <button
+              type="button"
+              className="top-bar__icon-button has-tooltip top-bar__chat-button"
+              onClick={() => setIsChatVisible((prev) => !prev)}
+              aria-pressed={isChatVisible}
+              aria-label={chatToggleLabel}
+              data-tooltip={chatToggleTooltip}
+            >
+              <svg viewBox="0 0 24 24" role="presentation" aria-hidden="true">
+                <path
+                  fill="currentColor"
+                  d="M5 4h14a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-5.586L9 20.414V17H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"
+                />
+              </svg>
+              <span className="sr-only">{chatToggleLabel}</span>
+            </button>
+          </div>
+        </header>
+        <div className="stage__content">
+        <main className="canvas-area" aria-label="Bitby room canvas placeholder">
+          <div className="canvas-placeholder" role="presentation">
+            <p className="canvas-placeholder__title">Bitby Grid Canvas</p>
+            <p className="canvas-placeholder__body">
+              Deterministic diamond grid rendering, avatars, and realtime movement will appear here as the
+              Master Spec milestones are implemented.
+            </p>
+          </div>
+        </main>
+          <aside className="right-panel" aria-label="Right panel placeholder">
+            <header className="right-panel__header">
+              <h1>Right Panel</h1>
+              <span className="right-panel__header-divider" aria-hidden="true" />
+            </header>
+            <section className="right-panel__sections" aria-label="Upcoming panel modules">
+              {panelSections.map((section) => (
+                <article key={section.title} className="right-panel__section">
+                  <h2>{section.title}</h2>
+                  <p>{section.body}</p>
+                </article>
+              ))}
+            </section>
+          </aside>
         </div>
         <nav
-          id="primary-dock"
-          className={isDockCollapsed ? 'dock dock--collapsed' : 'dock'}
+          className="primary-menu"
           aria-label="Primary actions"
-          aria-hidden={isDockCollapsed}
+          style={primaryMenuStyle}
         >
           {dockButtons.map((label) => (
-            <button key={label} type="button">
+            <button
+              key={label}
+              type="button"
+              onClick={() => handleMenuButtonClick(label)}
+              aria-pressed={label === 'Admin' ? isAdminPanelVisible : undefined}
+              data-active={label === 'Admin' ? isAdminPanelVisible : undefined}
+            >
               {label}
             </button>
           ))}
         </nav>
-        <button
-          type="button"
-          className="dock-tab"
-          aria-label={dockTabLabel}
-          aria-controls="primary-dock"
-          aria-expanded={!isDockCollapsed}
-          onClick={() => setIsDockCollapsed((prev) => !prev)}
-        >
-          {isDockCollapsed ? '›' : '‹'}
-        </button>
-      </main>
-      <aside className="right-panel" aria-label="Right panel placeholder">
-        <header className="right-panel__header">
-          <h1>Right Panel</h1>
-          <p>Chat history, item info, and profile views will render here.</p>
-        </header>
-        <section className="panel-body">
-          <p>
-            This placeholder reserves the fixed 400px panel required by the Master Spec. Future commits will
-            hydrate it with live data and chat history streamed from the authoritative server.
-          </p>
-          <p>
-            The surrounding chrome already respects the deterministic canvas boundary so future Pixi/WebGL
-            rendering can drop in without shifting layout.
-          </p>
-        </section>
-        <section
-          className={isChatCollapsed ? 'chat-log chat-log--collapsed' : 'chat-log'}
+        <aside
+          className={isChatVisible ? 'chat-drawer chat-drawer--open' : 'chat-drawer chat-drawer--collapsed'}
           aria-label="Chat history"
         >
-          {isChatCollapsed ? null : (
-            <ol id="chat-log-messages" className="chat-log__messages" ref={chatMessagesRef}>
-              {chatLogEntries.map((message) => (
-                <li key={message.id}>
-                  <span className="chat-log__time">({message.time})</span>
-                  <span className="chat-log__actor">{message.actor}:</span>
-                  <span className="chat-log__body">{message.body}</span>
-                </li>
-              ))}
-            </ol>
-          )}
-          <button
-            type="button"
-            className={isChatCollapsed ? 'chat-log__toggle chat-log__toggle--collapsed' : 'chat-log__toggle'}
-            onClick={() => setIsChatCollapsed((prev) => !prev)}
-            aria-expanded={!isChatCollapsed}
-            aria-controls="chat-log-messages"
-          >
-            <span aria-hidden="true">{isChatCollapsed ? '▲' : '▼'}</span>
-            <span className="sr-only">{chatToggleLabel}</span>
-          </button>
-        </section>
-      </aside>
+          <div className="chat-drawer__panel" aria-hidden={!isChatVisible}>
+            <header className="chat-drawer__header">
+              <h2>Chat Log</h2>
+              <div className="chat-drawer__actions">
+                <button
+                  type="button"
+                  className={
+                    showSystemMessages
+                      ? 'chat-drawer__system-toggle has-tooltip'
+                      : 'chat-drawer__system-toggle chat-drawer__system-toggle--muted has-tooltip'
+                  }
+                  onClick={() => setShowSystemMessages((prev) => !prev)}
+                  aria-pressed={showSystemMessages}
+                  aria-label={systemToggleLabel}
+                  data-tooltip={systemToggleTooltip}
+                >
+                  !
+                </button>
+              </div>
+            </header>
+            <div className="chat-drawer__body">
+              <div className="chat-log__messages-wrapper">
+                <ol
+                  id="chat-log-messages"
+                  className="chat-log__messages"
+                  ref={chatMessagesRef}
+                  aria-hidden={!isChatVisible}
+                >
+                  {chatLogEntries.map((message) => (
+                    <li
+                      key={message.id}
+                      className="chat-log__message"
+                      data-time={message.time}
+                      tabIndex={0}
+                    >
+                      <span className="chat-log__actor">{message.actor}</span>
+                      <span className="chat-log__body">{message.body}</span>
+                    </li>
+                  ))}
+                </ol>
+                {isChatVisible && showBackToTop ? (
+                  <button
+                    type="button"
+                    className="chat-log__back-to-top"
+                    onClick={() => {
+                      const container = chatMessagesRef.current;
+                      if (container) {
+                        container.scrollTo({ top: 0, behavior: 'smooth' });
+                      }
+                    }}
+                  >
+                    Back to top
+                  </button>
+                ) : null}
+              </div>
+            </div>
+          </div>
+          {!isChatVisible ? (
+            <button
+              type="button"
+              className="chat-drawer__handle"
+              onClick={() => setIsChatVisible(true)}
+              aria-label="Show chat log"
+            >
+              <span aria-hidden="true">‹</span>
+              <span>Log</span>
+              <span aria-hidden="true">›</span>
+            </button>
+          ) : null}
+        </aside>
+      </div>
+      <nav
+        className={isAdminPanelVisible ? 'admin-panel admin-panel--open' : 'admin-panel'}
+        aria-label="Admin shortcuts"
+        aria-hidden={!isAdminPanelVisible}
+      >
+        <div className="admin-panel__inner" role="group" aria-label="Admin quick actions">
+          {adminShortcuts.map((item) => (
+            <button key={item} type="button" className="admin-panel__button">
+              {item}
+            </button>
+          ))}
+        </div>
+      </nav>
     </div>
   );
 };
