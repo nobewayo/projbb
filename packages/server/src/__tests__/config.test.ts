@@ -6,31 +6,25 @@ describe('resolveCorsOrigins', () => {
     expect(resolveCorsOrigins('https://bitby.dev/app')).toBe('https://bitby.dev');
   });
 
-  it('returns an allow list that includes loopback aliases for localhost', () => {
+  it('returns a regex that permits localhost aliases across ports', () => {
     const origin = resolveCorsOrigins('http://localhost:5173');
-    expect(origin).toEqual([
-      'http://localhost:5173',
-      'http://127.0.0.1:5173',
-      'http://[::1]:5173'
-    ]);
+    expect(origin).toBeInstanceOf(RegExp);
+    const pattern = origin as RegExp;
+    expect(pattern.test('http://localhost:5173')).toBe(true);
+    expect(pattern.test('http://localhost:5174')).toBe(true);
+    expect(pattern.test('http://127.0.0.1:5173')).toBe(true);
+    expect(pattern.test('http://[::1]:6006')).toBe(true);
+    expect(pattern.test('https://localhost:5173')).toBe(false);
   });
 
-  it('returns the same allow list when a loopback alias is configured directly', () => {
+  it('returns a regex when 127.0.0.1 is configured directly', () => {
     const origin = resolveCorsOrigins('http://127.0.0.1:4173');
-    expect(origin).toEqual([
-      'http://localhost:4173',
-      'http://127.0.0.1:4173',
-      'http://[::1]:4173'
-    ]);
-  });
-
-  it('preserves the configured protocol when expanding loopback aliases', () => {
-    const origin = resolveCorsOrigins('https://localhost:8443');
-    expect(origin).toEqual([
-      'https://localhost:8443',
-      'https://127.0.0.1:8443',
-      'https://[::1]:8443'
-    ]);
+    expect(origin).toBeInstanceOf(RegExp);
+    const pattern = origin as RegExp;
+    expect(pattern.test('http://localhost:8080')).toBe(true);
+    expect(pattern.test('http://127.0.0.1:4173')).toBe(true);
+    expect(pattern.test('http://[::1]:9000')).toBe(true);
+    expect(pattern.test('https://127.0.0.1:4173')).toBe(false);
   });
 
   it('falls back to the provided value when parsing fails', () => {
