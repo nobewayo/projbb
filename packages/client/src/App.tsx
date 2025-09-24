@@ -4,6 +4,7 @@ import GridCanvas from './canvas/GridCanvas';
 import './styles.css';
 import { useRealtimeConnection } from './ws/useRealtimeConnection';
 import type { GridTile } from './canvas/types';
+import { createTileKey } from './canvas/geometry';
 
 const dockButtons = [
   'Rooms',
@@ -13,12 +14,6 @@ const dockButtons = [
   'Quests',
   'Settings',
   'Admin',
-];
-
-const adminShortcuts = [
-  'Reload room',
-  'Toggle grid',
-  'Latency trace',
 ];
 
 type ChatMessage = {
@@ -110,6 +105,9 @@ const App = (): JSX.Element => {
   );
   const [showSystemMessages, setShowSystemMessages] = useState(true);
   const [showBackToTop, setShowBackToTop] = useState(false);
+  const [isGridVisible, setIsGridVisible] = useState(true);
+  const [showHoverWhenGridHidden, setShowHoverWhenGridHidden] = useState(true);
+  const [areMoveAnimationsEnabled, setAreMoveAnimationsEnabled] = useState(true);
   const chatMessagesRef = useRef<HTMLOListElement | null>(null);
   const connection = useRealtimeConnection();
 
@@ -184,15 +182,41 @@ const App = (): JSX.Element => {
     : 'Show system messages';
   const systemToggleTooltip = showSystemMessages ? 'Hide System Logs' : 'Show System Logs';
 
+  const lockedTileKeys = useMemo(() => {
+    const keys = new Set<string>();
+    for (const flag of connection.tileFlags) {
+      if (flag.locked) {
+        keys.add(createTileKey(flag.x, flag.y));
+      }
+    }
+    return keys;
+  }, [connection.tileFlags]);
+
+  const occupiedTileKeys = useMemo(() => {
+    const keys = new Set<string>();
+    for (const occupant of connection.occupants) {
+      keys.add(createTileKey(occupant.position.x, occupant.position.y));
+    }
+    return keys;
+  }, [connection.occupants]);
+
   const handleTileClick = useCallback(
     (tile: GridTile): void => {
       if (connection.status !== 'connected') {
         return;
       }
 
+      if (lockedTileKeys.has(tile.key)) {
+        return;
+      }
+
+      if (occupiedTileKeys.has(tile.key)) {
+        return;
+      }
+
       connection.sendMove(tile.gridX, tile.gridY);
     },
-    [connection.sendMove, connection.status],
+    [connection.sendMove, connection.status, lockedTileKeys, occupiedTileKeys],
   );
 
   const overlayCopy = useMemo(() => {
@@ -235,6 +259,53 @@ const App = (): JSX.Element => {
       setIsAdminPanelVisible((prev) => !prev);
     }
   };
+
+  const adminShortcuts = useMemo(
+    () => [
+      {
+        label: 'Reload room',
+        onClick: () => {
+          if (import.meta.env.DEV) {
+            console.debug('[admin] Reload room requested');
+          }
+        },
+      },
+      {
+        label: isGridVisible ? 'Hide grid' : 'Show grid',
+        onClick: () => {
+          setIsGridVisible((prev) => !prev);
+        },
+        pressed: !isGridVisible,
+      },
+      {
+        label: showHoverWhenGridHidden
+          ? 'Disable hidden hover highlight'
+          : 'Enable hidden hover highlight',
+        onClick: () => {
+          setShowHoverWhenGridHidden((prev) => !prev);
+        },
+        pressed: showHoverWhenGridHidden,
+      },
+      {
+        label: areMoveAnimationsEnabled
+          ? 'Disable move animations'
+          : 'Enable move animations',
+        onClick: () => {
+          setAreMoveAnimationsEnabled((prev) => !prev);
+        },
+        pressed: !areMoveAnimationsEnabled,
+      },
+      {
+        label: 'Latency trace',
+        onClick: () => {
+          if (import.meta.env.DEV) {
+            console.debug('[admin] Latency trace requested');
+          }
+        },
+      },
+    ],
+    [areMoveAnimationsEnabled, isGridVisible, showHoverWhenGridHidden],
+  );
 
   return (
     <div className="stage-shell">
@@ -317,6 +388,9 @@ const App = (): JSX.Element => {
               pendingMoveTarget={connection.pendingMoveTarget}
               onTileClick={handleTileClick}
               localOccupantId={connection.user?.id ?? null}
+              showGrid={isGridVisible}
+              showHoverWhenGridHidden={showHoverWhenGridHidden}
+              moveAnimationsEnabled={areMoveAnimationsEnabled}
             />
           </main>
           <nav
@@ -427,8 +501,15 @@ const App = (): JSX.Element => {
         role="group"
       >
         {adminShortcuts.map((item) => (
-          <button key={item} type="button" className="admin-quick-menu__button">
-            {item}
+          <button
+            key={item.label}
+            type="button"
+            className="admin-quick-menu__button"
+            onClick={item.onClick}
+            aria-pressed={item.pressed}
+            data-active={item.pressed}
+          >
+            {item.label}
           </button>
         ))}
       </nav>

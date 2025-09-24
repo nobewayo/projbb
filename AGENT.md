@@ -201,7 +201,7 @@ Each proto has `weight` (1–10). Sum ≤ maxWeight.
 - Right panel fixed **500px** (not slideable) with header copy tucked close to the top edge and dense text sections that run nearly full width so the column stays visually active without form fields. It spans the full canvas + menu stack so the dock lines up beneath the playfield while every corner stays square except for the rounded bottom-right seam. Chat history lives in a freestanding, fully rounded card hugging the panel’s right edge with only a slender gutter, spans from the status bar to the bottom menu, opens by default, hides native scrollbars, reveals a **“Back to top”** control only after scrolling, and toggles solely via the top-bar chat icon without shifting the surrounding layout. Messages pack tightly with alternating row colours, stretch almost edge-to-edge with only a hairline inset, hug the drawer bottom even with short transcripts, and show timestamps only after 500 ms hover/focus with the tooltip anchored to the hovered card. An **!** control in the chat header toggles system messages on/off and updates its tooltip to match the active state.
 - Primary menu stays permanently attached to the bottom edge of the stage, matches the canvas width exactly with a rounded bottom-left corner (all other corners square), uses compact (~36px) buttons, cannot collapse, auto-distributes button widths to fill the bar regardless of count, and sits flush against the right panel.
 - Add a persistent top bar bonded to the stage with player stats (name plus a single-line, accent-coloured coins/level readout), a looping news ticker, and paired round icon buttons on the far right: a **? Support** shortcut and the chat bubble toggle. Each button must surface a labelled tooltip on hover/focus.
-- A pill-shaped, button-only admin quick menu sits directly beneath the bottom dock (outside the main stage container) with only a minimal gutter between them. It only appears after pressing the bottom-bar **Admin** button, lists quick actions (reload room, toggle grid, latency trace), and stays on its own layer without moving surrounding UI when toggled. This surface will later gate to admin accounts.
+- A pill-shaped, button-only admin quick menu sits directly beneath the bottom dock (outside the main stage container) with only a minimal gutter between them. It only appears after pressing the bottom-bar **Admin** button, lists quick actions (reload room, toggle grid, toggle hidden hover highlight, latency trace), and stays on its own layer without moving surrounding UI when toggled. This surface will later gate to admin accounts.
 - Themes affect only chrome; **never** the canvas.
 
 ---
@@ -494,21 +494,21 @@ When implementing, **Codex should**:
 
 ---
 
-## 24) Progress Snapshot — 2025-09-25
+## 24) Progress Snapshot — 2025-09-26
 
 - ✅ Client grid renderer + chrome are live with the spec-mandated blocking reconnect overlay driven by a reusable `useRealtimeConnection` hook.
 - ✅ Fastify Socket.IO endpoint now validates HS256 JWTs issued from `/auth/login`, returns a development room snapshot inside `auth:ok`, closes idle sockets after the 30 s heartbeat window, and accepts `move` envelopes with `move:ok` / `move:err` replies plus `room:occupant_moved` broadcasts.
 - ✅ Shared schema package now covers the core envelope plus development room/move payloads so the client and server validate optimistic movement and room snapshots against the same definitions.
 - ✅ Client dev workflow automatically rebuilds `@bitby/schemas` before Vite starts (with a dedicated `pnpm --filter @bitby/schemas dev` watcher) so the workspace no longer crashes on fresh clones when resolving shared envelopes.
-- ✅ React client performs the `/auth/login` flow automatically, surfaces heartbeat-driven reconnect status, renders development avatar sprites, and keeps the stage chrome deterministic while reconciling optimistic moves with authoritative acks.
-- ✅ Strict Mode lifecycle handling in `useRealtimeConnection` now resets its disposal guard and treats intentional `AbortController` cancellations as benign, so `/auth/login` no longer aborts under automation. Latest overlay-free screenshot: `browser:/invocations/xjwvubss/artifacts/artifacts/bitby-connected.png`.
+- ✅ React client performs the `/auth/login` flow automatically, surfaces heartbeat-driven reconnect status, draws the development room background, foot-anchors placeholder avatar PNGs with snug underfoot username labels, and keeps optimistic moves visually aligned via eased interpolation while authoritative acks reconcile state. Admin quick toggles now hide the grid entirely, enable a barely-there hidden-grid hover outline, and switch move animations on or off while movement clicks refuse tiles that are locked or already occupied.
+- ✅ Strict Mode lifecycle handling in `useRealtimeConnection` now resets its disposal guard and treats intentional `AbortController` cancellations as benign, so `/auth/login` no longer aborts under automation. Latest overlay-free screenshot: `browser:/invocations/hsmymagx/artifacts/artifacts/bitby-connected.png`.
 
 ### Immediate Next Focus
 
-1. Layer sprite z-ordering, animation timing, and placeholder assets on top of the optimistic movement loop so the development avatars respect the Master Spec compositing rules.
-2. Stand up Postgres/Redis (local Docker) and wire the server to persist/load room state and broadcast deltas beyond the in-memory development authority.
+1. Stand up Postgres/Redis (local Docker) and wire the server to persist/load room state and broadcast deltas beyond the in-memory development authority.
+2. Implement chat and richer presence broadcast loops that hydrate the room snapshot, drive client updates, and render typing bubbles/right-panel logs beyond the current fixtures.
 3. Extend `@bitby/schemas` with additional realtime/REST definitions (chat, error envelopes, presence) so the server/client no longer rely on ad-hoc payload shapes.
-4. Implement chat and richer presence broadcast loops that hydrate the room snapshot and drive client state updates beyond the current fixtures.
+4. Bring up Postgres/Redis migrations, data seeds, and automated test harnesses (unit/integration/visual) that exercise the heartbeat + reconnect flow.
 5. Decide how to handle the `[realtime]` `console.debug` statements before production builds (demote, gate, or remove).
 
 **End of AGENT.md**
