@@ -494,14 +494,14 @@ When implementing, **Codex should**:
 
 ---
 
-## 24) Progress Snapshot — 2025-09-26
+## 24) Progress Snapshot — 2025-09-24
 
 - ✅ Client grid renderer + chrome are live with the spec-mandated blocking reconnect overlay driven by a reusable `useRealtimeConnection` hook.
-- ✅ Fastify Socket.IO endpoint now validates HS256 JWTs issued from `/auth/login`, returns a development room snapshot inside `auth:ok`, closes idle sockets after the 30 s heartbeat window, and accepts `move` envelopes with `move:ok` / `move:err` replies plus `room:occupant_moved` broadcasts.
-- ✅ Shared schema package now covers the core envelope plus development room/move payloads so the client and server validate optimistic movement and room snapshots against the same definitions.
+- ✅ Fastify Socket.IO endpoint now validates HS256 JWTs issued from `/auth/login`, returns a development room snapshot inside `auth:ok`, closes idle sockets after the 30 s heartbeat window, accepts `move` envelopes with `move:ok` / `move:err` replies, and emits `room:occupant_moved` plus `room:occupant_left` broadcasts so every instance converges on the same presence list when sockets disconnect.
+- ✅ Shared schema package now covers the core envelope plus development room/move payloads, including the `room:occupant_left` definition used by both tiers to prune avatars after disconnects.
 - ✅ Client dev workflow automatically rebuilds `@bitby/schemas` before Vite starts (with a dedicated `pnpm --filter @bitby/schemas dev` watcher) so the workspace no longer crashes on fresh clones when resolving shared envelopes.
-- ✅ React client performs the `/auth/login` flow automatically, surfaces heartbeat-driven reconnect status, draws the development room background, foot-anchors placeholder avatar PNGs with snug underfoot username labels, and keeps optimistic moves visually aligned via eased interpolation while authoritative acks reconcile state. Admin quick toggles now hide the grid entirely, enable a barely-there hidden-grid hover outline, and switch move animations on or off while movement clicks refuse tiles that are locked or already occupied.
-- ✅ Strict Mode lifecycle handling in `useRealtimeConnection` now resets its disposal guard and treats intentional `AbortController` cancellations as benign, so `/auth/login` no longer aborts under automation. Latest overlay-free screenshot: `browser:/invocations/hsmymagx/artifacts/artifacts/bitby-connected.png`.
+- ✅ React client performs the `/auth/login` flow automatically, surfaces heartbeat-driven reconnect status, draws the development room background, foot-anchors placeholder avatar PNGs with snug underfoot username labels, keeps optimistic moves visually aligned via eased interpolation while authoritative acks reconcile state, and now consumes `room:occupant_left` packets to drop stale occupants immediately. Admin quick toggles still hide the grid entirely, enable a barely-there hidden-grid hover outline, and switch move animations on or off while movement clicks refuse tiles that are locked or already occupied.
+- ✅ Strict Mode lifecycle handling in `useRealtimeConnection` now resets its disposal guard and treats intentional `AbortController` cancellations as benign, so `/auth/login` no longer aborts under automation. Latest overlay-free screenshot: `browser:/invocations/nlvmljto/artifacts/artifacts/bitby-connected.png`.
 
 ### Immediate Next Focus
 

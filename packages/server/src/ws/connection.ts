@@ -204,7 +204,27 @@ const registerRealtimeConnection = (
 };
 
 const unregisterRealtimeConnection = (socket: Socket): void => {
+  const connection = developmentRoomState.connections.get(socket.id);
+  if (!connection) {
+    developmentRoomState.connections.delete(socket.id);
+    return;
+  }
+
   developmentRoomState.connections.delete(socket.id);
+
+  const occupant = developmentRoomState.occupants.get(connection.userId);
+  if (!occupant) {
+    return;
+  }
+
+  developmentRoomState.occupants.delete(connection.userId);
+  developmentRoomState.roomSeq += 1;
+
+  broadcastOccupantLeft({
+    occupantId: occupant.id,
+    lastPosition: { ...occupant.position },
+    roomSeq: developmentRoomState.roomSeq,
+  });
 };
 
 const broadcastOccupantUpdate = (
@@ -222,6 +242,28 @@ const broadcastOccupantUpdate = (
       connection.socket,
       createEnvelope('room:occupant_moved', 0, {
         occupant: cloneOccupant(occupant),
+        roomSeq,
+      }),
+    );
+  }
+};
+
+const broadcastOccupantLeft = ({
+  occupantId,
+  lastPosition,
+  roomSeq,
+}: {
+  occupantId: string;
+  lastPosition: { x: number; y: number };
+  roomSeq: number;
+}): void => {
+  for (const connection of developmentRoomState.connections.values()) {
+    safeSend(
+      connection.logger,
+      connection.socket,
+      createEnvelope('room:occupant_left', 0, {
+        occupantId,
+        lastPosition,
         roomSeq,
       }),
     );

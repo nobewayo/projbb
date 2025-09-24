@@ -6,6 +6,7 @@ import {
   moveOkDataSchema,
   moveRequestDataSchema,
   roomOccupantMovedDataSchema,
+  roomOccupantLeftDataSchema,
   roomSnapshotSchema,
   type MessageEnvelope,
   type RoomOccupant,
@@ -579,6 +580,25 @@ export const useRealtimeConnection = (): RealtimeConnectionState => {
             pendingMoveTarget: sessionUserRef.current && occupant.id === sessionUserRef.current.id
               ? getLatestPendingTarget(pendingMovesRef.current)
               : previous.pendingMoveTarget,
+            isMoveInFlight: pendingMovesRef.current.size > 0,
+          }));
+
+          return;
+        }
+        case 'room:occupant_left': {
+          const result = roomOccupantLeftDataSchema.safeParse(envelope.data);
+          if (!result.success) {
+            updateState({ lastError: 'Received malformed occupant departure' });
+            return;
+          }
+
+          occupantMapRef.current.delete(result.data.occupantId);
+
+          setState((previous) => ({
+            ...previous,
+            occupants: sortOccupants(occupantMapRef.current),
+            lastRoomSeq: result.data.roomSeq,
+            pendingMoveTarget: previous.pendingMoveTarget,
             isMoveInFlight: pendingMovesRef.current.size > 0,
           }));
 

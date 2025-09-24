@@ -4,13 +4,13 @@
 This repository implements the Bitby platform following the **Master Spec v3.7**. The stack is now wired together as a pnpm monorepo with:
 
 - a Vite + React client that now renders the deterministic top-right anchored grid with live hit-testing across the fixed 10-row field, keeps the right panel and bottom dock chrome locked to the stage footprint, surfaces the blocking reconnect overlay mandated by the spec, draws the development room background + tile overlays, and layers placeholder avatar PNGs with toggleable move animations, grid visibility controls, subtle hidden-grid hover outlines, and tight underfoot username labels while awaiting authoritative `move:ok` / `move:err` replies and blocking clicks on occupied or locked tiles before any animation begins
-- a Fastify-based server that now issues short-lived JWTs from `/auth/login`, seeds Argon2-hashed development users, exposes a guarded Socket.IO endpoint at `/ws`, validates tokens, streams a development room snapshot, services the heartbeat loop end to end, and accepts `move` envelopes with room-sequenced `move:ok`/`move:err` acknowledgements plus `room:occupant_moved` broadcasts to every connection
+- a Fastify-based server that now issues short-lived JWTs from `/auth/login`, seeds Argon2-hashed development users, exposes a guarded Socket.IO endpoint at `/ws`, validates tokens, streams a development room snapshot, services the heartbeat loop end to end, accepts `move` envelopes with room-sequenced `move:ok`/`move:err` acknowledgements, emits `room:occupant_moved` broadcasts to every connection, and now tears down departing avatars with authoritative `room:occupant_left` events so the shared presence list stays accurate
 - shared schema utilities for the canonical realtime envelope and the development `move` / room snapshot payloads consumed by both the client and server layers
 - Docker Compose definitions for Postgres and Redis
 
 This guide explains how to clone, run, and test the project on Debian- or Ubuntu-based Linux desktops. The workflow below assumes an apt-based distribution (Debian 12 “Bookworm”, Ubuntu 22.04 “Jammy”, or newer) with sudo access.
 
-> **Note:** The deterministic grid renderer now paints the full 10-row field (10 columns on even rows, 11 on odd rows), overlays the development room background, and keeps a HUD so geometry can be verified while diamond tiles render as translucent outlines (only locked/no-pickup states add a faint wash). The realtime hook authenticates with the server using the `/auth/login` JWT flow, binds a Socket.IO client to the `/ws` namespace, receives a stubbed-but-structured room snapshot (player seed plus NPC + tile flags), shows the blocking reconnect overlay mandated by the spec whenever the socket drops, and drives an optimistic movement loop: clicking an open tile issues `move` envelopes, the client immediately animates a placeholder sprite PNG when move animations are enabled, underfoot name labels hug each avatar's feet, hidden-grid hover feedback is now a near-neutral grey wash, and the server answers with authoritative `move:ok` / `move:err` frames plus `room:occupant_moved` broadcasts that reconcile any drift.
+> **Note:** The deterministic grid renderer now paints the full 10-row field (10 columns on even rows, 11 on odd rows), overlays the development room background, and keeps a HUD so geometry can be verified while diamond tiles render as translucent outlines (only locked/no-pickup states add a faint wash). The realtime hook authenticates with the server using the `/auth/login` JWT flow, binds a Socket.IO client to the `/ws` namespace, receives a stubbed-but-structured room snapshot (player seed plus NPC + tile flags), shows the blocking reconnect overlay mandated by the spec whenever the socket drops, and drives an optimistic movement loop: clicking an open tile issues `move` envelopes, the client immediately animates a placeholder sprite PNG when move animations are enabled, underfoot name labels hug each avatar's feet, hidden-grid hover feedback is now a near-neutral grey wash, and the server answers with authoritative `move:ok` / `move:err` frames, `room:occupant_moved` deltas, and `room:occupant_left` departures that reconcile any drift in local state.
 
 ---
 
@@ -304,11 +304,12 @@ Progress will be tracked in future commits; this document will evolve with concr
 
 ---
 
-## Handoff Notes (2025-09-26)
+## Handoff Notes (2025-09-24)
 
 - The realtime hook now resets its Strict Mode lifecycle guard and treats intentional `AbortController` cancellations as benign, so the `/auth/login` bootstrap no longer fails during automated runs and the reconnect overlay clears once the Socket.IO handshake finishes.
 - The grid canvas now draws the development room background, sorts occupants by tile depth, renders placeholder avatar PNGs with optional eased interpolation, keeps usernames anchored directly beneath each avatar's feet, blocks movement onto occupied tiles, and exposes quick admin toggles for grid visibility, hidden-grid hover outlines, and move animations.
-- Latest connectivity screenshot with the overlay dismissed: `browser:/invocations/hsmymagx/artifacts/artifacts/bitby-connected.png`.
+- The realtime server now drops departing occupants from the authoritative snapshot, increments the shared `roomSeq`, and emits `room:occupant_left` payloads that the client consumes to keep its presence map accurate between reconnects.
+- Latest connectivity screenshot with the overlay dismissed: `browser:/invocations/nlvmljto/artifacts/artifacts/bitby-connected.png`.
 - Immediate follow-ups:
   - Decide whether to demote or remove the `[realtime]` `console.debug` statements before production builds.
   - Continue with the roadmap items above (chat/presence streaming, persisted room authority, richer protocol coverage).
@@ -325,4 +326,4 @@ Progress will be tracked in future commits; this document will evolve with concr
 
 ---
 
-*Last updated: 2025-09-26 UTC*
+*Last updated: 2025-09-24 UTC*
