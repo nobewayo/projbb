@@ -1,6 +1,5 @@
 import type { FastifyBaseLogger, FastifyInstance } from 'fastify';
-import type { SocketStream } from '@fastify/websocket';
-import type { RawData } from 'ws';
+import type { Socket } from 'socket.io';
 import {
   messageEnvelopeSchema,
   moveRequestDataSchema,
@@ -43,14 +42,14 @@ interface TileFlag {
 }
 
 interface RegisteredConnection {
-  stream: SocketStream;
+  socket: Socket;
   logger: FastifyBaseLogger;
   userId: string;
 }
 
 interface ConnectionContext {
   app: FastifyInstance;
-  stream: SocketStream;
+  socket: Socket;
   requestId: string;
   config: ServerConfig;
 }
@@ -87,7 +86,7 @@ const developmentRoomState: {
   tiles: TileFlag[];
   tileIndex: Map<string, TileFlag>;
   occupants: Map<string, RoomSnapshotOccupant>;
-  connections: Map<SocketStream['socket'], RegisteredConnection>;
+  connections: Map<string, RegisteredConnection>;
 } = {
   id: DEVELOPMENT_ROOM_ID,
   name: DEVELOPMENT_ROOM_NAME,
@@ -196,31 +195,31 @@ const buildDevelopmentRoomSnapshot = (): RoomSnapshot => {
 
 const registerRealtimeConnection = (
   logger: FastifyBaseLogger,
-  stream: SocketStream,
+  socket: Socket,
   user: AuthenticatedUser,
 ): RoomSnapshot => {
   ensureOccupantForUser(user);
-  developmentRoomState.connections.set(stream.socket, { stream, logger, userId: user.id });
+  developmentRoomState.connections.set(socket.id, { socket, logger, userId: user.id });
   return buildDevelopmentRoomSnapshot();
 };
 
-const unregisterRealtimeConnection = (stream: SocketStream): void => {
-  developmentRoomState.connections.delete(stream.socket);
+const unregisterRealtimeConnection = (socket: Socket): void => {
+  developmentRoomState.connections.delete(socket.id);
 };
 
 const broadcastOccupantUpdate = (
   occupant: RoomSnapshotOccupant,
   roomSeq: number,
-  excludeSocket?: SocketStream['socket'],
+  excludeSocketId?: string,
 ): void => {
   for (const connection of developmentRoomState.connections.values()) {
-    if (excludeSocket && connection.stream.socket === excludeSocket) {
+    if (excludeSocketId && connection.socket.id === excludeSocketId) {
       continue;
     }
 
     safeSend(
       connection.logger,
-      connection.stream,
+      connection.socket,
       createEnvelope('room:occupant_moved', 0, {
         occupant: cloneOccupant(occupant),
         roomSeq,
@@ -319,11 +318,11 @@ const createEnvelope = (
 
 const safeSend = (
   logger: FastifyBaseLogger,
-  stream: SocketStream,
+  socket: Socket,
   envelope: Envelope,
 ): void => {
   try {
-    stream.socket.send(JSON.stringify(envelope));
+    socket.emit('message', envelope);
   } catch (error) {
     logger.error({ err: error }, 'Failed to send websocket envelope');
   }
@@ -331,33 +330,33 @@ const safeSend = (
 
 const acknowledge = (
   logger: FastifyBaseLogger,
-  stream: SocketStream,
+  socket: Socket,
   requestEnvelope: Envelope,
   op: string,
   data: EnvelopeData = {},
 ): void => {
-  safeSend(logger, stream, createEnvelope(op, requestEnvelope.seq, data));
+  safeSend(logger, socket, createEnvelope(op, requestEnvelope.seq, data));
 };
 
 const emitSystemMessage = (
   logger: FastifyBaseLogger,
-  stream: SocketStream,
+  socket: Socket,
   op: string,
   data: EnvelopeData,
 ): void => {
-  safeSend(logger, stream, createEnvelope(op, 0, data));
+  safeSend(logger, socket, createEnvelope(op, 0, data));
 };
 
 const handleAuth = (
   logger: FastifyBaseLogger,
-  stream: SocketStream,
+  socket: Socket,
   envelope: Envelope,
   config: ServerConfig,
-  closeWithReason: (code: number, reason: string) => void,
+  closeWithReason: (reason: string) => void,
 ): AuthenticatedUser | null => {
   const parsed = authPayloadSchema.safeParse(envelope.data);
   if (!parsed.success) {
-    acknowledge(logger, stream, envelope, 'error:auth_invalid', {
+    acknowledge(logger, socket, envelope, 'error:auth_invalid', {
       message: 'Invalid auth payload',
       issues: parsed.error.issues,
     });
@@ -369,14 +368,14 @@ const handleAuth = (
     authenticatedUser = decodeToken(parsed.data.token, config);
   } catch (error) {
     logger.warn({ err: error }, 'Rejected realtime auth token');
-    acknowledge(logger, stream, envelope, 'error:auth_invalid', {
+    acknowledge(logger, socket, envelope, 'error:auth_invalid', {
       message: 'Authentication failed: invalid token',
     });
-    closeWithReason(4003, 'Invalid auth token');
+    closeWithReason('Invalid auth token');
     return null;
   }
 
-  const snapshot = registerRealtimeConnection(logger, stream, authenticatedUser);
+  const snapshot = registerRealtimeConnection(logger, socket, authenticatedUser);
   const payload: AuthOkPayload = {
     user: authenticatedUser,
     room: {
@@ -387,9 +386,9 @@ const handleAuth = (
     roomSnapshot: snapshot,
   };
 
-  acknowledge(logger, stream, envelope, 'auth:ok', payload);
+  acknowledge(logger, socket, envelope, 'auth:ok', payload);
 
-  emitSystemMessage(logger, stream, 'system:room_snapshot', {
+  emitSystemMessage(logger, socket, 'system:room_snapshot', {
     message:
       'Authoritative snapshot streaming is stubbed; using development fixtures.',
     roomSeq: snapshot.roomSeq,
@@ -401,7 +400,7 @@ const handleAuth = (
   );
 
   if (occupantForUser) {
-    broadcastOccupantUpdate(occupantForUser, snapshot.roomSeq, stream.socket);
+    broadcastOccupantUpdate(occupantForUser, snapshot.roomSeq, socket.id);
   }
 
   return authenticatedUser;
@@ -409,7 +408,7 @@ const handleAuth = (
 
 export const handleRealtimeConnection = ({
   app,
-  stream,
+  socket,
   requestId,
   config,
 }: ConnectionContext): void => {
@@ -418,9 +417,12 @@ export const handleRealtimeConnection = ({
   let sessionUser: AuthenticatedUser | null = null;
   let lastHeartbeatAt = Date.now();
 
-  const closeWithReason = (code: number, reason: string): void => {
+  const closeWithReason = (reason: string): void => {
     try {
-      stream.socket.close(code, reason);
+      logger.warn({ reason }, 'Disconnecting realtime socket');
+      if (socket.connected) {
+        socket.disconnect(true);
+      }
     } catch (error) {
       logger.error({ err: error }, 'Failed to close websocket connection gracefully');
     }
@@ -430,38 +432,34 @@ export const handleRealtimeConnection = ({
     const elapsed = Date.now() - lastHeartbeatAt;
     if (elapsed > HEARTBEAT_GRACE_MS) {
       logger.warn({ elapsed }, 'Heartbeat window elapsed; closing connection');
-      closeWithReason(1013, 'Heartbeat timeout');
+      closeWithReason('Heartbeat timeout');
     }
   }, HEARTBEAT_INTERVAL_MS);
 
-  stream.socket.on('message', (raw: RawData) => {
-    let data: string;
+  socket.on('message', (raw: unknown) => {
+    let candidate: unknown = raw;
+
     if (typeof raw === 'string') {
-      data = raw;
-    } else if (Buffer.isBuffer(raw)) {
-      data = raw.toString('utf8');
-    } else if (Array.isArray(raw)) {
-      data = Buffer.concat(raw).toString('utf8');
-    } else {
-      data = Buffer.from(raw).toString('utf8');
-    }
-    let parsed: unknown;
-
-    try {
-      parsed = JSON.parse(data);
-    } catch (error) {
-      logger.warn({ err: error }, 'Received invalid JSON payload');
-      safeSend(logger, stream, createEnvelope('error:invalid_json', 0, {
-        message: 'Messages must be valid JSON',
-      }));
-      closeWithReason(1003, 'Invalid JSON payload');
-      return;
+      try {
+        candidate = JSON.parse(raw);
+      } catch (error) {
+        logger.warn({ err: error }, 'Received invalid JSON payload');
+        safeSend(
+          logger,
+          socket,
+          createEnvelope('error:invalid_json', 0, {
+            message: 'Messages must be valid JSON',
+          }),
+        );
+        closeWithReason('Invalid JSON payload');
+        return;
+      }
     }
 
-    const envelopeResult = messageEnvelopeSchema.safeParse(parsed);
+    const envelopeResult = messageEnvelopeSchema.safeParse(candidate);
     if (!envelopeResult.success) {
       logger.warn({ issues: envelopeResult.error.issues }, 'Received malformed envelope');
-      safeSend(logger, stream, createEnvelope('error:envelope', 0, {
+      safeSend(logger, socket, createEnvelope('error:envelope', 0, {
         message: 'Malformed envelope',
         issues: envelopeResult.error.issues,
       }));
@@ -473,20 +471,20 @@ export const handleRealtimeConnection = ({
 
     switch (envelope.op) {
       case 'ping': {
-        acknowledge(logger, stream, envelope, 'pong', {
+        acknowledge(logger, socket, envelope, 'pong', {
           serverTs: toUnixTimestamp(),
         });
         return;
       }
       case 'auth': {
         if (isAuthenticated) {
-          acknowledge(logger, stream, envelope, 'error:auth_state', {
+          acknowledge(logger, socket, envelope, 'error:auth_state', {
             message: 'Auth already completed for this session',
           });
           return;
         }
 
-        const user = handleAuth(logger, stream, envelope, config, closeWithReason);
+        const user = handleAuth(logger, socket, envelope, config, closeWithReason);
         if (user) {
           isAuthenticated = true;
           sessionUser = user;
@@ -497,7 +495,7 @@ export const handleRealtimeConnection = ({
       }
       case 'move': {
         if (!isAuthenticated || !sessionUser) {
-          acknowledge(logger, stream, envelope, 'error:not_authenticated', {
+          acknowledge(logger, socket, envelope, 'error:not_authenticated', {
             message: 'Authenticate before issuing realtime operations',
           });
           return;
@@ -505,7 +503,7 @@ export const handleRealtimeConnection = ({
 
         const payloadResult = moveRequestDataSchema.safeParse(envelope.data);
         if (!payloadResult.success) {
-          acknowledge(logger, stream, envelope, 'error:move_payload', {
+          acknowledge(logger, socket, envelope, 'error:move_payload', {
             message: 'Invalid move payload',
             issues: payloadResult.error.issues,
           });
@@ -516,7 +514,7 @@ export const handleRealtimeConnection = ({
         const moveResult = attemptMove(sessionUser.id, target);
 
         if (moveResult.ok) {
-          acknowledge(logger, stream, envelope, 'move:ok', {
+          acknowledge(logger, socket, envelope, 'move:ok', {
             x: moveResult.occupant.position.x,
             y: moveResult.occupant.position.y,
             roomSeq: moveResult.roomSeq,
@@ -534,7 +532,7 @@ export const handleRealtimeConnection = ({
             'Processed move operation',
           );
         } else {
-          acknowledge(logger, stream, envelope, 'move:err', {
+          acknowledge(logger, socket, envelope, 'move:err', {
             code: moveResult.code,
             message: moveResult.message,
             at: target,
@@ -554,33 +552,33 @@ export const handleRealtimeConnection = ({
       }
       default: {
         if (!isAuthenticated) {
-          acknowledge(logger, stream, envelope, 'error:not_authenticated', {
+          acknowledge(logger, socket, envelope, 'error:not_authenticated', {
             message: 'Authenticate before issuing realtime operations',
           });
           return;
         }
 
-        acknowledge(logger, stream, envelope, 'error:unhandled_op', {
+        acknowledge(logger, socket, envelope, 'error:unhandled_op', {
           message: `Operation ${envelope.op} is not yet implemented`,
         });
       }
     }
   });
 
-  stream.socket.on('close', (code: number, reason: Buffer) => {
-    clearInterval(heartbeatMonitor);
-    unregisterRealtimeConnection(stream);
-    logger.info(
-      { code, reason: reason.toString(), userId: sessionUser?.id ?? null },
-      'WebSocket connection closed',
-    );
-  });
+    socket.on('disconnect', (reason: string) => {
+      clearInterval(heartbeatMonitor);
+      unregisterRealtimeConnection(socket);
+      logger.info(
+        { reason, userId: sessionUser?.id ?? null },
+        'Socket.IO connection closed',
+      );
+    });
 
-  stream.socket.on('error', (error: Error) => {
-    logger.error({ err: error }, 'WebSocket error');
-  });
+    socket.on('error', (error: Error) => {
+      logger.error({ err: error }, 'Socket.IO transport error');
+    });
 
-  emitSystemMessage(logger, stream, 'system:hello', {
+    emitSystemMessage(logger, socket, 'system:hello', {
     message: 'Authenticate via { op: "auth" } to start streaming realtime state.',
     heartbeatIntervalMs: HEARTBEAT_INTERVAL_MS,
   });

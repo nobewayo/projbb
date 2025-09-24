@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { io, type Socket } from 'socket.io-client';
 import {
   messageEnvelopeSchema,
   moveErrorDataSchema,
@@ -12,7 +13,6 @@ import {
   type RoomTileFlag,
 } from '@bitby/schemas';
 
-const WS_SUBPROTOCOL = 'bitby.v1';
 const DEFAULT_HEARTBEAT_MS = 15_000;
 const MAX_RECONNECT_DELAY_MS = 15_000;
 const LOGIN_USERNAME_FALLBACK = 'test';
@@ -109,13 +109,40 @@ const buildEnvelope = (
   data,
 });
 
-const resolveWebSocketUrl = (): string => {
-  if (import.meta.env.VITE_BITBY_WS_URL) {
-    return import.meta.env.VITE_BITBY_WS_URL;
+interface SocketEndpoint {
+  origin: string;
+  path: string;
+}
+
+const normaliseSocketProtocol = (protocol: string): string => {
+  switch (protocol) {
+    case 'ws:':
+      return 'http:';
+    case 'wss:':
+      return 'https:';
+    default:
+      return protocol;
+  }
+};
+
+const resolveSocketEndpoint = (): SocketEndpoint => {
+  const raw = import.meta.env.VITE_BITBY_WS_URL;
+  if (typeof raw === 'string' && raw.trim().length > 0) {
+    try {
+      const parsed = new URL(raw);
+      const protocol = normaliseSocketProtocol(parsed.protocol);
+      const origin = `${protocol}//${parsed.host}`;
+      const path = parsed.pathname && parsed.pathname !== '/' ? parsed.pathname : '/ws';
+      return { origin, path };
+    } catch {
+      // Fall through to default if parsing fails.
+    }
   }
 
-  const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
-  return `${protocol}://${window.location.hostname}:3001/ws`;
+  const isSecure = window.location.protocol === 'https:';
+  const originProtocol = isSecure ? 'https:' : 'http:';
+  const originHost = `${window.location.hostname}:3001`;
+  return { origin: `${originProtocol}//${originHost}`, path: '/ws' };
 };
 
 const resolveHttpBaseUrl = (): string => {
@@ -162,7 +189,7 @@ export const useRealtimeConnection = (): RealtimeConnectionState => {
     isMoveInFlight: false,
   });
 
-  const socketRef = useRef<WebSocket | null>(null);
+  const socketRef = useRef<Socket | null>(null);
   const seqRef = useRef(1);
   const pingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -181,7 +208,7 @@ export const useRealtimeConnection = (): RealtimeConnectionState => {
   useEffect(() => {
     disposedRef.current = false;
 
-    const url = resolveWebSocketUrl();
+    const endpoint = resolveSocketEndpoint();
 
     const clearPingTimer = () => {
       if (pingTimerRef.current) {
@@ -205,11 +232,24 @@ export const useRealtimeConnection = (): RealtimeConnectionState => {
       loginPromiseRef.current = null;
     };
 
+    const clearActiveSocket = () => {
+      const active = socketRef.current;
+      if (!active) {
+        return;
+      }
+
+      active.removeAllListeners();
+      if (active.connected) {
+        active.disconnect();
+      }
+      socketRef.current = null;
+    };
+
     const startPingTimer = (intervalMs: number) => {
       clearPingTimer();
       pingTimerRef.current = setInterval(() => {
         const socket = socketRef.current;
-        if (!socket || socket.readyState !== WebSocket.OPEN) {
+        if (!socket || !socket.connected) {
           return;
         }
 
@@ -217,7 +257,7 @@ export const useRealtimeConnection = (): RealtimeConnectionState => {
           clientTs: Date.now(),
         });
         seqRef.current += 1;
-        socket.send(JSON.stringify(envelope));
+        socket.emit('message', envelope);
       }, intervalMs);
     };
 
@@ -343,6 +383,7 @@ export const useRealtimeConnection = (): RealtimeConnectionState => {
       clearPingTimer();
       clearCountdownTimer();
       abortLogin();
+      clearActiveSocket();
       pendingMovesRef.current.clear();
       occupantMapRef.current.clear();
       sessionUserRef.current = null;
@@ -612,12 +653,31 @@ export const useRealtimeConnection = (): RealtimeConnectionState => {
         return;
       }
 
-      const socket = new WebSocket(url, WS_SUBPROTOCOL);
+      if (disposedRef.current) {
+        return;
+      }
+
+      const socket = io(endpoint.origin, {
+        path: endpoint.path,
+        transports: ['websocket'],
+        autoConnect: false,
+        reconnection: false,
+      });
+
       socketRef.current = socket;
 
-      socket.addEventListener('open', () => {
+      const detachListeners = () => {
+        socket.off('connect');
+        socket.off('message');
+        socket.off('disconnect');
+        socket.off('connect_error');
+        socket.off('error');
+      };
+
+      socket.on('connect', () => {
         if (disposedRef.current) {
-          socket.close(1000, 'Client disposed');
+          detachListeners();
+          socket.disconnect();
           return;
         }
 
@@ -625,32 +685,30 @@ export const useRealtimeConnection = (): RealtimeConnectionState => {
         updateState({ status: 'authenticating', lastError: null, retryInSeconds: null });
 
         if (import.meta.env.DEV) {
-          console.debug('[realtime] websocket open, sending auth envelope');
+          console.debug('[realtime] socket.io connected, sending auth envelope');
         }
 
         const authEnvelope = buildEnvelope(seqRef.current, 'auth', { token });
         seqRef.current += 1;
-        socket.send(JSON.stringify(authEnvelope));
+        socket.emit('message', authEnvelope);
       });
 
-      socket.addEventListener('message', (event) => {
+      socket.on('message', (payload: unknown) => {
         if (disposedRef.current) {
           return;
         }
 
-        if (typeof event.data !== 'string') {
-          return;
+        let candidate: unknown = payload;
+        if (typeof payload === 'string') {
+          try {
+            candidate = JSON.parse(payload);
+          } catch (error) {
+            updateState({ lastError: 'Received malformed JSON from server' });
+            return;
+          }
         }
 
-        let parsed: unknown;
-        try {
-          parsed = JSON.parse(event.data);
-        } catch (error) {
-          updateState({ lastError: 'Received malformed JSON from server' });
-          return;
-        }
-
-        const result = messageEnvelopeSchema.safeParse(parsed);
+        const result = messageEnvelopeSchema.safeParse(candidate);
         if (!result.success) {
           updateState({ lastError: 'Server envelope validation failed' });
           return;
@@ -659,28 +717,39 @@ export const useRealtimeConnection = (): RealtimeConnectionState => {
         handleEnvelope(result.data);
       });
 
-      socket.addEventListener('close', (event) => {
+      socket.on('disconnect', (reason) => {
+        detachListeners();
         if (disposedRef.current) {
           return;
         }
 
-        if (event.code === 4003 || event.code === 4401) {
-          tokenRef.current = null;
-        }
-
-        const reason = event.reason || 'Connection closed';
-        updateState({ lastError: `${reason} (code ${event.code})` });
+        const message = reason ? `Connection closed (${reason})` : 'Connection closed';
+        updateState({ lastError: message });
         socketRef.current = null;
         scheduleReconnect();
       });
 
-      socket.addEventListener('error', () => {
+      socket.on('connect_error', (error) => {
+        detachListeners();
+        if (disposedRef.current) {
+          return;
+        }
+
+        const message = error instanceof Error ? error.message : 'Connection failed';
+        updateState({ lastError: message });
+        socketRef.current = null;
+        scheduleReconnect();
+      });
+
+      socket.on('error', () => {
         if (disposedRef.current) {
           return;
         }
 
         updateState({ lastError: 'WebSocket transport error' });
       });
+
+      socket.connect();
     };
 
     void connect();
@@ -694,17 +763,14 @@ export const useRealtimeConnection = (): RealtimeConnectionState => {
         clearTimeout(reconnectTimerRef.current);
       }
 
-      const socket = socketRef.current;
-      if (socket && socket.readyState === WebSocket.OPEN) {
-        socket.close(1000, 'Client shutdown');
-      }
+      clearActiveSocket();
     };
   }, []);
 
   const sendMove = useCallback(
     (x: number, y: number): boolean => {
       const socket = socketRef.current;
-      if (!socket || socket.readyState !== WebSocket.OPEN) {
+      if (!socket || !socket.connected) {
         return false;
       }
 
@@ -749,7 +815,7 @@ export const useRealtimeConnection = (): RealtimeConnectionState => {
       }));
 
       const envelope = buildEnvelope(seq, 'move', validation.data);
-      socket.send(JSON.stringify(envelope));
+      socket.emit('message', envelope);
       return true;
     },
     [state.status],
