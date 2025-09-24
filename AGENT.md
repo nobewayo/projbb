@@ -483,30 +483,30 @@ When implementing, **Codex should**:
 
 ## 23) Ready‑to‑Implement Tasks (First Sprint)
 
-1) Socket.IO client with heartbeat + blocking reconnect overlay.
-2) Socket.IO server endpoints: `auth`, `move`, `chat`; Redis room pub/sub skeleton.
-3) Postgres schema & migrations; seed users/room.
-4) Item click → panel info; pickup rule gating.
-5) Metrics & health endpoints.
-6) JSON Schemas for `auth`, `move`, `chat`; OpenAPI for `/auth` REST.
+1) Wire the item pickup loop (server validation, inventory persistence, optimistic UI) so the panel’s “Saml Op” control reflects authoritative acknowledgements.
+2) Add realtime typing bubbles and chat bubble rendering on the canvas while persisting the chat drawer’s system-message preference per user.
+3) Build right-click context menus for tiles, items, and avatars with the gating rules outlined in the Master Spec (Info/Saml Op, player actions).
+4) Extend the admin quick menu so each toggle calls the authoritative API (lock/noPickup, latency trace) and persists dev overrides via Postgres/Redis.
+5) Establish automated integration/E2E tests that exercise auth → chat → move → item flows against the Postgres/Redis stack and wire them into CI.
+6) Audit `[realtime]` debug logging before release (demote, gate, or remove) so production builds ship without noisy console output.
 
 ---
 
-## 24) Progress Snapshot — 2025-09-24
+## 24) Progress Snapshot — 2025-09-25
 
-- ✅ Client grid renderer + chrome are live with the spec-mandated blocking reconnect overlay driven by a reusable `useRealtimeConnection` hook.
-- ✅ Fastify Socket.IO endpoint now validates HS256 JWTs issued from `/auth/login`, returns a development room snapshot inside `auth:ok`, closes idle sockets after the 30 s heartbeat window, accepts `move` envelopes with `move:ok` / `move:err` replies, and emits `room:occupant_moved` plus `room:occupant_left` broadcasts so every instance converges on the same presence list when sockets disconnect.
-- ✅ Shared schema package now covers the core envelope plus development room/move payloads, including the `room:occupant_left` definition used by both tiers to prune avatars after disconnects.
-- ✅ Client dev workflow automatically rebuilds `@bitby/schemas` before Vite starts (with a dedicated `pnpm --filter @bitby/schemas dev` watcher) so the workspace no longer crashes on fresh clones when resolving shared envelopes.
-- ✅ React client performs the `/auth/login` flow automatically, surfaces heartbeat-driven reconnect status, draws the development room background, foot-anchors placeholder avatar PNGs with snug underfoot username labels, keeps optimistic moves visually aligned via eased interpolation while authoritative acks reconcile state, and now consumes `room:occupant_left` packets to drop stale occupants immediately. Admin quick toggles still hide the grid entirely, enable a barely-there hidden-grid hover outline, and switch move animations on or off while movement clicks refuse tiles that are locked or already occupied.
-- ✅ Strict Mode lifecycle handling in `useRealtimeConnection` now resets its disposal guard and treats intentional `AbortController` cancellations as benign, so `/auth/login` no longer aborts under automation. Latest overlay-free screenshot: `browser:/invocations/nlvmljto/artifacts/artifacts/bitby-connected.png`.
+- ✅ `useRealtimeConnection` authenticates via `/auth/login`, maintains heartbeats, hydrates the room snapshot, streams historical chat, appends live `chat:new` envelopes, and exposes a composer that emits `chat:send` while the blocking overlay clears automatically after reconnect.
+- ✅ The React client now renders seeded room items beneath avatars, tracks per-item hit boxes, routes selections into the right panel’s item info view, and honours the chat drawer’s system-message toggle alongside the existing admin quick toggles and movement gating.
+- ✅ The Fastify server boots Postgres migrations/seeds, validates `auth`/`move`/`chat` envelopes, persists chat history to Postgres, relays cross-instance chat through Redis pub/sub, and exposes `/healthz`, `/readyz`, and `/metrics` endpoints instrumented with Prometheus counters.
+- ✅ `@bitby/schemas` publishes JSON Schemas for `auth`, `move`, and `chat` plus an OpenAPI document for `/auth/login`, keeping both tiers on a single contract for realtime and REST payloads.
+- ✅ Workspace scripts rebuild shared schemas before Vite launches, and lint/typecheck/test/build workflows cover the new chat, item, and observability codepaths.
+- Latest connectivity screenshot with chat + item panel: `browser:/invocations/nkjxmmlj/artifacts/artifacts/bitby-connected.png`.
 
 ### Immediate Next Focus
 
-1. Stand up Postgres/Redis (local Docker) and wire the server to persist/load room state and broadcast deltas beyond the in-memory development authority.
-2. Implement chat and richer presence broadcast loops that hydrate the room snapshot, drive client updates, and render typing bubbles/right-panel logs beyond the current fixtures.
-3. Extend `@bitby/schemas` with additional realtime/REST definitions (chat, error envelopes, presence) so the server/client no longer rely on ad-hoc payload shapes.
-4. Bring up Postgres/Redis migrations, data seeds, and automated test harnesses (unit/integration/visual) that exercise the heartbeat + reconnect flow.
-5. Decide how to handle the `[realtime]` `console.debug` statements before production builds (demote, gate, or remove).
+1. Wire the pickup pipeline end-to-end (server validation, inventory persistence, optimistic UI) so the right panel button reflects authoritative acknowledgements.
+2. Add typing bubbles and chat bubble rendering on the canvas while persisting the system-message preference.
+3. Implement the spec’d context menus for tiles/items/avatars and extend the admin quick menu to call authoritative toggles.
+4. Stand up integration/E2E tests that drive auth → chat → move → item flows against Postgres/Redis and gate CI on them.
+5. Gate or demote the `[realtime]` debug logging before shipping production builds.
 
 **End of AGENT.md**

@@ -20,11 +20,22 @@ type TileFlag = {
   noPickup: boolean;
 };
 
+export type CanvasItem = {
+  id: string;
+  name: string;
+  description: string;
+  tileX: number;
+  tileY: number;
+  texture: string;
+};
+
 type GridCanvasProps = {
   occupants: CanvasOccupant[];
   tileFlags: TileFlag[];
   pendingMoveTarget: { x: number; y: number } | null;
   onTileClick?: (tile: GridTile) => void;
+  items: CanvasItem[];
+  onItemClick?: (item: CanvasItem) => void;
   localOccupantId?: string | null;
   showGrid: boolean;
   showHoverWhenGridHidden: boolean;
@@ -39,6 +50,15 @@ type PointerPosition = {
 type SpriteAssets = {
   room: HTMLImageElement | null;
   avatars: HTMLImageElement[];
+  items: Map<string, HTMLImageElement>;
+};
+
+type ItemBounds = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  item: CanvasItem;
 };
 
 type OccupantRenderState = {
@@ -78,6 +98,9 @@ const FOOT_OFFSET = 6;
 const USERNAME_OFFSET = 2;
 const FALLBACK_AVATAR_WIDTH = 48;
 const FALLBACK_AVATAR_HEIGHT = 90;
+const FALLBACK_ITEM_WIDTH = 96;
+const FALLBACK_ITEM_HEIGHT = 96;
+const ITEM_HIT_PADDING = 3;
 
 const loadImage = async (source: string): Promise<HTMLImageElement> =>
   new Promise((resolve, reject) => {
@@ -284,6 +307,8 @@ const GridCanvas = ({
   tileFlags,
   pendingMoveTarget,
   onTileClick,
+  items,
+  onItemClick,
   localOccupantId = null,
   showGrid,
   showHoverWhenGridHidden,
@@ -301,10 +326,17 @@ const GridCanvas = ({
   const showGridRef = useRef(showGrid);
   const showHoverWhenGridHiddenRef = useRef(showHoverWhenGridHidden);
   const moveAnimationsEnabledRef = useRef(moveAnimationsEnabled);
+  const itemsRef = useRef<CanvasItem[]>(items);
+  const itemBoundsRef = useRef<Map<string, ItemBounds>>(new Map());
+  const itemDrawOrderRef = useRef<string[]>([]);
 
   useEffect(() => {
     assetsRef.current = assets;
   }, [assets]);
+
+  useEffect(() => {
+    itemsRef.current = items;
+  }, [items]);
 
   useEffect(() => {
     let isMounted = true;
@@ -317,21 +349,25 @@ const GridCanvas = ({
         ]);
 
         if (isMounted) {
-          setAssets({ room: roomImage, avatars: avatarImages });
+          setAssets({
+            room: roomImage,
+            avatars: avatarImages,
+            items: new Map(assetsRef.current?.items ?? []),
+          });
         }
       } catch (error) {
         if (import.meta.env.DEV) {
           console.warn('Failed to load canvas assets', error);
         }
         if (isMounted) {
-          setAssets({ room: null, avatars: [] });
+          setAssets({ room: null, avatars: [], items: new Map() });
         }
       }
     };
 
     loadAssets().catch(() => {
       if (isMounted) {
-        setAssets({ room: null, avatars: [] });
+        setAssets({ room: null, avatars: [], items: new Map() });
       }
     });
 
@@ -339,6 +375,63 @@ const GridCanvas = ({
       isMounted = false;
     };
   }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadItemAssets = async (): Promise<void> => {
+      const uniqueTextures = Array.from(new Set(items.map((item) => item.texture)));
+      const currentItems = assetsRef.current?.items ?? new Map<string, HTMLImageElement>();
+      const nextItems = new Map(currentItems);
+      const texturesToLoad = uniqueTextures.filter((texture) => !nextItems.has(texture));
+
+      if (texturesToLoad.length === 0) {
+        if (isMounted) {
+          setAssets((previous) => {
+            if (!previous) {
+              return { room: null, avatars: [], items: nextItems };
+            }
+            return { ...previous, items: nextItems };
+          });
+        }
+        return;
+      }
+
+      try {
+        const loadedImages = await Promise.all(texturesToLoad.map((texture) => loadImage(texture)));
+        texturesToLoad.forEach((texture, index) => {
+          nextItems.set(texture, loadedImages[index]);
+        });
+        if (isMounted) {
+          setAssets((previous) => {
+            if (!previous) {
+              return { room: null, avatars: [], items: nextItems };
+            }
+            return { ...previous, items: nextItems };
+          });
+        }
+      } catch (error) {
+        if (import.meta.env.DEV) {
+          console.warn('Failed to load item textures', error);
+        }
+      }
+    };
+
+    loadItemAssets().catch(() => {
+      if (isMounted) {
+        setAssets((previous) => {
+          if (!previous) {
+            return { room: null, avatars: [], items: new Map() };
+          }
+          return { ...previous, items: new Map(previous.items) };
+        });
+      }
+    });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [items]);
 
   useEffect(() => {
     hoveredTileRef.current = hoveredTile;
@@ -507,6 +600,57 @@ const GridCanvas = ({
 
         drawBackground(context, assetsRef.current);
 
+        itemBoundsRef.current.clear();
+        itemDrawOrderRef.current = [];
+        const sortedItems = [...itemsRef.current].sort((a, b) => {
+          if (a.tileY === b.tileY) {
+            return a.tileX - b.tileX;
+          }
+          return a.tileY - b.tileY;
+        });
+
+        for (const item of sortedItems) {
+          const tile = grid.tileMap.get(createTileKey(item.tileX, item.tileY));
+          if (!tile) {
+            continue;
+          }
+
+          const asset = assetsRef.current?.items.get(item.texture) ?? null;
+          const width = asset?.width ?? FALLBACK_ITEM_WIDTH;
+          const height = asset?.height ?? FALLBACK_ITEM_HEIGHT;
+          const baseX = tile.centerX;
+          const baseY = tile.screenY + tile.height;
+          const drawX = Math.round(baseX - width / 2);
+          const drawY = Math.round(baseY - height);
+
+          if (asset) {
+            context.drawImage(asset, drawX, drawY, width, height);
+          } else {
+            context.save();
+            context.fillStyle = 'rgba(255, 255, 255, 0.82)';
+            context.strokeStyle = 'rgba(20, 35, 54, 0.35)';
+            context.lineWidth = 2;
+            context.fillRect(drawX, drawY, width, height);
+            context.strokeRect(drawX, drawY, width, height);
+            context.fillStyle = 'rgba(20, 35, 54, 0.78)';
+            context.font = '14px "Inter", "Segoe UI", sans-serif';
+            context.textAlign = 'center';
+            context.textBaseline = 'middle';
+            const label = item.name.length > 24 ? `${item.name.slice(0, 21)}…` : item.name;
+            context.fillText(label, drawX + width / 2, drawY + height / 2, width - 12);
+            context.restore();
+          }
+
+          itemBoundsRef.current.set(item.id, {
+            x: drawX - ITEM_HIT_PADDING,
+            y: drawY - ITEM_HIT_PADDING,
+            width: width + ITEM_HIT_PADDING * 2,
+            height: height + ITEM_HIT_PADDING * 2,
+            item,
+          });
+          itemDrawOrderRef.current.push(item.id);
+        }
+
         if (showGridRef.current) {
           for (const tile of grid.tiles) {
             drawTile(context, tile, {
@@ -588,15 +732,37 @@ const GridCanvas = ({
     };
 
     const handlePointerDown = (event: PointerEvent): void => {
-      if (!onTileClick) {
-        return;
-      }
-
       const rect = canvas.getBoundingClientRect();
       const scaleX = CANVAS_WIDTH / rect.width;
       const scaleY = CANVAS_HEIGHT / rect.height;
       const x = (event.clientX - rect.left) * scaleX;
       const y = (event.clientY - rect.top) * scaleY;
+
+      if (event.button === 0 && onItemClick) {
+        for (let index = itemDrawOrderRef.current.length - 1; index >= 0; index -= 1) {
+          const id = itemDrawOrderRef.current[index];
+          const bounds = id ? itemBoundsRef.current.get(id) : undefined;
+          if (!bounds) {
+            continue;
+          }
+
+          if (
+            x >= bounds.x &&
+            x <= bounds.x + bounds.width &&
+            y >= bounds.y &&
+            y <= bounds.y + bounds.height
+          ) {
+            event.preventDefault();
+            event.stopPropagation();
+            onItemClick(bounds.item);
+            return;
+          }
+        }
+      }
+
+      if (!onTileClick || event.button !== 0) {
+        return;
+      }
 
       const tile = findTileAtPoint(grid, x, y);
       if (tile) {
@@ -613,7 +779,7 @@ const GridCanvas = ({
       canvas.removeEventListener('pointerleave', handlePointerLeave);
       canvas.removeEventListener('pointerdown', handlePointerDown);
     };
-  }, [grid, onTileClick]);
+  }, [grid, onItemClick, onTileClick]);
 
   return (
     <div className="grid-canvas" aria-hidden={false}>

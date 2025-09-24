@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import type { ServerConfig } from '../config.js';
-import { findUserByUsername, toPublicUser, verifyUserPassword } from '../auth/store.js';
+import type { UserStore } from '../auth/store.js';
 import { signToken } from '../auth/jwt.js';
 
 const loginSchema = z.object({
@@ -11,13 +11,14 @@ const loginSchema = z.object({
 
 interface AuthPluginOptions {
   config: ServerConfig;
+  userStore: UserStore;
 }
 
 export const authRoutes: FastifyPluginAsync<AuthPluginOptions> = async (
   app: FastifyInstance,
   options: AuthPluginOptions,
 ): Promise<void> => {
-  const { config } = options;
+  const { config, userStore } = options;
 
   app.post('/auth/login', async (request, reply) => {
     const parsed = loginSchema.safeParse(request.body);
@@ -30,19 +31,19 @@ export const authRoutes: FastifyPluginAsync<AuthPluginOptions> = async (
     }
 
     const { username, password } = parsed.data;
-    const user = findUserByUsername(username);
+    const user = await userStore.findUserByUsername(username);
     if (!user) {
       await reply.code(401).send({ message: 'Invalid username or password' });
       return;
     }
 
-    const passwordIsValid = await verifyUserPassword(user, password);
+    const passwordIsValid = await userStore.verifyUserPassword(user, password);
     if (!passwordIsValid) {
       await reply.code(401).send({ message: 'Invalid username or password' });
       return;
     }
 
-    const publicUser = toPublicUser(user);
+    const publicUser = userStore.toPublicUser(user);
     const token = signToken(publicUser, config);
 
     reply.header('Cache-Control', 'no-store');

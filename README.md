@@ -3,14 +3,14 @@
 
 This repository implements the Bitby platform following the **Master Spec v3.7**. The stack is now wired together as a pnpm monorepo with:
 
-- a Vite + React client that now renders the deterministic top-right anchored grid with live hit-testing across the fixed 10-row field, keeps the right panel and bottom dock chrome locked to the stage footprint, surfaces the blocking reconnect overlay mandated by the spec, draws the development room background + tile overlays, and layers placeholder avatar PNGs with toggleable move animations, grid visibility controls, subtle hidden-grid hover outlines, and tight underfoot username labels while awaiting authoritative `move:ok` / `move:err` replies and blocking clicks on occupied or locked tiles before any animation begins
-- a Fastify-based server that now issues short-lived JWTs from `/auth/login`, seeds Argon2-hashed development users, exposes a guarded Socket.IO endpoint at `/ws`, validates tokens, streams a development room snapshot, services the heartbeat loop end to end, accepts `move` envelopes with room-sequenced `move:ok`/`move:err` acknowledgements, emits `room:occupant_moved` broadcasts to every connection, and now tears down departing avatars with authoritative `room:occupant_left` events so the shared presence list stays accurate
-- shared schema utilities for the canonical realtime envelope and the development `move` / room snapshot payloads consumed by both the client and server layers
-- Docker Compose definitions for Postgres and Redis
+- a Vite + React client that renders the deterministic top-right anchored grid, keeps the blocking reconnect overlay mandated by the spec, streams authoritative chat history with a live composer, and now paints dev room items beneath avatars with click-through hit testing so the right panel can surface spec-compliant pickup gating copy.
+- a Fastify-based server backed by Postgres and Redis that issues short-lived JWTs from `/auth/login`, runs migrations/seeds on boot, exposes Socket.IO handlers for `auth`, `move`, and `chat`, publishes cross-instance chat via Redis, and exports `/healthz`, `/readyz`, and `/metrics` endpoints instrumented with Prometheus counters.
+- shared schema utilities covering the canonical realtime envelope plus JSON Schemas for `auth`, `move`, and `chat` alongside an OpenAPI description of the `/auth/login` REST endpoint so both tiers validate identical payloads.
+- Docker Compose definitions for Postgres and Redis plus pnpm workflows that hydrate the entire stack for local development.
 
 This guide explains how to clone, run, and test the project on Debian- or Ubuntu-based Linux desktops. The workflow below assumes an apt-based distribution (Debian 12 “Bookworm”, Ubuntu 22.04 “Jammy”, or newer) with sudo access.
 
-> **Note:** The deterministic grid renderer now paints the full 10-row field (10 columns on even rows, 11 on odd rows), overlays the development room background, and keeps a HUD so geometry can be verified while diamond tiles render as translucent outlines (only locked/no-pickup states add a faint wash). The realtime hook authenticates with the server using the `/auth/login` JWT flow, binds a Socket.IO client to the `/ws` namespace, receives a stubbed-but-structured room snapshot (player seed plus NPC + tile flags), shows the blocking reconnect overlay mandated by the spec whenever the socket drops, and drives an optimistic movement loop: clicking an open tile issues `move` envelopes, the client immediately animates a placeholder sprite PNG when move animations are enabled, underfoot name labels hug each avatar's feet, hidden-grid hover feedback is now a near-neutral grey wash, and the server answers with authoritative `move:ok` / `move:err` frames, `room:occupant_moved` deltas, and `room:occupant_left` departures that reconcile any drift in local state.
+> **Note:** The deterministic grid renderer still paints the full 10-row field (10 columns on even rows, 11 on odd rows) with the development background and HUD overlays, but the realtime hook now authenticates, maintains heartbeats, hydrates chat history, and appends live `chat:new` envelopes alongside movement deltas. Item sprites render beneath avatars with alpha-aware hit tests so left-clicking opens the panel’s item view, which shows “Kan ikke samle op her” vs. “Klar til at samle op” copy based on tile flags and the local avatar’s position while the server remains authoritative for `move`, `chat`, and presence snapshots sourced from Postgres/Redis.
 
 ---
 
@@ -97,11 +97,11 @@ Skip this section if you ran the script above.
 
 All commands below assume you are inside the repository root (`projbb/`). Use separate terminals/tabs for each long-running process.
 
-1. **API / realtime server (Fastify + Socket.IO)**:
+1. **API / realtime server (Fastify + Socket.IO)** — ensure Postgres + Redis are running first (see L6) so migrations and Redis pub/sub can initialise:
    ```bash
    pnpm --filter @bitby/server dev
    ```
-   The server listens on `http://localhost:3001` with health checks and the `/auth/login` endpoint described later in this guide.
+   The server listens on `http://localhost:3001`, runs migrations/seeds against Postgres on boot, exposes `/auth/login`, `/healthz`, `/readyz`, and `/metrics`, and bridges chat traffic through Redis pub/sub.
 2. **Client (Vite + React)**:
    ```bash
    pnpm --filter @bitby/client dev
@@ -293,26 +293,26 @@ Copy the template to `.env.local` (git-ignored) and adjust values for your machi
 ## Next Steps in the Roadmap
 
 
-1. Stream chat and presence deltas from the authoritative server, wiring the right-panel log and canvas bubbles to the realtime feeds with typing previews (§3–4).
-2. Replace the remaining in-memory fixtures with Redis/Postgres-backed room authority so movement, catalog, and presence state persist across instances (§1, §3, §8, §12).
-3. Bring up Postgres/Redis migrations and seed data via Docker Compose (§12, §13, §21).
-4. Establish automated testing harnesses (unit, integration, visual goldens) and CI workflows that exercise the heartbeat + reconnect flow.
-5. Expand the schemas package with JSON Schemas/OpenAPI definitions covering realtime operations and REST endpoints (§23).
+1. Implement the item pickup loop (server validation, inventory persistence, authoritative acknowledgements) and wire the panel’s “Saml Op” action to real backend responses (§3, §5, §9, §12).
+2. Add realtime typing bubbles plus chat bubble rendering on the canvas and persist the panel’s system-message toggle to the server so it reflects per-user preferences (§3–4, §A.7).
+3. Build right-click context menus for grid tiles, items, and avatars with the gating rules outlined in the spec while the admin quick toggles remain non-blocking (§3, §A.6).
+4. Extend the admin quick menu so the controls call authoritative endpoints for lock/noPickup toggles, latency tracing, and dev affordances, persisting state in Postgres/Redis (§A.5, §21).
+5. Establish automated integration and E2E tests (move + chat + item flows) that run against the Postgres/Redis stack to guard regressions in the heartbeat, reconnect, and chat pipelines (§8, §23).
 
 
 Progress will be tracked in future commits; this document will evolve with concrete commands as they become available.
 
 ---
 
-## Handoff Notes (2025-09-24)
+## Handoff Notes (2025-09-25)
 
-- The realtime hook now resets its Strict Mode lifecycle guard and treats intentional `AbortController` cancellations as benign, so the `/auth/login` bootstrap no longer fails during automated runs and the reconnect overlay clears once the Socket.IO handshake finishes.
-- The grid canvas now draws the development room background, sorts occupants by tile depth, renders placeholder avatar PNGs with optional eased interpolation, keeps usernames anchored directly beneath each avatar's feet, blocks movement onto occupied tiles, and exposes quick admin toggles for grid visibility, hidden-grid hover outlines, and move animations.
-- The realtime server now drops departing occupants from the authoritative snapshot, increments the shared `roomSeq`, and emits `room:occupant_left` payloads that the client consumes to keep its presence map accurate between reconnects.
-- Latest connectivity screenshot with the overlay dismissed: `browser:/invocations/nlvmljto/artifacts/artifacts/bitby-connected.png`.
+- The realtime hook now authenticates via `/auth/login`, keeps the heartbeat loop alive, restores the room snapshot, streams historical chat on join, appends live `chat:new` envelopes, and resets the blocking reconnect overlay while the chat composer emits `chat:send` frames and honours the system-message toggle.
+- The canvas draws seeded development items beneath avatars, maintains per-item hit boxes, and funnels item selections into the right panel where Danish pickup copy (“Kan ikke samle op her” / “Klar til at samle op”) reflects tile flags and the local avatar’s position while movement gating remains authoritative.
+- The Fastify server boots Postgres migrations/seeds, validates `auth`/`move`/`chat` envelopes, persists chat to Postgres, relays room chat via Redis pub/sub, and exposes `/healthz`, `/readyz`, and `/metrics` Prometheus counters alongside the `/auth/login` REST endpoint.
+- Latest connectivity screenshot with chat + item panel: `browser:/invocations/nkjxmmlj/artifacts/artifacts/bitby-connected.png`.
 - Immediate follow-ups:
-  - Decide whether to demote or remove the `[realtime]` `console.debug` statements before production builds.
-  - Continue with the roadmap items above (chat/presence streaming, persisted room authority, richer protocol coverage).
+  - Wire the panel’s “Saml Op” action into a real pickup pipeline (server validation, inventory persistence, optimistic UI updates).
+  - Add typing bubble + chat bubble rendering so the canvas reflects realtime typing activity and per-user preferences for system messages.
 
 ---
 
@@ -326,4 +326,4 @@ Progress will be tracked in future commits; this document will evolve with concr
 
 ---
 
-*Last updated: 2025-09-24 UTC*
+*Last updated: 2025-09-25 UTC*

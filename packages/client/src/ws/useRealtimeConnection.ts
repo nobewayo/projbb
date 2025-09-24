@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { io, type Socket } from 'socket.io-client';
 import {
+  chatMessageBroadcastSchema,
   messageEnvelopeSchema,
   moveErrorDataSchema,
   moveOkDataSchema,
@@ -8,9 +9,9 @@ import {
   roomOccupantMovedDataSchema,
   roomOccupantLeftDataSchema,
   roomSnapshotSchema,
+  type ChatMessageBroadcast,
   type MessageEnvelope,
   type RoomOccupant,
-  type RoomSnapshot,
   type RoomTileFlag,
 } from '@bitby/schemas';
 
@@ -66,6 +67,7 @@ const isSessionRoom = (value: unknown): value is SessionRoom => {
 
 export interface RealtimeConnectionState extends InternalConnectionState {
   sendMove: (x: number, y: number) => boolean;
+  sendChat: (body: string) => boolean;
 }
 
 interface InternalConnectionState {
@@ -80,6 +82,7 @@ interface InternalConnectionState {
   lastRoomSeq: number | null;
   pendingMoveTarget: { x: number; y: number } | null;
   isMoveInFlight: boolean;
+  chatLog: ChatMessageBroadcast[];
 }
 
 const cloneOccupant = (occupant: RoomOccupant): RoomOccupant => ({
@@ -188,6 +191,7 @@ export const useRealtimeConnection = (): RealtimeConnectionState => {
     lastRoomSeq: null,
     pendingMoveTarget: null,
     isMoveInFlight: false,
+    chatLog: [],
   });
 
   const socketRef = useRef<Socket | null>(null);
@@ -401,6 +405,7 @@ export const useRealtimeConnection = (): RealtimeConnectionState => {
         tileFlags: [],
         pendingMoveTarget: null,
         isMoveInFlight: false,
+        chatLog: [],
       });
 
       countdownTimerRef.current = setInterval(() => {
@@ -423,19 +428,19 @@ export const useRealtimeConnection = (): RealtimeConnectionState => {
       }, delay);
     };
 
-    const handleOccupantSync = (snapshot: RoomSnapshot) => {
-      occupantMapRef.current = new Map(
-        snapshot.occupants.map((occupant: RoomOccupant) => [occupant.id, cloneOccupant(occupant)]),
-      );
-      pendingMovesRef.current.clear();
-      setState((previous) => ({
-        ...previous,
-        occupants: sortOccupants(occupantMapRef.current),
-        tileFlags: snapshot.tiles.map((tile: RoomTileFlag) => ({ ...tile })),
-        lastRoomSeq: snapshot.roomSeq,
-        pendingMoveTarget: null,
-        isMoveInFlight: false,
-      }));
+    const appendChatMessage = (message: ChatMessageBroadcast) => {
+      setState((previous) => {
+        const nextSeq = message.roomSeq ?? previous.lastRoomSeq ?? null;
+        const nextLog = [...previous.chatLog, message].slice(-200);
+        return {
+          ...previous,
+          chatLog: nextLog,
+          lastRoomSeq:
+            nextSeq === null
+              ? previous.lastRoomSeq
+              : Math.max(previous.lastRoomSeq ?? 0, nextSeq),
+        };
+      });
     };
 
     const handleEnvelope = (envelope: MessageEnvelope) => {
@@ -445,6 +450,16 @@ export const useRealtimeConnection = (): RealtimeConnectionState => {
           const userCandidate = payload.user;
           const roomCandidate = payload.room;
           const snapshotResult = roomSnapshotSchema.safeParse(payload.roomSnapshot);
+          const chatHistoryRaw = Array.isArray(payload.chatHistory)
+            ? payload.chatHistory
+            : [];
+          const chatHistory: ChatMessageBroadcast[] = [];
+          for (const entry of chatHistoryRaw) {
+            const parsedEntry = chatMessageBroadcastSchema.safeParse(entry);
+            if (parsedEntry.success) {
+              chatHistory.push(parsedEntry.data);
+            }
+          }
           const intervalFromServer =
             typeof envelope.data?.heartbeatIntervalMs === 'number'
               ? envelope.data.heartbeatIntervalMs
@@ -474,16 +489,38 @@ export const useRealtimeConnection = (): RealtimeConnectionState => {
 
           sessionUserRef.current = normalizedUser;
 
-          updateState({
+          occupantMapRef.current = new Map(
+            snapshotResult.data.occupants.map((occupant) => [
+              occupant.id,
+              cloneOccupant(occupant),
+            ]),
+          );
+          pendingMovesRef.current.clear();
+
+          const maxSeqCandidates: number[] = [snapshotResult.data.roomSeq];
+          for (const entry of chatHistory) {
+            if (typeof entry.roomSeq === 'number') {
+              maxSeqCandidates.push(entry.roomSeq);
+            }
+          }
+          const maxSeq = Math.max(...maxSeqCandidates);
+
+          setState((previous) => ({
+            ...previous,
             status: 'connected',
             lastError: null,
             retryInSeconds: null,
             heartbeatIntervalMs: intervalFromServer,
             user: normalizedUser,
             room: normalizedRoom,
-          });
+            occupants: sortOccupants(occupantMapRef.current),
+            tileFlags: snapshotResult.data.tiles.map((tile) => ({ ...tile })),
+            lastRoomSeq: maxSeq,
+            pendingMoveTarget: null,
+            isMoveInFlight: false,
+            chatLog: chatHistory,
+          }));
 
-          handleOccupantSync(snapshotResult.data);
           startPingTimer(intervalFromServer);
           return;
         }
@@ -602,6 +639,27 @@ export const useRealtimeConnection = (): RealtimeConnectionState => {
             isMoveInFlight: pendingMovesRef.current.size > 0,
           }));
 
+          return;
+        }
+        case 'chat:new': {
+          const parsed = chatMessageBroadcastSchema.safeParse(envelope.data);
+          if (!parsed.success) {
+            updateState({ lastError: 'Received malformed chat:new payload' });
+            return;
+          }
+
+          appendChatMessage(parsed.data);
+          return;
+        }
+        case 'chat:ok': {
+          return;
+        }
+        case 'error:chat_payload': {
+          const message =
+            typeof (envelope.data as { message?: unknown })?.message === 'string'
+              ? (envelope.data as { message: string }).message
+              : 'Chat payload rejected';
+          updateState({ lastError: message });
           return;
         }
         case 'pong': {
@@ -841,11 +899,37 @@ export const useRealtimeConnection = (): RealtimeConnectionState => {
     [state.status],
   );
 
+  const sendChat = useCallback(
+    (body: string): boolean => {
+      if (state.status !== 'connected') {
+        return false;
+      }
+
+      const socket = socketRef.current;
+      if (!socket || !socket.connected) {
+        return false;
+      }
+
+      const trimmed = body.trim();
+      if (trimmed.length === 0) {
+        return false;
+      }
+
+      const seq = seqRef.current;
+      seqRef.current += 1;
+      const envelope = buildEnvelope(seq, 'chat:send', { body: trimmed });
+      socket.emit('message', envelope);
+      return true;
+    },
+    [state.status],
+  );
+
   return useMemo(
     () => ({
       ...state,
       sendMove,
+      sendChat,
     }),
-    [state, sendMove],
+    [state, sendMove, sendChat],
   );
 };
