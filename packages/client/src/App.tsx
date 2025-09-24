@@ -15,12 +15,6 @@ const dockButtons = [
   'Admin',
 ];
 
-const adminShortcuts = [
-  'Reload room',
-  'Toggle grid',
-  'Latency trace',
-];
-
 type ChatMessage = {
   id: string;
   actor: string;
@@ -110,6 +104,8 @@ const App = (): JSX.Element => {
   );
   const [showSystemMessages, setShowSystemMessages] = useState(true);
   const [showBackToTop, setShowBackToTop] = useState(false);
+  const [isGridVisible, setIsGridVisible] = useState(true);
+  const [showHoverWhenGridHidden, setShowHoverWhenGridHidden] = useState(true);
   const chatMessagesRef = useRef<HTMLOListElement | null>(null);
   const connection = useRealtimeConnection();
 
@@ -236,6 +232,44 @@ const App = (): JSX.Element => {
     }
   };
 
+  const adminShortcuts = useMemo(
+    () => [
+      {
+        label: 'Reload room',
+        onClick: () => {
+          if (import.meta.env.DEV) {
+            console.debug('[admin] Reload room requested');
+          }
+        },
+      },
+      {
+        label: isGridVisible ? 'Hide grid' : 'Show grid',
+        onClick: () => {
+          setIsGridVisible((prev) => !prev);
+        },
+        pressed: !isGridVisible,
+      },
+      {
+        label: showHoverWhenGridHidden
+          ? 'Disable hidden hover highlight'
+          : 'Enable hidden hover highlight',
+        onClick: () => {
+          setShowHoverWhenGridHidden((prev) => !prev);
+        },
+        pressed: showHoverWhenGridHidden,
+      },
+      {
+        label: 'Latency trace',
+        onClick: () => {
+          if (import.meta.env.DEV) {
+            console.debug('[admin] Latency trace requested');
+          }
+        },
+      },
+    ],
+    [isGridVisible, showHoverWhenGridHidden],
+  );
+
   return (
     <div className="stage-shell">
       {connection.status !== 'connected' ? (
@@ -317,6 +351,8 @@ const App = (): JSX.Element => {
               pendingMoveTarget={connection.pendingMoveTarget}
               onTileClick={handleTileClick}
               localOccupantId={connection.user?.id ?? null}
+              showGrid={isGridVisible}
+              showHoverWhenGridHidden={showHoverWhenGridHidden}
             />
           </main>
           <nav
@@ -427,8 +463,15 @@ const App = (): JSX.Element => {
         role="group"
       >
         {adminShortcuts.map((item) => (
-          <button key={item} type="button" className="admin-quick-menu__button">
-            {item}
+          <button
+            key={item.label}
+            type="button"
+            className="admin-quick-menu__button"
+            onClick={item.onClick}
+            aria-pressed={item.pressed}
+            data-active={item.pressed}
+          >
+            {item.label}
           </button>
         ))}
       </nav>

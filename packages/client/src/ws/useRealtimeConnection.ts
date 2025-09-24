@@ -717,7 +717,7 @@ export const useRealtimeConnection = (): RealtimeConnectionState => {
         handleEnvelope(result.data);
       });
 
-      socket.on('disconnect', (reason) => {
+      socket.on('disconnect', (reason: Socket.DisconnectReason) => {
         detachListeners();
         if (disposedRef.current) {
           return;
@@ -729,7 +729,7 @@ export const useRealtimeConnection = (): RealtimeConnectionState => {
         scheduleReconnect();
       });
 
-      socket.on('connect_error', (error) => {
+      socket.on('connect_error', (error: Error) => {
         detachListeners();
         if (disposedRef.current) {
           return;
