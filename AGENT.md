@@ -34,6 +34,7 @@
 
 7) **Pre‑Rendered 3D → 2D**
    - Rooms, avatars, items are produced from 3D but shipped as **2D sprites** (PNGs/sprite-sheets). Paper‑doll compositing allowed; no runtime 3D.
+   - Development placeholder sprites live in-repo: avatars at `packages/client/src/assets/avatars/` (`avatar1.png`, `avatar2.png`), items at `packages/client/src/assets/items/` (`plant.png`, `couch.png`), and the dev room background at `packages/client/src/assets/rooms/dev_room.png`.
 
 8) **Security First**
    - JWT, CSRF protection for REST, parameterized SQL, upload allow‑list + scanning, progressive rate‑limits (see §8).

@@ -150,6 +150,14 @@ projbb/
 
 The repository uses `pnpm` workspaces to manage dependencies consistently across packages.
 
+### Development art assets (current test fixtures)
+
+When authoring or validating features that rely on placeholder art, reference the committed PNG sprites under the client asset tree:
+
+- **Avatar sprites** live in `packages/client/src/assets/avatars/` and currently include `avatar1.png` and `avatar2.png`.
+- **Item sprites** live in `packages/client/src/assets/items/` and currently include `plant.png` and `couch.png`.
+- The development **room background** lives in `packages/client/src/assets/rooms/` as `dev_room.png`.
+
 ---
 
 ## Running the Stack Locally (future-ready)

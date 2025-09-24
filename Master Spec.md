@@ -11,11 +11,12 @@
 
 ## 0) Product Overview
 
-- Denmark-style “diamond grid” chat: **pre-rendered 3D room backgrounds, pre-rendered 3D avatars, pre-rendered 3D items** — all shipped as **2D sprites** (PNG/JPG, optional frame sequences). **No runtime 3D** in the client.  
-- **Deterministic canvas**: the grid window renders identically for all clients; themes only affect UI chrome (panels, dock, menus).  
-- **Fast, accurate tile movement** is the #1 priority.  
-- Rooms are unique instances (items/players/bots/background per room).  
+- Denmark-style “diamond grid” chat: **pre-rendered 3D room backgrounds, pre-rendered 3D avatars, pre-rendered 3D items** — all shipped as **2D sprites** (PNG/JPG, optional frame sequences). **No runtime 3D** in the client.
+- **Deterministic canvas**: the grid window renders identically for all clients; themes only affect UI chrome (panels, dock, menus).
+- **Fast, accurate tile movement** is the #1 priority.
+- Rooms are unique instances (items/players/bots/background per room).
 - Monetization is **phase-gated** to the end; **ad banners** may be enabled early (never inside the grid window).
+- Development art fixtures live under the client asset tree for fast prototyping: avatar sprites at `packages/client/src/assets/avatars/` (`avatar1.png`, `avatar2.png`), item sprites at `packages/client/src/assets/items/` (`plant.png`, `couch.png`), and the dev room background at `packages/client/src/assets/rooms/dev_room.png`.
 
 ---
 
