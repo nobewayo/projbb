@@ -5,6 +5,7 @@
 .DESCRIPTION
   - Verifies that pnpm is available on PATH.
   - Automatically runs `pnpm install` if the workspace has not been bootstrapped yet.
+  - Re-runs `pnpm install` when the lockfile hash changes to make sure new dependencies are linked.
   - Supports `-InstallDependencies` to force a fresh install even when dependencies exist.
   - Prebuilds the shared `@bitby/schemas` package so Vite can resolve workspace imports on cold clones.
   - Starts the schema TypeScript watcher (`pnpm --filter @bitby/schemas dev`).
@@ -54,18 +55,79 @@ function Test-DependenciesPresent {
   return (Test-Path $nodeModules -PathType Container) -and (Test-Path $modulesMarker -PathType Leaf)
 }
 
+function Get-LockfileHash {
+  param(
+    [string]$RepoRoot
+  )
+
+  $lockfile = Join-Path $RepoRoot 'pnpm-lock.yaml'
+  if (-not (Test-Path $lockfile -PathType Leaf)) {
+    return $null
+  }
+
+  return (Get-FileHash -Path $lockfile -Algorithm SHA256).Hash
+}
+
+function Get-SavedLockfileHash {
+  param(
+    [string]$RepoRoot
+  )
+
+  $hashFile = Join-Path $RepoRoot 'node_modules/.pnpm-lock.hash'
+  if (-not (Test-Path $hashFile -PathType Leaf)) {
+    return $null
+  }
+
+  return (Get-Content -Path $hashFile -Raw -ErrorAction Stop).Trim()
+}
+
+function Save-LockfileHash {
+  param(
+    [string]$RepoRoot,
+    [string]$Hash
+  )
+
+  if (-not $Hash) {
+    return
+  }
+
+  $hashFile = Join-Path $RepoRoot 'node_modules/.pnpm-lock.hash'
+  $nodeModulesPath = Split-Path -Parent $hashFile
+  if (-not (Test-Path $nodeModulesPath -PathType Container)) {
+    New-Item -ItemType Directory -Path $nodeModulesPath -Force | Out-Null
+  }
+
+  Set-Content -Path $hashFile -Value $Hash -Encoding UTF8
+}
+
 function Ensure-WorkspaceDependencies {
   param(
     [string]$RepoRoot,
     [switch]$Force
   )
 
-  if ($Force -or -not (Test-DependenciesPresent -RepoRoot $RepoRoot)) {
-    Write-Host 'Installing workspace dependencies with pnpm install...' -ForegroundColor Cyan
+  $dependenciesPresent = Test-DependenciesPresent -RepoRoot $RepoRoot
+  $lockfileHash = Get-LockfileHash -RepoRoot $RepoRoot
+  $savedLockfileHash = Get-SavedLockfileHash -RepoRoot $RepoRoot
+
+  $requiresInstall = $Force -or -not $dependenciesPresent -or ($lockfileHash -and ($lockfileHash -ne $savedLockfileHash))
+
+  if ($requiresInstall) {
+    if ($Force) {
+      Write-Host 'Forced dependency reinstall requested. Running pnpm install...' -ForegroundColor Cyan
+    }
+    elseif (-not $dependenciesPresent) {
+      Write-Host 'Installing workspace dependencies with pnpm install...' -ForegroundColor Cyan
+    }
+    else {
+      Write-Host 'Detected pnpm-lock.yaml changes. Reinstalling workspace dependencies...' -ForegroundColor Cyan
+    }
     pnpm install --dir $RepoRoot
     if ($LASTEXITCODE -ne 0) {
       throw "pnpm install failed with exit code $LASTEXITCODE."
     }
+    $updatedLockfileHash = Get-LockfileHash -RepoRoot $RepoRoot
+    Save-LockfileHash -RepoRoot $RepoRoot -Hash $updatedLockfileHash
   }
   else {
     Write-Host 'Dependencies already present. Skipping pnpm install.' -ForegroundColor DarkGray
