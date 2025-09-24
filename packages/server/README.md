@@ -4,7 +4,7 @@ This package hosts the Node.js (TypeScript) API/WebSocket authority for Bitby. T
 
 - `/healthz` and `/readyz` endpoints aligned with the Master Spec observability guardrails (§17)
 - `POST /auth/login` which verifies the Argon2id hash for the seeded development users (`test`, `test2`, `test3`, `test4` all share `password123`), then issues an HS256 JWT containing the profile metadata and expiry window
-- CORS configuration that, when `CLIENT_ORIGIN` targets localhost, automatically whitelists both `http://localhost:5173` and `http://127.0.0.1:5173` so developers don't get blocked by host alias differences
+- CORS configuration that, when `CLIENT_ORIGIN` targets localhost, automatically accepts any loopback alias (`localhost`, `127.0.0.1`, or `[::1]`) on any port so developers don't get blocked by host alias or port shuffling differences during setup
 - a WebSocket endpoint at `/ws` that enforces the `bitby.v1` subprotocol, caps payloads at 64 KB, validates the provided JWT, responds with `auth:ok` including the development room snapshot + heartbeat interval, echoes `ping`/`pong`, and closes sessions that miss the 30 s heartbeat window
 - readiness tracking so orchestrators can mark the instance unavailable before shutdown
 
