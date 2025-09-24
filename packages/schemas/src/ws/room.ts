@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { roomItemSchema } from './item.js';
 
 export const roomTileFlagSchema = z.object({
   x: z.number().int().min(0, 'tile.x must be non-negative'),
@@ -23,6 +24,7 @@ export const roomSnapshotSchema = z.object({
   roomSeq: z.number().int().min(0, 'roomSeq must be non-negative'),
   occupants: z.array(roomOccupantSchema),
   tiles: z.array(roomTileFlagSchema),
+  items: z.array(roomItemSchema),
 });
 
 export const roomOccupantMovedDataSchema = z.object({

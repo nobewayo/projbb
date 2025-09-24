@@ -35,4 +35,24 @@ export interface RoomSnapshot {
     locked: boolean;
     noPickup: boolean;
   }>;
+  items: RoomSnapshotItem[];
+}
+
+export interface RoomSnapshotItem {
+  id: string;
+  name: string;
+  description: string;
+  tileX: number;
+  tileY: number;
+  texture: string;
+}
+
+export interface InventoryItem {
+  id: string;
+  catalogItemId: string;
+  roomItemId: string;
+  name: string;
+  description: string;
+  texture: string;
+  acquiredAt: string;
 }

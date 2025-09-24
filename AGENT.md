@@ -483,11 +483,11 @@ When implementing, **Codex should**:
 
 ## 23) Ready‑to‑Implement Tasks (First Sprint)
 
-1) Wire the item pickup loop (server validation, inventory persistence, optimistic UI) so the panel’s “Saml Op” control reflects authoritative acknowledgements.
-2) Add realtime typing bubbles and chat bubble rendering on the canvas while persisting the chat drawer’s system-message preference per user.
-3) Build right-click context menus for tiles, items, and avatars with the gating rules outlined in the Master Spec (Info/Saml Op, player actions).
-4) Extend the admin quick menu so each toggle calls the authoritative API (lock/noPickup, latency trace) and persists dev overrides via Postgres/Redis.
-5) Establish automated integration/E2E tests that exercise auth → chat → move → item flows against the Postgres/Redis stack and wire them into CI.
+1) Add realtime typing bubbles and chat bubble rendering on the canvas while persisting the chat drawer’s system-message preference per user.
+2) Build right-click context menus for tiles, items, and avatars with the gating rules outlined in the Master Spec (Info/Saml Op, player actions).
+3) Extend the admin quick menu so each toggle calls the authoritative API (lock/noPickup, latency trace) and persists dev overrides via Postgres/Redis.
+4) Establish automated integration/E2E tests that exercise auth → chat → move → item flows against the Postgres/Redis stack and wire them into CI.
+5) Design the persistent inventory/backpack presentation (inspection + future drop/wear flows) now that pickups are persisted.
 6) Audit `[realtime]` debug logging before release (demote, gate, or remove) so production builds ship without noisy console output.
 
 ---
@@ -495,18 +495,24 @@ When implementing, **Codex should**:
 ## 24) Progress Snapshot — 2025-09-25
 
 - ✅ `useRealtimeConnection` authenticates via `/auth/login`, maintains heartbeats, hydrates the room snapshot, streams historical chat, appends live `chat:new` envelopes, and exposes a composer that emits `chat:send` while the blocking overlay clears automatically after reconnect.
-- ✅ The React client now renders seeded room items beneath avatars, tracks per-item hit boxes, routes selections into the right panel’s item info view, and honours the chat drawer’s system-message toggle alongside the existing admin quick toggles and movement gating.
-- ✅ The Fastify server boots Postgres migrations/seeds, validates `auth`/`move`/`chat` envelopes, persists chat history to Postgres, relays cross-instance chat through Redis pub/sub, and exposes `/healthz`, `/readyz`, and `/metrics` endpoints instrumented with Prometheus counters.
-- ✅ `@bitby/schemas` publishes JSON Schemas for `auth`, `move`, and `chat` plus an OpenAPI document for `/auth/login`, keeping both tiers on a single contract for realtime and REST payloads.
+- ✅ The React client now renders seeded room items beneath avatars, tracks per-item hit boxes, wires the right panel’s “Saml Op” button into the optimistic → authoritative pickup loop, and honours the chat drawer’s system-message toggle alongside the existing admin quick toggles and movement gating.
+- ✅ The Fastify server boots Postgres migrations/seeds, validates `auth`/`move`/`chat`/`item:pickup` envelopes, persists chat history and inventory state to Postgres, relays room chat via Redis pub/sub, and exposes `/healthz`, `/readyz`, and `/metrics` endpoints instrumented with Prometheus counters.
+- ✅ `@bitby/schemas` publishes JSON Schemas for `auth`, `move`, `chat`, and `item` envelopes plus an OpenAPI document for `/auth/login`, keeping both tiers on a single contract for realtime and REST payloads.
 - ✅ Workspace scripts rebuild shared schemas before Vite launches, and lint/typecheck/test/build workflows cover the new chat, item, and observability codepaths.
-- Latest connectivity screenshot with chat + item panel: `browser:/invocations/nkjxmmlj/artifacts/artifacts/bitby-connected.png`.
+- Latest connectivity screenshot with chat + item panel: `browser:/invocations/pcpnzfin/artifacts/artifacts/bitby-connected.png`.
+
+**Environment Notes**
+
+- When Docker is unavailable, install and start Postgres + Redis via the distro services (`sudo apt install postgresql redis-server`, `sudo service postgresql start`, `sudo service redis-server start`), then seed the `bitby` role/database as documented in the README.
+- Launch dev tiers with `pnpm --filter @bitby/server dev` and `pnpm --filter @bitby/client dev -- --host 0.0.0.0 --port 5173`; the realtime socket expects Postgres + Redis to be online before boot.
+
 
 ### Immediate Next Focus
 
-1. Wire the pickup pipeline end-to-end (server validation, inventory persistence, optimistic UI) so the right panel button reflects authoritative acknowledgements.
-2. Add typing bubbles and chat bubble rendering on the canvas while persisting the system-message preference.
-3. Implement the spec’d context menus for tiles/items/avatars and extend the admin quick menu to call authoritative toggles.
-4. Stand up integration/E2E tests that drive auth → chat → move → item flows against Postgres/Redis and gate CI on them.
+1. Add typing bubbles and chat bubble rendering on the canvas while persisting the system-message preference.
+2. Implement the spec’d context menus for tiles/items/avatars and extend the admin quick menu to call authoritative toggles.
+3. Stand up integration/E2E tests that drive auth → chat → move → item flows against Postgres/Redis and gate CI on them.
+4. Design and implement the inventory/backpack presentation now that pickups persist (inspection, future drop/wear flows).
 5. Gate or demote the `[realtime]` debug logging before shipping production builds.
 
 **End of AGENT.md**

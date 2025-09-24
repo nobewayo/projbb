@@ -3,6 +3,7 @@ import type { FastifyBaseLogger, FastifyInstance } from 'fastify';
 import type { Socket } from 'socket.io';
 import {
   chatSendRequestDataSchema,
+  itemPickupRequestDataSchema,
   messageEnvelopeSchema,
   moveRequestDataSchema,
   type ChatMessageBroadcast,
@@ -12,9 +13,15 @@ import {
 import { z } from 'zod';
 import type { ServerConfig } from '../config.js';
 import { decodeToken } from '../auth/jwt.js';
-import type { AuthenticatedUser, RoomSnapshot } from '../auth/types.js';
+import type {
+  AuthenticatedUser,
+  InventoryItem,
+  RoomSnapshot,
+  RoomSnapshotItem,
+} from '../auth/types.js';
 import type { RoomStore, TileFlagRecord } from '../db/rooms.js';
 import type { ChatStore } from '../db/chat.js';
+import type { ItemStore, RoomItemRecord, InventoryItemRecord } from '../db/items.js';
 import type { RoomPubSub, RoomChatEvent } from '../redis/pubsub.js';
 import type { MetricsBundle } from '../metrics/registry.js';
 
@@ -52,6 +59,7 @@ interface DevelopmentRoomState {
   tileIndex: Map<string, TileFlag>;
   occupants: Map<string, RoomOccupant>;
   connections: Map<string, RegisteredConnection>;
+  items: Map<string, RoomItemState>;
 }
 
 interface RoomOccupant {
@@ -60,6 +68,8 @@ interface RoomOccupant {
   roles: string[];
   position: { x: number; y: number };
 }
+
+interface RoomItemState extends RoomSnapshotItem {}
 
 interface ConnectionContext {
   app: FastifyInstance;
@@ -71,6 +81,7 @@ interface RealtimeDependencies {
   config: ServerConfig;
   roomStore: RoomStore;
   chatStore: ChatStore;
+  itemStore: ItemStore;
   pubsub: RoomPubSub;
   metrics: MetricsBundle;
 }
@@ -93,6 +104,7 @@ type AuthOkPayload = EnvelopeData & {
   heartbeatIntervalMs: number;
   roomSnapshot: RoomSnapshot;
   chatHistory: ChatMessageBroadcast[];
+  inventory: InventoryItem[];
 };
 
 const authPayloadSchema = z.object({
@@ -131,6 +143,45 @@ const sortOccupants = (map: Map<string, RoomOccupant>): RoomOccupant[] =>
       return a.position.y - b.position.y;
     });
 
+const cloneItem = (item: RoomItemState): RoomItemState => ({
+  id: item.id,
+  name: item.name,
+  description: item.description,
+  tileX: item.tileX,
+  tileY: item.tileY,
+  texture: item.texture,
+});
+
+const sortItems = (map: Map<string, RoomItemState>): RoomItemState[] =>
+  Array.from(map.values())
+    .map((item) => cloneItem(item))
+    .sort((a, b) => {
+      if (a.tileY === b.tileY) {
+        return a.tileX - b.tileX;
+      }
+
+      return a.tileY - b.tileY;
+    });
+
+const mapRoomItemRecordToState = (record: RoomItemRecord): RoomItemState => ({
+  id: record.id,
+  name: record.name,
+  description: record.description,
+  tileX: record.tileX,
+  tileY: record.tileY,
+  texture: record.texture,
+});
+
+const mapInventoryRecordToPayload = (record: InventoryItemRecord): InventoryItem => ({
+  id: record.id,
+  catalogItemId: record.catalogItemId,
+  roomItemId: record.roomItemId,
+  name: record.name,
+  description: record.description,
+  texture: record.texture,
+  acquiredAt: record.acquiredAt.toISOString(),
+});
+
 const safeSend = (
   logger: FastifyBaseLogger,
   socket: Socket,
@@ -166,6 +217,7 @@ export const createRealtimeServer = async ({
   config,
   roomStore,
   chatStore,
+  itemStore,
   pubsub,
   metrics,
 }: RealtimeDependencies): Promise<RealtimeServer> => {
@@ -176,6 +228,7 @@ export const createRealtimeServer = async ({
 
   const tileFlags = await roomStore.getTileFlags(roomRecord.id);
   const occupantList = await roomStore.listOccupants(roomRecord.id);
+  const roomItems = await itemStore.listRoomItems(roomRecord.id);
 
   const developmentRoomState: DevelopmentRoomState = {
     id: roomRecord.id,
@@ -185,6 +238,7 @@ export const createRealtimeServer = async ({
     tileIndex: new Map(tileFlags.map((flag) => [createTileKey(flag.x, flag.y), flag])),
     occupants: new Map(),
     connections: new Map(),
+    items: new Map(roomItems.map((item) => [item.id, mapRoomItemRecordToState(item)])),
   };
 
   for (const occupant of occupantList) {
@@ -208,10 +262,14 @@ export const createRealtimeServer = async ({
       locked: tile.locked,
       noPickup: tile.noPickup,
     })),
+    items: sortItems(developmentRoomState.items),
   });
 
   const isTileLocked = (x: number, y: number): boolean =>
     developmentRoomState.tileIndex.get(createTileKey(x, y))?.locked ?? false;
+
+  const isTileNoPickup = (x: number, y: number): boolean =>
+    developmentRoomState.tileIndex.get(createTileKey(x, y))?.noPickup ?? false;
 
   const isTileInBounds = (x: number, y: number): boolean => {
     if (y < 0 || y >= GRID_ROW_COUNT || x < 0) {
@@ -354,6 +412,24 @@ export const createRealtimeServer = async ({
     }
   };
 
+  const broadcastItemRemoved = (
+    itemId: string,
+    roomSeq: number,
+    pickedUpBy?: { id: string; username: string },
+  ): void => {
+    for (const connection of developmentRoomState.connections.values()) {
+      safeSend(
+        connection.logger,
+        connection.socket,
+        createEnvelope('room:item_removed', 0, {
+          itemId,
+          roomSeq,
+          pickedUpBy,
+        }),
+      );
+    }
+  };
+
   const broadcastChatEvent = (event: RoomChatEvent): void => {
     updateRoomSeq(event.payload.roomSeq);
     for (const connection of developmentRoomState.connections.values()) {
@@ -450,6 +526,93 @@ export const createRealtimeServer = async ({
     };
   };
 
+  const attemptItemPickup = async (
+    user: AuthenticatedUser,
+    itemId: string,
+  ): Promise<
+    | {
+        ok: true;
+        inventoryItem: InventoryItem;
+        roomSeq: number;
+      }
+    | {
+        ok: false;
+        code: 'not_available' | 'wrong_position' | 'tile_blocked' | 'unknown_item';
+        message: string;
+        roomSeq: number;
+      }
+  > => {
+    const occupant = developmentRoomState.occupants.get(user.id);
+    if (!occupant) {
+      return {
+        ok: false,
+        code: 'not_available',
+        message: 'Join the room before picking up items',
+        roomSeq: developmentRoomState.roomSeq,
+      };
+    }
+
+    const item = developmentRoomState.items.get(itemId);
+    if (!item) {
+      return {
+        ok: false,
+        code: 'not_available',
+        message: 'Item is no longer available',
+        roomSeq: developmentRoomState.roomSeq,
+      };
+    }
+
+    if (isTileNoPickup(item.tileX, item.tileY)) {
+      return {
+        ok: false,
+        code: 'tile_blocked',
+        message: 'This tile does not allow pickups',
+        roomSeq: developmentRoomState.roomSeq,
+      };
+    }
+
+    if (occupant.position.x !== item.tileX || occupant.position.y !== item.tileY) {
+      return {
+        ok: false,
+        code: 'wrong_position',
+        message: 'Stand on the tile to pick up this item',
+        roomSeq: developmentRoomState.roomSeq,
+      };
+    }
+
+    const pickupResult = await itemStore.pickupRoomItem({
+      roomItemId: itemId,
+      roomId: developmentRoomState.id,
+      userId: user.id,
+    });
+
+    if (!pickupResult.ok) {
+      const errorCode = pickupResult.code === 'room_mismatch' ? 'unknown_item' : 'not_available';
+      const message =
+        pickupResult.code === 'not_found'
+          ? 'Item could not be located'
+          : pickupResult.code === 'room_mismatch'
+          ? 'Item does not belong to this room'
+          : 'Item was already picked up';
+      return {
+        ok: false,
+        code: errorCode,
+        message,
+        roomSeq: developmentRoomState.roomSeq,
+      };
+    }
+
+    developmentRoomState.items.delete(itemId);
+    const newRoomSeq = await roomStore.incrementRoomSequence(developmentRoomState.id);
+    updateRoomSeq(newRoomSeq);
+
+    return {
+      ok: true,
+      inventoryItem: mapInventoryRecordToPayload(pickupResult.inventoryItem),
+      roomSeq: developmentRoomState.roomSeq,
+    };
+  };
+
   const handleAuth = async (
     logger: FastifyBaseLogger,
     socket: Socket,
@@ -482,6 +645,7 @@ export const createRealtimeServer = async ({
       developmentRoomState.id,
       50,
     );
+    const inventoryRecords = await itemStore.listInventoryByUser(authenticatedUser.id);
 
     const payload: AuthOkPayload = {
       user: authenticatedUser,
@@ -500,6 +664,7 @@ export const createRealtimeServer = async ({
         createdAt: record.createdAt.toISOString(),
         roomSeq: record.roomSeq,
       })),
+      inventory: inventoryRecords.map((record) => mapInventoryRecordToPayload(record)),
     };
 
     acknowledge(logger, socket, envelope, 'auth:ok', payload);
@@ -718,6 +883,69 @@ export const createRealtimeServer = async ({
                 'Rejected move operation',
               );
             }
+            return;
+          }
+          case 'item:pickup': {
+            if (!isAuthenticated || !sessionUser) {
+              acknowledge(logger, socket, envelope, 'error:not_authenticated', {
+                message: 'Authenticate before issuing realtime operations',
+              });
+              return;
+            }
+
+            const parsed = itemPickupRequestDataSchema.safeParse(envelope.data);
+            if (!parsed.success) {
+              acknowledge(logger, socket, envelope, 'item:pickup:err', {
+                itemId:
+                  typeof (envelope.data as { itemId?: unknown })?.itemId === 'string'
+                    ? ((envelope.data as { itemId: string }).itemId)
+                    : 'unknown',
+                code: 'unknown_item',
+                message: 'Invalid pickup payload',
+                roomSeq: developmentRoomState.roomSeq,
+              });
+              return;
+            }
+
+            const itemId = parsed.data.itemId;
+            const pickupResult = await attemptItemPickup(sessionUser, itemId);
+
+            if (pickupResult.ok) {
+              metrics.itemPickups.inc();
+              acknowledge(logger, socket, envelope, 'item:pickup:ok', {
+                itemId,
+                inventoryItem: pickupResult.inventoryItem,
+                roomSeq: pickupResult.roomSeq,
+              });
+              broadcastItemRemoved(itemId, pickupResult.roomSeq, {
+                id: sessionUser.id,
+                username: sessionUser.username,
+              });
+              logger.info(
+                {
+                  userId: sessionUser.id,
+                  itemId,
+                  roomSeq: pickupResult.roomSeq,
+                },
+                'Processed item pickup',
+              );
+            } else {
+              acknowledge(logger, socket, envelope, 'item:pickup:err', {
+                itemId,
+                code: pickupResult.code,
+                message: pickupResult.message,
+                roomSeq: pickupResult.roomSeq,
+              });
+              logger.warn(
+                {
+                  userId: sessionUser.id,
+                  itemId,
+                  code: pickupResult.code,
+                },
+                'Rejected item pickup',
+              );
+            }
+
             return;
           }
           case 'chat:send': {

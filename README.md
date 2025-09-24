@@ -3,14 +3,15 @@
 
 This repository implements the Bitby platform following the **Master Spec v3.7**. The stack is now wired together as a pnpm monorepo with:
 
-- a Vite + React client that renders the deterministic top-right anchored grid, keeps the blocking reconnect overlay mandated by the spec, streams authoritative chat history with a live composer, and now paints dev room items beneath avatars with click-through hit testing so the right panel can surface spec-compliant pickup gating copy.
-- a Fastify-based server backed by Postgres and Redis that issues short-lived JWTs from `/auth/login`, runs migrations/seeds on boot, exposes Socket.IO handlers for `auth`, `move`, and `chat`, publishes cross-instance chat via Redis, and exports `/healthz`, `/readyz`, and `/metrics` endpoints instrumented with Prometheus counters.
+- a Vite + React client that renders the deterministic top-right anchored grid, keeps the blocking reconnect overlay mandated by the spec, streams authoritative chat history with a live composer, and now paints dev room items beneath avatars with click-through hit testing so the right panel can surface spec-compliant pickup gating copy while reflecting realtime pickup acknowledgements.
+- a Fastify-based server backed by Postgres and Redis that issues short-lived JWTs from `/auth/login`, runs migrations/seeds on boot, exposes Socket.IO handlers for `auth`, `move`, `chat`, and `item:pickup`, publishes cross-instance chat via Redis, and exports `/healthz`, `/readyz`, and `/metrics` endpoints instrumented with Prometheus counters.
+- an item authority pipeline that seeds catalog + room items into Postgres, mirrors available room inventory into the `auth:ok` snapshot, validates `item:pickup` requests against tile flags and avatar position, persists the pickup + user inventory entry, and rebroadcasts removals so every client maintains an authoritative view.
 - shared schema utilities covering the canonical realtime envelope plus JSON Schemas for `auth`, `move`, and `chat` alongside an OpenAPI description of the `/auth/login` REST endpoint so both tiers validate identical payloads.
 - Docker Compose definitions for Postgres and Redis plus pnpm workflows that hydrate the entire stack for local development.
 
 This guide explains how to clone, run, and test the project on Debian- or Ubuntu-based Linux desktops. The workflow below assumes an apt-based distribution (Debian 12 “Bookworm”, Ubuntu 22.04 “Jammy”, or newer) with sudo access.
 
-> **Note:** The deterministic grid renderer still paints the full 10-row field (10 columns on even rows, 11 on odd rows) with the development background and HUD overlays, but the realtime hook now authenticates, maintains heartbeats, hydrates chat history, and appends live `chat:new` envelopes alongside movement deltas. Item sprites render beneath avatars with alpha-aware hit tests so left-clicking opens the panel’s item view, which shows “Kan ikke samle op her” vs. “Klar til at samle op” copy based on tile flags and the local avatar’s position while the server remains authoritative for `move`, `chat`, and presence snapshots sourced from Postgres/Redis.
+> **Note:** The deterministic grid renderer still paints the full 10-row field (10 columns on even rows, 11 on odd rows) with the development background and HUD overlays, but the realtime hook now authenticates, maintains heartbeats, hydrates chat history, and appends live `chat:new` envelopes alongside movement deltas. Item sprites render beneath avatars with alpha-aware hit tests; selecting one opens the right panel where “Saml Op” issues an optimistic pickup, the server validates tile state + avatar position, persists the pickup to Postgres, and rebroadcasts the removal plus inventory entry so the UI reflects authoritative acknowledgements.
 
 ---
 
@@ -128,6 +129,29 @@ docker compose up -d
 ```
 
 When finished, stop them with `docker compose down`. The services expose credentials documented in the compose file (`bitby/bitby`).
+
+
+### L6b. Native Postgres & Redis (no Docker)
+
+If Docker access is restricted, you can run the persistence layer with the distro packages instead. The commands below match the development defaults baked into the server config.
+
+1. Install the services (skip if already present):
+   ```bash
+   sudo apt update
+   sudo apt install -y postgresql redis-server
+   ```
+2. Start both daemons each time the container boots:
+   ```bash
+   sudo service postgresql start
+   sudo service redis-server start
+   ```
+3. Ensure the Bitby role/database exist (rerunning is harmless):
+   ```bash
+   sudo -u postgres psql -c "CREATE USER bitby WITH PASSWORD 'bitby';"
+   sudo -u postgres createdb -O bitby bitby
+   ```
+
+With those services online the usual dev workflows (`pnpm --filter @bitby/server dev`, `pnpm --filter @bitby/client dev -- --host 0.0.0.0 --port 5173`) will migrate the schema and connect automatically.
 
 ---
 
@@ -293,11 +317,11 @@ Copy the template to `.env.local` (git-ignored) and adjust values for your machi
 ## Next Steps in the Roadmap
 
 
-1. Implement the item pickup loop (server validation, inventory persistence, authoritative acknowledgements) and wire the panel’s “Saml Op” action to real backend responses (§3, §5, §9, §12).
-2. Add realtime typing bubbles plus chat bubble rendering on the canvas and persist the panel’s system-message toggle to the server so it reflects per-user preferences (§3–4, §A.7).
-3. Build right-click context menus for grid tiles, items, and avatars with the gating rules outlined in the spec while the admin quick toggles remain non-blocking (§3, §A.6).
-4. Extend the admin quick menu so the controls call authoritative endpoints for lock/noPickup toggles, latency tracing, and dev affordances, persisting state in Postgres/Redis (§A.5, §21).
-5. Establish automated integration and E2E tests (move + chat + item flows) that run against the Postgres/Redis stack to guard regressions in the heartbeat, reconnect, and chat pipelines (§8, §23).
+1. Add realtime typing bubbles plus chat bubble rendering on the canvas and persist the panel’s system-message toggle to the server so it reflects per-user preferences (§3–4, §A.7).
+2. Build right-click context menus for grid tiles, items, and avatars with the gating rules outlined in the spec while the admin quick toggles remain non-blocking (§3, §A.6).
+3. Extend the admin quick menu so the controls call authoritative endpoints for lock/noPickup toggles, latency tracing, and dev affordances, persisting state in Postgres/Redis (§A.5, §21).
+4. Establish automated integration and E2E tests (move + chat + item flows) that run against the Postgres/Redis stack to guard regressions in the heartbeat, reconnect, and chat pipelines (§8, §23).
+5. Surface the user’s persistent inventory within the right panel/backpack UI and begin planning drop/wear flows now that pickups are persisted (§5, §9).
 
 
 Progress will be tracked in future commits; this document will evolve with concrete commands as they become available.
@@ -307,12 +331,12 @@ Progress will be tracked in future commits; this document will evolve with concr
 ## Handoff Notes (2025-09-25)
 
 - The realtime hook now authenticates via `/auth/login`, keeps the heartbeat loop alive, restores the room snapshot, streams historical chat on join, appends live `chat:new` envelopes, and resets the blocking reconnect overlay while the chat composer emits `chat:send` frames and honours the system-message toggle.
-- The canvas draws seeded development items beneath avatars, maintains per-item hit boxes, and funnels item selections into the right panel where Danish pickup copy (“Kan ikke samle op her” / “Klar til at samle op”) reflects tile flags and the local avatar’s position while movement gating remains authoritative.
-- The Fastify server boots Postgres migrations/seeds, validates `auth`/`move`/`chat` envelopes, persists chat to Postgres, relays room chat via Redis pub/sub, and exposes `/healthz`, `/readyz`, and `/metrics` Prometheus counters alongside the `/auth/login` REST endpoint.
+- The canvas draws seeded development items beneath avatars, maintains per-item hit boxes, and funnels item selections into the right panel where Danish pickup copy now drives the optimistic → authoritative pickup flow, surfaces pending/success/error status, and clears the tile immediately when the server ack arrives.
+- The Fastify server boots Postgres migrations/seeds, validates `auth`/`move`/`chat`/`item:pickup` envelopes, persists chat to Postgres, relays room chat via Redis pub/sub, and exposes `/healthz`, `/readyz`, and `/metrics` Prometheus counters alongside the `/auth/login` REST endpoint.
 - Latest connectivity screenshot with chat + item panel: `browser:/invocations/nkjxmmlj/artifacts/artifacts/bitby-connected.png`.
 - Immediate follow-ups:
-  - Wire the panel’s “Saml Op” action into a real pickup pipeline (server validation, inventory persistence, optimistic UI updates).
   - Add typing bubble + chat bubble rendering so the canvas reflects realtime typing activity and per-user preferences for system messages.
+  - Design the inventory/backpack presentation now that pickups persist and expose a way to inspect acquired items.
 
 ---
 

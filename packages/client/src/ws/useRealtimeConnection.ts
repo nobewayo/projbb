@@ -2,16 +2,23 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { io, type Socket } from 'socket.io-client';
 import {
   chatMessageBroadcastSchema,
+  itemPickupErrorDataSchema,
+  itemPickupOkDataSchema,
+  itemPickupRequestDataSchema,
+  inventoryItemSchema,
   messageEnvelopeSchema,
   moveErrorDataSchema,
   moveOkDataSchema,
   moveRequestDataSchema,
   roomOccupantMovedDataSchema,
   roomOccupantLeftDataSchema,
+  roomItemRemovedDataSchema,
   roomSnapshotSchema,
   type ChatMessageBroadcast,
+  type InventoryItem,
   type MessageEnvelope,
   type RoomOccupant,
+  type RoomItem,
   type RoomTileFlag,
 } from '@bitby/schemas';
 
@@ -68,6 +75,14 @@ const isSessionRoom = (value: unknown): value is SessionRoom => {
 export interface RealtimeConnectionState extends InternalConnectionState {
   sendMove: (x: number, y: number) => boolean;
   sendChat: (body: string) => boolean;
+  sendItemPickup: (itemId: string) => boolean;
+}
+
+type PickupStatus = 'idle' | 'pending' | 'success' | 'error';
+
+interface PickupState {
+  status: PickupStatus;
+  message?: string;
 }
 
 interface InternalConnectionState {
@@ -83,6 +98,9 @@ interface InternalConnectionState {
   pendingMoveTarget: { x: number; y: number } | null;
   isMoveInFlight: boolean;
   chatLog: ChatMessageBroadcast[];
+  items: RoomItem[];
+  inventory: InventoryItem[];
+  pickupActivity: Record<string, PickupState>;
 }
 
 const cloneOccupant = (occupant: RoomOccupant): RoomOccupant => ({
@@ -101,6 +119,44 @@ const sortOccupants = (map: Map<string, RoomOccupant>): RoomOccupant[] =>
 
       return a.position.y - b.position.y;
     });
+
+const cloneItem = (item: RoomItem): RoomItem => ({
+  ...item,
+});
+
+const sortItems = (map: Map<string, RoomItem>): RoomItem[] =>
+  Array.from(map.values())
+    .map((item) => cloneItem(item))
+    .sort((a, b) => {
+      if (a.tileY === b.tileY) {
+        return a.tileX - b.tileX;
+      }
+
+      return a.tileY - b.tileY;
+    });
+
+const sortInventory = (items: InventoryItem[]): InventoryItem[] =>
+  [...items].sort((a, b) => {
+    const aTime = Date.parse(a.acquiredAt);
+    const bTime = Date.parse(b.acquiredAt);
+    if (!Number.isNaN(aTime) && !Number.isNaN(bTime)) {
+      if (aTime === bTime) {
+        return a.id.localeCompare(b.id);
+      }
+      return aTime - bTime;
+    }
+
+    return a.id.localeCompare(b.id);
+  });
+
+const updatePickupActivity = (
+  previous: Record<string, PickupState>,
+  itemId: string,
+  state: PickupState,
+): Record<string, PickupState> => ({
+  ...previous,
+  [itemId]: state,
+});
 
 const buildEnvelope = (
   seq: number,
@@ -192,6 +248,9 @@ export const useRealtimeConnection = (): RealtimeConnectionState => {
     pendingMoveTarget: null,
     isMoveInFlight: false,
     chatLog: [],
+    items: [],
+    inventory: [],
+    pickupActivity: {},
   });
 
   const socketRef = useRef<Socket | null>(null);
@@ -209,6 +268,10 @@ export const useRealtimeConnection = (): RealtimeConnectionState => {
     new Map<number, { from: { x: number; y: number }; to: { x: number; y: number } }>(),
   );
   const sessionUserRef = useRef<SessionUser | null>(null);
+  const itemMapRef = useRef(new Map<string, RoomItem>());
+  const inventoryRef = useRef<InventoryItem[]>([]);
+  const pendingPickupsRef = useRef(new Map<number, RoomItem>());
+  const pendingPickupByItemRef = useRef(new Map<string, number>());
 
   useEffect(() => {
     disposedRef.current = false;
@@ -460,6 +523,16 @@ export const useRealtimeConnection = (): RealtimeConnectionState => {
               chatHistory.push(parsedEntry.data);
             }
           }
+          const inventoryRaw = Array.isArray(payload.inventory)
+            ? payload.inventory
+            : [];
+          const inventory: InventoryItem[] = [];
+          for (const entry of inventoryRaw) {
+            const parsedInventory = inventoryItemSchema.safeParse(entry);
+            if (parsedInventory.success) {
+              inventory.push(parsedInventory.data);
+            }
+          }
           const intervalFromServer =
             typeof envelope.data?.heartbeatIntervalMs === 'number'
               ? envelope.data.heartbeatIntervalMs
@@ -490,12 +563,18 @@ export const useRealtimeConnection = (): RealtimeConnectionState => {
           sessionUserRef.current = normalizedUser;
 
           occupantMapRef.current = new Map(
-            snapshotResult.data.occupants.map((occupant) => [
+            snapshotResult.data.occupants.map((occupant: RoomOccupant) => [
               occupant.id,
               cloneOccupant(occupant),
             ]),
           );
           pendingMovesRef.current.clear();
+          itemMapRef.current = new Map(
+            snapshotResult.data.items.map((item: RoomItem) => [item.id, cloneItem(item)]),
+          );
+          inventoryRef.current = sortInventory(inventory);
+          pendingPickupsRef.current.clear();
+          pendingPickupByItemRef.current.clear();
 
           const maxSeqCandidates: number[] = [snapshotResult.data.roomSeq];
           for (const entry of chatHistory) {
@@ -514,11 +593,14 @@ export const useRealtimeConnection = (): RealtimeConnectionState => {
             user: normalizedUser,
             room: normalizedRoom,
             occupants: sortOccupants(occupantMapRef.current),
-            tileFlags: snapshotResult.data.tiles.map((tile) => ({ ...tile })),
+            tileFlags: snapshotResult.data.tiles.map((tile: RoomTileFlag) => ({ ...tile })),
             lastRoomSeq: maxSeq,
             pendingMoveTarget: null,
             isMoveInFlight: false,
             chatLog: chatHistory,
+            items: sortItems(itemMapRef.current),
+            inventory: inventoryRef.current,
+            pickupActivity: {},
           }));
 
           startPingTimer(intervalFromServer);
@@ -589,6 +671,71 @@ export const useRealtimeConnection = (): RealtimeConnectionState => {
 
           return;
         }
+        case 'item:pickup:ok': {
+          const result = itemPickupOkDataSchema.safeParse(envelope.data);
+          if (!result.success) {
+            updateState({ lastError: 'Received malformed item:pickup:ok payload' });
+            return;
+          }
+
+          const pending = pendingPickupsRef.current.get(envelope.seq);
+          if (pending) {
+            pendingPickupsRef.current.delete(envelope.seq);
+            pendingPickupByItemRef.current.delete(pending.id);
+          } else {
+            pendingPickupByItemRef.current.delete(result.data.itemId);
+          }
+
+          inventoryRef.current = sortInventory([
+            ...inventoryRef.current,
+            result.data.inventoryItem,
+          ]);
+
+          setState((previous) => ({
+            ...previous,
+            inventory: inventoryRef.current,
+            lastRoomSeq: result.data.roomSeq,
+            pickupActivity: updatePickupActivity(previous.pickupActivity, result.data.itemId, {
+              status: 'success',
+              message: 'Lagt i rygsæk',
+            }),
+          }));
+
+          return;
+        }
+        case 'item:pickup:err': {
+          const result = itemPickupErrorDataSchema.safeParse(envelope.data);
+          if (!result.success) {
+            updateState({ lastError: 'Received malformed item:pickup:err payload' });
+            return;
+          }
+
+          const pending = pendingPickupsRef.current.get(envelope.seq);
+          if (pending) {
+            pendingPickupsRef.current.delete(envelope.seq);
+            pendingPickupByItemRef.current.delete(pending.id);
+            if (result.data.code === 'wrong_position' || result.data.code === 'tile_blocked') {
+              itemMapRef.current.set(pending.id, pending);
+            }
+          } else {
+            pendingPickupByItemRef.current.delete(result.data.itemId);
+          }
+
+          setState((previous) => ({
+            ...previous,
+            items: sortItems(itemMapRef.current),
+            lastRoomSeq:
+              typeof result.data.roomSeq === 'number'
+                ? result.data.roomSeq
+                : previous.lastRoomSeq,
+            pickupActivity: updatePickupActivity(previous.pickupActivity, result.data.itemId, {
+              status: 'error',
+              message: result.data.message ?? 'Kunne ikke samle op',
+            }),
+          }));
+
+          return;
+        }
         case 'room:occupant_moved': {
           const result = roomOccupantMovedDataSchema.safeParse(envelope.data);
           if (!result.success) {
@@ -618,6 +765,29 @@ export const useRealtimeConnection = (): RealtimeConnectionState => {
               ? getLatestPendingTarget(pendingMovesRef.current)
               : previous.pendingMoveTarget,
             isMoveInFlight: pendingMovesRef.current.size > 0,
+          }));
+
+          return;
+        }
+        case 'room:item_removed': {
+          const result = roomItemRemovedDataSchema.safeParse(envelope.data);
+          if (!result.success) {
+            updateState({ lastError: 'Received malformed room:item_removed payload' });
+            return;
+          }
+
+          const pendingSeq = pendingPickupByItemRef.current.get(result.data.itemId);
+          if (typeof pendingSeq === 'number') {
+            pendingPickupByItemRef.current.delete(result.data.itemId);
+            pendingPickupsRef.current.delete(pendingSeq);
+          }
+
+          itemMapRef.current.delete(result.data.itemId);
+
+          setState((previous) => ({
+            ...previous,
+            items: sortItems(itemMapRef.current),
+            lastRoomSeq: result.data.roomSeq,
           }));
 
           return;
@@ -899,6 +1069,53 @@ export const useRealtimeConnection = (): RealtimeConnectionState => {
     [state.status],
   );
 
+  const sendItemPickup = useCallback(
+    (itemId: string): boolean => {
+      const socket = socketRef.current;
+      if (!socket || !socket.connected) {
+        return false;
+      }
+
+      if (state.status !== 'connected') {
+        return false;
+      }
+
+      const validation = itemPickupRequestDataSchema.safeParse({ itemId });
+      if (!validation.success) {
+        return false;
+      }
+
+      if (pendingPickupByItemRef.current.has(validation.data.itemId)) {
+        return false;
+      }
+
+      const item = itemMapRef.current.get(validation.data.itemId);
+      if (!item) {
+        return false;
+      }
+
+      const seq = seqRef.current;
+      seqRef.current += 1;
+
+      pendingPickupsRef.current.set(seq, cloneItem(item));
+      pendingPickupByItemRef.current.set(item.id, seq);
+      itemMapRef.current.delete(item.id);
+
+      setState((previous) => ({
+        ...previous,
+        items: sortItems(itemMapRef.current),
+        pickupActivity: updatePickupActivity(previous.pickupActivity, item.id, {
+          status: 'pending',
+        }),
+      }));
+
+      const envelope = buildEnvelope(seq, 'item:pickup', { itemId: item.id });
+      socket.emit('message', envelope);
+      return true;
+    },
+    [state.status],
+  );
+
   const sendChat = useCallback(
     (body: string): boolean => {
       if (state.status !== 'connected') {
@@ -929,7 +1146,8 @@ export const useRealtimeConnection = (): RealtimeConnectionState => {
       ...state,
       sendMove,
       sendChat,
+      sendItemPickup,
     }),
-    [state, sendMove, sendChat],
+    [state, sendMove, sendChat, sendItemPickup],
   );
 };

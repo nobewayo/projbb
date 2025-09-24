@@ -119,30 +119,28 @@ const App = (): JSX.Element => {
   const [areMoveAnimationsEnabled, setAreMoveAnimationsEnabled] = useState(true);
   const [chatDraft, setChatDraft] = useState('');
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
+  const [selectedItemSnapshot, setSelectedItemSnapshot] = useState<CanvasItem | null>(null);
   const chatMessagesRef = useRef<HTMLOListElement | null>(null);
   const connection = useRealtimeConnection();
-  const roomItems = useMemo<CanvasItem[]>(
-    () => [
-      {
-        id: 'dev-plant-1',
-        name: 'Atrium Plant',
-        description:
-          'Lush greenery staged near the spawn tiles to verify z-ordering beneath avatars while ensuring pickup gating still works.',
-        tileX: 6,
-        tileY: 4,
-        texture: plantTexture,
-      },
-      {
-        id: 'dev-couch-1',
-        name: 'Lounge Couch',
-        description:
-          'Soft seating reserved for plaza screenshots. This tile has pickup disabled so the right panel can surface the gating copy mandated by the spec.',
-        tileX: 2,
-        tileY: 8,
-        texture: couchTexture,
-      },
-    ],
+  const textureAtlas = useMemo(
+    () => ({
+      plant: plantTexture,
+      couch: couchTexture,
+    }),
     [],
+  );
+
+  const roomItems = useMemo<CanvasItem[]>(
+    () =>
+      connection.items.map((item) => ({
+        id: item.id,
+        name: item.name,
+        description: item.description,
+        tileX: item.tileX,
+        tileY: item.tileY,
+        texture: textureAtlas[item.texture as keyof typeof textureAtlas] ?? plantTexture,
+      })),
+    [connection.items, textureAtlas],
   );
 
   const chatLogEntries = useMemo(() => {
@@ -151,7 +149,7 @@ const App = (): JSX.Element => {
       const time = Number.isNaN(timestamp.getTime())
         ? ''
         : timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-      const isSystem = message.roles.some((role) => role.toLowerCase() === 'system');
+      const isSystem = message.roles.some((role: string) => role.toLowerCase() === 'system');
       return {
         id: message.id,
         actor: message.username,
@@ -276,10 +274,35 @@ const App = (): JSX.Element => {
     return keys;
   }, [connection.tileFlags]);
 
-  const selectedItem = useMemo(
+  const activeSelectedItem = useMemo(
     () => roomItems.find((item) => item.id === selectedItemId) ?? null,
     [roomItems, selectedItemId],
   );
+
+  const selectedItem = useMemo(() => {
+    if (activeSelectedItem) {
+      return activeSelectedItem;
+    }
+
+    if (selectedItemId && selectedItemSnapshot && selectedItemSnapshot.id === selectedItemId) {
+      return selectedItemSnapshot;
+    }
+
+    return null;
+  }, [activeSelectedItem, selectedItemId, selectedItemSnapshot]);
+
+  const isSelectedItemActive = activeSelectedItem !== null;
+
+  useEffect(() => {
+    if (selectedItemId === null) {
+      setSelectedItemSnapshot(null);
+      return;
+    }
+
+    if (activeSelectedItem) {
+      setSelectedItemSnapshot(activeSelectedItem);
+    }
+  }, [activeSelectedItem, selectedItemId]);
 
   const selectedItemTileKey = useMemo(() => {
     if (!selectedItem) {
@@ -297,9 +320,17 @@ const App = (): JSX.Element => {
     );
   }, [connection.occupants, connection.user]);
 
-  const pickupStatusMessage = useMemo(() => {
+  const pickupState = useMemo(
+    () => (selectedItemId ? connection.pickupActivity[selectedItemId] : undefined),
+    [connection.pickupActivity, selectedItemId],
+  );
+
+  const pickupGatingMessage = useMemo(() => {
     if (!selectedItem) {
       return '';
+    }
+    if (!isSelectedItemActive) {
+      return 'Genstanden er ikke længere tilgængelig';
     }
     if (!localOccupant) {
       return 'Forbind til rummet for at samle op.';
@@ -314,48 +345,100 @@ const App = (): JSX.Element => {
       return 'Stil dig på feltet for at samle op';
     }
     return 'Klar til at samle op';
-  }, [localOccupant, noPickupTileKeys, selectedItem, selectedItemTileKey]);
+  }, [
+    isSelectedItemActive,
+    localOccupant,
+    noPickupTileKeys,
+    selectedItem,
+    selectedItemTileKey,
+  ]);
+
+  const pickupDisplayMessage = useMemo(() => {
+    if (!selectedItem) {
+      return '';
+    }
+    if (!pickupState) {
+      return pickupGatingMessage;
+    }
+    if (pickupState.status === 'pending') {
+      return 'Samler op…';
+    }
+    if (pickupState.status === 'success') {
+      return pickupState.message ?? 'Lagt i rygsæk';
+    }
+    if (pickupState.status === 'error') {
+      return pickupState.message ?? 'Kunne ikke samle op';
+    }
+    return pickupGatingMessage;
+  }, [pickupGatingMessage, pickupState, selectedItem]);
 
   const pickupStatusTone = useMemo(() => {
-    if (!selectedItem || !pickupStatusMessage) {
+    if (!selectedItem || !pickupDisplayMessage) {
       return 'pending';
     }
-    if (pickupStatusMessage === 'Klar til at samle op') {
+    if (pickupState?.status === 'success' || pickupDisplayMessage === 'Klar til at samle op') {
       return 'ready';
     }
-    if (pickupStatusMessage === 'Kan ikke samle op her') {
+    if (
+      pickupState?.status === 'error' ||
+      pickupDisplayMessage === 'Kan ikke samle op her' ||
+      pickupDisplayMessage === 'Genstanden er ikke længere tilgængelig'
+    ) {
       return 'blocked';
     }
     return 'pending';
-  }, [pickupStatusMessage, selectedItem]);
+  }, [pickupDisplayMessage, pickupState, selectedItem]);
 
-  const canPickupSelectedItem = selectedItem
-    ? pickupStatusMessage === 'Klar til at samle op'
-    : false;
+  const canPickupSelectedItem = Boolean(
+    selectedItem &&
+      isSelectedItemActive &&
+      pickupGatingMessage === 'Klar til at samle op' &&
+      pickupState?.status !== 'pending',
+  );
 
-  const shouldShowPickupHint =
-    !canPickupSelectedItem &&
-    pickupStatusMessage.length > 0 &&
-    pickupStatusMessage !== 'Kan ikke samle op her';
+  const shouldShowPickupHint = useMemo(() => {
+    if (!selectedItem) {
+      return false;
+    }
+    if (pickupState?.status === 'error') {
+      return true;
+    }
+    if (pickupState?.status === 'success') {
+      return false;
+    }
+    if (pickupDisplayMessage.length === 0) {
+      return false;
+    }
+    if (pickupDisplayMessage === 'Kan ikke samle op her') {
+      return false;
+    }
+    return !canPickupSelectedItem;
+  }, [canPickupSelectedItem, pickupDisplayMessage, pickupState, selectedItem]);
 
   const handleItemClick = useCallback((item: CanvasItem): void => {
     setSelectedItemId(item.id);
+    setSelectedItemSnapshot(item);
   }, []);
 
   const handlePickupSelectedItem = useCallback(() => {
     if (!selectedItem || !canPickupSelectedItem) {
       return;
     }
+
+    const sent = connection.sendItemPickup(selectedItem.id);
+
     if (import.meta.env.DEV) {
       console.debug('[items] Pickup requested', {
         itemId: selectedItem.id,
         name: selectedItem.name,
+        dispatched: sent,
       });
     }
-  }, [canPickupSelectedItem, selectedItem]);
+  }, [canPickupSelectedItem, connection, selectedItem]);
 
   const handleClearSelectedItem = useCallback(() => {
     setSelectedItemId(null);
+    setSelectedItemSnapshot(null);
   }, []);
 
   const handleTileClick = useCallback(
@@ -606,7 +689,7 @@ const App = (): JSX.Element => {
                     <div>
                       <dt>Pickup status</dt>
                       <dd className={`item-info__status item-info__status--${pickupStatusTone}`}>
-                        {pickupStatusMessage}
+                        {pickupDisplayMessage}
                       </dd>
                     </div>
                   </dl>
@@ -627,7 +710,7 @@ const App = (): JSX.Element => {
                     </button>
                   </div>
                   {shouldShowPickupHint ? (
-                    <p className="item-info__hint">{pickupStatusMessage}</p>
+                    <p className="item-info__hint">{pickupDisplayMessage}</p>
                   ) : null}
                 </article>
               ) : (

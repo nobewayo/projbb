@@ -5,6 +5,7 @@ export interface MetricsBundle {
   activeConnections: Gauge;
   moveEvents: Counter;
   chatEvents: Counter;
+  itemPickups: Counter;
 }
 
 export const createMetricsBundle = (): MetricsBundle => {
@@ -29,10 +30,17 @@ export const createMetricsBundle = (): MetricsBundle => {
     registers: [registry],
   });
 
+  const itemPickups = new Counter({
+    name: 'bitby_item_pickups_total',
+    help: 'Count of successful item pickup events',
+    registers: [registry],
+  });
+
   return {
     registry,
     activeConnections,
     moveEvents,
     chatEvents,
+    itemPickups,
   };
 };

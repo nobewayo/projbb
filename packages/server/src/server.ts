@@ -11,6 +11,7 @@ import { runMigrations } from './db/migrations.js';
 import { createUserStore } from './auth/store.js';
 import { createRoomStore } from './db/rooms.js';
 import { createChatStore } from './db/chat.js';
+import { createItemStore } from './db/items.js';
 import { createRoomPubSub } from './redis/pubsub.js';
 import { createMetricsBundle } from './metrics/registry.js';
 import { createRealtimeServer } from './ws/connection.js';
@@ -39,6 +40,7 @@ export const createServer = async ({
   const userStore = createUserStore(pool);
   const roomStore = createRoomStore(pool);
   const chatStore = createChatStore(pool);
+  const itemStore = createItemStore(pool);
   const metrics = createMetricsBundle();
   const instanceId = randomUUID();
   const pubsub = await createRoomPubSub({
@@ -50,6 +52,7 @@ export const createServer = async ({
     config,
     roomStore,
     chatStore,
+    itemStore,
     pubsub,
     metrics,
   });
