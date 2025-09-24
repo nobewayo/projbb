@@ -45,19 +45,15 @@ export type ServerConfig = z.infer<typeof configSchema>;
 
 const LOCALHOST_HOSTNAMES = new Set(["localhost", "127.0.0.1", "[::1]"]);
 
-const buildLocalhostAllowList = (parsed: URL): string[] => {
-  const portSuffix = parsed.port ? `:${parsed.port}` : "";
-  const protocolPrefix = `${parsed.protocol}//`;
+const escapeForRegExp = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
-  const origins = new Set<string>();
-  for (const hostname of LOCALHOST_HOSTNAMES) {
-    origins.add(`${protocolPrefix}${hostname}${portSuffix}`);
-  }
-
-  return Array.from(origins);
+const buildLocalhostPattern = (protocol: string): RegExp => {
+  const hostAlternatives = Array.from(LOCALHOST_HOSTNAMES, (hostname) => escapeForRegExp(hostname)).join("|");
+  const protocolPrefix = `${protocol}//`;
+  return new RegExp(`^${escapeForRegExp(protocolPrefix)}(?:${hostAlternatives})(?::\\d+)?$`);
 };
 
-export const resolveCorsOrigins = (origin: string): string | string[] => {
+export const resolveCorsOrigins = (origin: string): string | RegExp => {
   let parsed: URL;
   try {
     parsed = new URL(origin);
@@ -69,7 +65,7 @@ export const resolveCorsOrigins = (origin: string): string | string[] => {
     return parsed.origin;
   }
 
-  return buildLocalhostAllowList(parsed);
+  return buildLocalhostPattern(parsed.protocol);
 };
 
 export const loadConfig = (env: NodeJS.ProcessEnv = process.env): ServerConfig => {
