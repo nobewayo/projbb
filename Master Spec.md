@@ -1,8 +1,10 @@
 # Bitby — Master Spec v3.7 (Consolidated, Full)
 
-> **Implementation guardrail**  
-> Follow this spec by default. It encodes non-negotiables like **grid determinism** and **server authority**.  
+> **Implementation guardrail**
+> Follow this spec by default. It encodes non-negotiables like **grid determinism** and **server authority**.
 > This document is **not set in stone**: if a human explicitly requests a change or a small tactical deviation is required, you may deviate **minimally**, must **comment** the deviation in code, and must **not** alter anything rendered inside the **grid window** unless told to.
+> **Maintenance:** Update this Master Spec whenever requirements shift so downstream documentation and implementations stay aligned.
+> **Platform:** Local development and deployment automation are standardized on Debian/Ubuntu Linux; Windows workflows and tooling are unsupported.
 
 ---
 
