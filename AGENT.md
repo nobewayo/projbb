@@ -483,14 +483,12 @@ When implementing, **Codex should**:
 
 ## 23) Ready‑to‑Implement Tasks (First Sprint)
 
-1) Client grid renderer with top‑right anchor & diamond hit test; draw cell centers for dev overlay.
-2) Socket.IO client with heartbeat + blocking reconnect overlay.
-3) Socket.IO server endpoints: `auth`, `move`, `chat`; Redis room pub/sub skeleton.
-4) Postgres schema & migrations; seed users/room.
-5) Basic right panel and bottom dock (slide-left, tab).
-6) Item click → panel info; pickup rule gating.
-7) Metrics & health endpoints.
-8) JSON Schemas for `auth`, `move`, `chat`; OpenAPI for `/auth` REST.
+1) Socket.IO client with heartbeat + blocking reconnect overlay.
+2) Socket.IO server endpoints: `auth`, `move`, `chat`; Redis room pub/sub skeleton.
+3) Postgres schema & migrations; seed users/room.
+4) Item click → panel info; pickup rule gating.
+5) Metrics & health endpoints.
+6) JSON Schemas for `auth`, `move`, `chat`; OpenAPI for `/auth` REST.
 
 ---
 
