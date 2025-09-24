@@ -7,6 +7,7 @@ import type { ReadinessController } from './readiness.js';
 import type { ServerConfig } from './config.js';
 import { handleRealtimeConnection } from './ws/connection.js';
 import { authRoutes } from './api/auth.js';
+import { resolveCorsOrigins } from './config.js';
 
 const SUPPORTED_SUBPROTOCOL = 'bitby.v1';
 const MAX_WS_MESSAGE_BYTES = 64 * 1024;
@@ -70,7 +71,7 @@ export const createServer = async ({
 
   app.decorate('readiness', readiness);
   await app.register(cors, {
-    origin: config.CLIENT_ORIGIN,
+    origin: resolveCorsOrigins(config.CLIENT_ORIGIN),
     credentials: true
   });
 

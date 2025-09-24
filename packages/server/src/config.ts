@@ -43,6 +43,40 @@ const configSchema = z.object({
 
 export type ServerConfig = z.infer<typeof configSchema>;
 
+const buildOrigin = (protocol: string, hostname: string, port: string): string => {
+  const portSuffix = port ? `:${port}` : "";
+  return `${protocol}//${hostname}${portSuffix}`;
+};
+
+const LOCALHOST_HOSTNAMES = new Set(["localhost", "127.0.0.1"]);
+
+export const resolveCorsOrigins = (origin: string): string | string[] => {
+  let parsed: URL;
+  try {
+    parsed = new URL(origin);
+  } catch (error) {
+    return origin;
+  }
+
+  if (!LOCALHOST_HOSTNAMES.has(parsed.hostname)) {
+    return parsed.origin;
+  }
+
+  const variants: string[] = [];
+  const addVariant = (value: string): void => {
+    if (!variants.includes(value)) {
+      variants.push(value);
+    }
+  };
+
+  addVariant(parsed.origin);
+  for (const hostname of LOCALHOST_HOSTNAMES) {
+    addVariant(buildOrigin(parsed.protocol, hostname, parsed.port));
+  }
+
+  return variants;
+};
+
 export const loadConfig = (env: NodeJS.ProcessEnv = process.env): ServerConfig => {
   const parsed = configSchema.parse({
     NODE_ENV: env.NODE_ENV,
