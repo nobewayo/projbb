@@ -43,6 +43,31 @@ const configSchema = z.object({
 
 export type ServerConfig = z.infer<typeof configSchema>;
 
+const LOCALHOST_HOSTNAMES = new Set(["localhost", "127.0.0.1", "[::1]"]);
+
+const escapeForRegExp = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+const buildLocalhostPattern = (protocol: string): RegExp => {
+  const hostAlternatives = Array.from(LOCALHOST_HOSTNAMES, (hostname) => escapeForRegExp(hostname)).join("|");
+  const protocolPrefix = `${protocol}//`;
+  return new RegExp(`^${escapeForRegExp(protocolPrefix)}(?:${hostAlternatives})(?::\\d+)?$`);
+};
+
+export const resolveCorsOrigins = (origin: string): string | RegExp => {
+  let parsed: URL;
+  try {
+    parsed = new URL(origin);
+  } catch (error) {
+    return origin;
+  }
+
+  if (!LOCALHOST_HOSTNAMES.has(parsed.hostname)) {
+    return parsed.origin;
+  }
+
+  return buildLocalhostPattern(parsed.protocol);
+};
+
 export const loadConfig = (env: NodeJS.ProcessEnv = process.env): ServerConfig => {
   const parsed = configSchema.parse({
     NODE_ENV: env.NODE_ENV,
