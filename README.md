@@ -1,4 +1,4 @@
-# Bitby Project Setup & Running Guide (Windows)
+# Bitby Project Setup & Running Guide (Windows & Linux)
 
 
 This repository implements the Bitby platform following the **Master Spec v3.7**. The stack is now wired together as a pnpm monorepo with:
@@ -8,19 +8,140 @@ This repository implements the Bitby platform following the **Master Spec v3.7**
 - shared schema utilities for the canonical WebSocket envelope (consumed by both client + server during the handshake)
 - Docker Compose definitions for Postgres and Redis
 
-This guide explains how to clone, run, and test the project on a Windows PC using the GitHub Desktop GUI or Docker-based tooling.
+This guide explains how to clone, run, and test the project on both Windows and Debian/Ubuntu-based Linux desktops. Windows-specific directions remain available in the second half of the document, while the next section walks through a complete Linux workflow tuned for Debian with the Xfce desktop.
 
 > **Note:** The deterministic grid renderer now paints the full 10-row field (10 columns on even rows, 11 on odd rows) with a development HUD so geometry can be verified. The realtime hook authenticates with the server using the new `/auth/login` JWT flow, receives a stubbed-but-structured room snapshot (player seed plus NPC + tile flags), and shows the blocking reconnect overlay mandated by the spec whenever the socket drops. Avatars, movement, and authoritative state streaming remain placeholders so subsequent milestones can build atop the verified geometry and auth loop without breaking the guardrails.
 
 ---
 
-## 1. Prerequisites
+## Linux (Debian/Xfce) Setup
 
-### 1.1 Hardware & OS
+The following instructions are tailored for Debian 12 (Bookworm) with the Xfce desktop, but they also work on Ubuntu 22.04+ and other apt-based derivatives. Use the automated script for the fastest path, or follow the manual steps if you prefer to install each dependency yourself.
+
+### L1. System Requirements
+
+- Debian 12/Ubuntu 22.04 (or later) with sudo access.
+- At least 16 GB RAM is recommended for running the client, API, Postgres, and Redis simultaneously.
+- A modern terminal emulator (Xfce Terminal is fine) with Git installed.
+
+### L2. Automated Bootstrap Script
+
+The repository ships with `scripts/setup-linux.sh`, which installs the tooling stack (Node.js 20 LTS, pnpm via Corepack, Docker Engine + Compose, build essentials) and optionally runs `pnpm install` for you.
+
+```bash
+sudo ./scripts/setup-linux.sh
+```
+
+What the script does:
+
+1. Verifies you are on an apt-based distribution and updates the package index.
+2. Installs build prerequisites (`curl`, `git`, `gnupg`, `build-essential`, etc.).
+3. Installs Node.js 20.x from NodeSource if an older version is detected.
+4. Enables Corepack and activates the latest pnpm CLI.
+5. Installs Docker Engine, Docker Compose, and related tooling, then adds your user to the `docker` group (log out/in afterwards so the membership takes effect).
+6. Runs `pnpm install` from the repository root to hydrate the workspace dependencies.
+
+Flags:
+
+- `--skip-docker` — leave Docker untouched (useful on cloud VMs where Docker is pre-provisioned).
+- `--skip-pnpm-install` — skip the workspace install if you only want to provision system dependencies.
+
+Run `sudo ./scripts/setup-linux.sh --help` for the latest usage description.
+
+### L3. Manual Install Steps (if you prefer)
+
+Skip this section if you ran the script above.
+
+1. Update apt and install prerequisites:
+   ```bash
+   sudo apt update
+   sudo apt install -y ca-certificates curl git gnupg build-essential pkg-config
+   ```
+2. Install Node.js 20.x (replace `bookworm` with your codename if prompted):
+   ```bash
+   curl -fsSL https://deb.nodesource.com/setup_20.x | sudo bash -
+   sudo apt install -y nodejs
+   ```
+3. Enable Corepack and activate pnpm:
+   ```bash
+   sudo corepack enable
+   corepack prepare pnpm@latest --activate
+   pnpm --version
+   ```
+   (The second command runs as your normal user so the pnpm shim is available in your shell.)
+4. Optional: Install Docker Engine + Compose:
+   ```bash
+   sudo install -m 0755 -d /etc/apt/keyrings
+   curl -fsSL https://download.docker.com/linux/debian/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+   echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+   sudo apt update
+   sudo apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+   sudo usermod -aG docker "$USER"
+   ```
+   Log out/in afterwards so your shell picks up the new `docker` group membership.
+
+### L4. Clone the Repository (Linux)
+
+1. Pick a workspace directory (e.g., `~/Projects`).
+2. Clone via SSH or HTTPS:
+   ```bash
+   git clone https://github.com/<your-org>/projbb.git
+   cd projbb
+   ```
+3. Install dependencies if the bootstrap script did not run it for you:
+   ```bash
+   pnpm install
+   ```
+
+### L5. Running the Stack on Linux
+
+All commands below assume you are inside the repository root (`projbb/`). Use separate terminals/tabs for each long-running process.
+
+1. **API/WebSocket server**:
+   ```bash
+   pnpm --filter @bitby/server dev
+   ```
+   The server listens on `http://localhost:3001` with health checks and the `/auth/login` endpoint described later in this guide.
+2. **Client (Vite + React)**:
+   ```bash
+   pnpm --filter @bitby/client dev
+   ```
+   The script rebuilds `@bitby/schemas` before launching Vite so shared types stay in sync.
+3. **Schema watcher (optional but recommended when editing shared envelopes)**:
+   ```bash
+   pnpm --filter @bitby/schemas dev
+   ```
+4. Open [http://localhost:5173](http://localhost:5173) in your browser. The deterministic grid preview, reconnect overlay, and development HUD behave the same as on Windows.
+
+Environment overrides for Linux shells mirror the Windows instructions:
+
+- `VITE_BITBY_WS_URL=ws://localhost:3001/ws pnpm --filter @bitby/client dev`
+- `VITE_BITBY_DEV_TOKEN=<token> pnpm --filter @bitby/client dev`
+
+### L6. Local Postgres & Redis via Docker
+
+The Docker Compose file under `packages/infra/docker` works cross-platform.
+
+```bash
+cd packages/infra/docker
+docker compose up -d
+```
+
+When finished, stop them with `docker compose down`. The services expose credentials documented in the compose file (`bitby/bitby`).
+
+---
+
+## Windows (PowerShell/GitHub Desktop) Setup
+
+---
+
+### 1. Prerequisites
+
+#### 1.1 Hardware & OS
 - Windows 10/11 64-bit with administrator access.
 - At least 16 GB RAM recommended (for running API, WebSocket, Postgres, and Redis locally).
 
-### 1.2 Required Software
+#### 1.2 Required Software
 
 | Tool | Purpose | Download |
 | --- | --- | --- |
@@ -40,7 +161,7 @@ pnpm -v
 
 ---
 
-## 2. Cloning the Repository via GitHub Desktop
+### 2. Cloning the Repository via GitHub Desktop
 
 1. Open **GitHub Desktop** and sign in with your GitHub account.
 2. Click **File → Clone Repository…** and choose the **URL** tab.
@@ -54,7 +175,7 @@ Whenever updates are pushed, use **Fetch origin** → **Pull** inside GitHub Des
 
 ---
 
-## 3. Project Structure (in progress)
+## Repository Structure (in progress)
 
 ```
 projbb/
@@ -75,20 +196,30 @@ The repository uses `pnpm` workspaces to manage dependencies consistently across
 
 ---
 
-## 4. Running the Stack Locally (future-ready)
+## Running the Stack Locally (future-ready)
 
 Two workflows are supported. Choose the one that fits your setup. The actual application code will introduce the commands referenced here.
 
-### 4.1 pnpm (Native Windows or WSL)
+### 4.1 pnpm (Native Windows, WSL, or Linux)
 
 1. **Install dependencies** (run from the repository root after cloning or pulling):
-   ```powershell
-   pnpm install
-   ```
+   - PowerShell (Windows):
+     ```powershell
+     pnpm install
+     ```
+   - Bash (Linux/macOS/WSL):
+     ```bash
+     pnpm install
+     ```
 2. **Start the API/WebSocket server** (Fastify + JSON Web Tokens + `@fastify/websocket`):
-   ```powershell
-   pnpm --filter @bitby/server dev
-   ```
+   - PowerShell:
+     ```powershell
+     pnpm --filter @bitby/server dev
+     ```
+   - Bash:
+     ```bash
+     pnpm --filter @bitby/server dev
+     ```
    The server listens on `http://localhost:3001` by default and exposes:
    - `GET /healthz` → `{ status: "ok" }`
    - `GET /readyz` → `{ status: "ready" }` once the process is accepting traffic (503 otherwise)
@@ -100,18 +231,31 @@ Two workflows are supported. Choose the one that fits your setup. The actual app
    ```powershell
    Invoke-RestMethod -Method Post -Uri http://localhost:3001/auth/login -Body (@{ username = 'test'; password = 'password123' } | ConvertTo-Json) -ContentType 'application/json'
    ```
+   ```bash
+   curl -X POST http://localhost:3001/auth/login \
+     -H 'Content-Type: application/json' \
+     -d '{"username":"test","password":"password123"}'
+   ```
 
    The returned `token` value can be copied into `.env.local` as `VITE_BITBY_DEV_TOKEN` if you want to bypass the automatic login.
 
 3. **Launch the client dev server** (Vite + React deterministic grid preview) in a separate terminal:
-   ```powershell
-   pnpm --filter @bitby/client dev
-   ```
+   - PowerShell:
+     ```powershell
+     pnpm --filter @bitby/client dev
+     ```
+   - Bash:
+     ```bash
+     pnpm --filter @bitby/client dev
+     ```
    The client script now runs a pre-step that builds the shared `@bitby/schemas` workspace before Vite boots. This guarantees the
    generated `dist/index.js` exists even on fresh clones or after dependency churn, eliminating the "Failed to resolve
    import '@bitby/schemas'" error that Vite reported previously. If you are iterating on schema definitions, start a watcher in a
    third terminal so edits rebuild automatically:
    ```powershell
+   pnpm --filter @bitby/schemas dev
+   ```
+   ```bash
    pnpm --filter @bitby/schemas dev
    ```
    Leave the watcher running while the client is open so TypeScript output stays in sync.
@@ -167,7 +311,7 @@ Future updates will add API, WebSocket, and client containers that bind to the s
 
 ---
 
-## 5. Testing
+## Testing
 
 Testing harnesses are gradually rolling out. The current scripts already wire up TypeScript builds, Vitest, and ESLint across packages:
 
@@ -188,7 +332,7 @@ When Docker-based services are required (e.g., Postgres), Compose files will inc
 
 ---
 
-## 6. Environment Variables & Secrets
+## Environment Variables & Secrets
 
 Once server packages are committed, sample `.env.example` files will be added. Typical variables include:
 
@@ -208,7 +352,7 @@ Copy the template to `.env.local` (git-ignored) and adjust values for your machi
 
 ---
 
-## 7. Keeping in Sync with the Master Spec
+## Keeping in Sync with the Master Spec
 
 - The **Master Spec.md** file in the repository root is the authoritative design document. Review it before contributing changes.
 - Non-negotiable requirements—grid determinism, top-right anchoring, WSS subprotocol enforcement, server authority—must be preserved in every feature.
@@ -216,7 +360,7 @@ Copy the template to `.env.local` (git-ignored) and adjust values for your machi
 
 ---
 
-## 8. Troubleshooting Tips (Windows)
+## Troubleshooting Tips (Windows)
 
 | Issue | Resolution |
 | --- | --- |
@@ -228,7 +372,7 @@ Copy the template to `.env.local` (git-ignored) and adjust values for your machi
 
 ---
 
-## 9. Next Steps in the Roadmap
+## Next Steps in the Roadmap
 
 
 1. Layer optimistic avatar movement + snapback logic on top of the deterministic grid renderer (Master Spec §2–3).
@@ -242,7 +386,7 @@ Progress will be tracked in future commits; this document will evolve with concr
 
 ---
 
-## 10. Support & Contribution Guidelines
+## Support & Contribution Guidelines
 
 - Use GitHub issues to track tasks aligned with Master Spec milestones.
 - Submit pull requests referencing the relevant sections of the spec.
