@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { CSSProperties } from 'react';
-import GridCanvas from './canvas/GridCanvas';
+import type { CSSProperties, FormEvent } from 'react';
+import GridCanvas, { type CanvasItem } from './canvas/GridCanvas';
 import './styles.css';
 import { useRealtimeConnection } from './ws/useRealtimeConnection';
 import type { GridTile } from './canvas/types';
 import { createTileKey } from './canvas/geometry';
+import plantTexture from './assets/items/plant.png';
+import couchTexture from './assets/items/couch.png';
 
 const dockButtons = [
   'Rooms',
@@ -21,6 +23,7 @@ type ChatMessage = {
   actor: string;
   body: string;
   time: string;
+  isSystem?: boolean;
 };
 
 const placeholderChatHistory: ChatMessage[] = [
@@ -29,12 +32,14 @@ const placeholderChatHistory: ChatMessage[] = [
     actor: 'System',
     body: 'Welcome to Bitby. Realtime chat will populate this log.',
     time: '17:58',
+    isSystem: true,
   },
   {
     id: 'system-2',
     actor: 'System',
     body: 'Daily quests rotate at midnight UTC. Claim rewards before the reset!',
     time: '17:59',
+    isSystem: true,
   },
   {
     id: 'player-0',
@@ -47,6 +52,7 @@ const placeholderChatHistory: ChatMessage[] = [
     actor: 'System',
     body: 'Admin: Spawned a practice bot near the fountain for collision testing.',
     time: '18:01',
+    isSystem: true,
   },
   {
     id: 'player-1',
@@ -59,12 +65,14 @@ const placeholderChatHistory: ChatMessage[] = [
     actor: 'System',
     body: 'Economy update placeholder: Daily coin stipend delivered.',
     time: '18:03',
+    isSystem: true,
   },
   {
     id: 'system-5',
     actor: 'System',
     body: 'Room presence placeholder: 8 visitors online in the plaza.',
     time: '18:04',
+    isSystem: true,
   },
   {
     id: 'player-2',
@@ -77,6 +85,7 @@ const placeholderChatHistory: ChatMessage[] = [
     actor: 'System',
     body: 'Reminder: Chat history shows the latest 100 entries. Older logs archive to the server.',
     time: '18:06',
+    isSystem: true,
   },
 ];
 
@@ -108,16 +117,57 @@ const App = (): JSX.Element => {
   const [isGridVisible, setIsGridVisible] = useState(true);
   const [showHoverWhenGridHidden, setShowHoverWhenGridHidden] = useState(true);
   const [areMoveAnimationsEnabled, setAreMoveAnimationsEnabled] = useState(true);
+  const [chatDraft, setChatDraft] = useState('');
+  const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const chatMessagesRef = useRef<HTMLOListElement | null>(null);
   const connection = useRealtimeConnection();
+  const roomItems = useMemo<CanvasItem[]>(
+    () => [
+      {
+        id: 'dev-plant-1',
+        name: 'Atrium Plant',
+        description:
+          'Lush greenery staged near the spawn tiles to verify z-ordering beneath avatars while ensuring pickup gating still works.',
+        tileX: 6,
+        tileY: 4,
+        texture: plantTexture,
+      },
+      {
+        id: 'dev-couch-1',
+        name: 'Lounge Couch',
+        description:
+          'Soft seating reserved for plaza screenshots. This tile has pickup disabled so the right panel can surface the gating copy mandated by the spec.',
+        tileX: 2,
+        tileY: 8,
+        texture: couchTexture,
+      },
+    ],
+    [],
+  );
 
   const chatLogEntries = useMemo(() => {
-    const baseLog = showSystemMessages
-      ? placeholderChatHistory
-      : placeholderChatHistory.filter((message) => message.actor !== 'System');
+    const formattedHistory: ChatMessage[] = connection.chatLog.map((message) => {
+      const timestamp = new Date(message.createdAt);
+      const time = Number.isNaN(timestamp.getTime())
+        ? ''
+        : timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      const isSystem = message.roles.some((role) => role.toLowerCase() === 'system');
+      return {
+        id: message.id,
+        actor: message.username,
+        body: message.body,
+        time,
+        isSystem,
+      };
+    });
 
-    return baseLog.slice(-100);
-  }, [showSystemMessages]);
+    const source = formattedHistory.length > 0 ? formattedHistory : placeholderChatHistory;
+    const filtered = showSystemMessages
+      ? source
+      : source.filter((message) => !message.isSystem && message.actor !== 'System');
+
+    return filtered.slice(-100);
+  }, [connection.chatLog, showSystemMessages]);
 
   const primaryMenuStyle = useMemo(
     () => ({ '--menu-count': dockButtons.length } as CSSProperties),
@@ -182,6 +232,22 @@ const App = (): JSX.Element => {
     : 'Show system messages';
   const systemToggleTooltip = showSystemMessages ? 'Hide System Logs' : 'Show System Logs';
 
+  const handleChatSubmit = useCallback(
+    (event: FormEvent<HTMLFormElement>) => {
+      event.preventDefault();
+      const trimmed = chatDraft.trim();
+      if (trimmed.length === 0) {
+        return;
+      }
+
+      const sent = connection.sendChat(trimmed);
+      if (sent) {
+        setChatDraft('');
+      }
+    },
+    [chatDraft, connection],
+  );
+
   const lockedTileKeys = useMemo(() => {
     const keys = new Set<string>();
     for (const flag of connection.tileFlags) {
@@ -199,6 +265,98 @@ const App = (): JSX.Element => {
     }
     return keys;
   }, [connection.occupants]);
+
+  const noPickupTileKeys = useMemo(() => {
+    const keys = new Set<string>();
+    for (const flag of connection.tileFlags) {
+      if (flag.noPickup) {
+        keys.add(createTileKey(flag.x, flag.y));
+      }
+    }
+    return keys;
+  }, [connection.tileFlags]);
+
+  const selectedItem = useMemo(
+    () => roomItems.find((item) => item.id === selectedItemId) ?? null,
+    [roomItems, selectedItemId],
+  );
+
+  const selectedItemTileKey = useMemo(() => {
+    if (!selectedItem) {
+      return null;
+    }
+    return createTileKey(selectedItem.tileX, selectedItem.tileY);
+  }, [selectedItem]);
+
+  const localOccupant = useMemo(() => {
+    if (!connection.user) {
+      return null;
+    }
+    return (
+      connection.occupants.find((occupant) => occupant.id === connection.user?.id) ?? null
+    );
+  }, [connection.occupants, connection.user]);
+
+  const pickupStatusMessage = useMemo(() => {
+    if (!selectedItem) {
+      return '';
+    }
+    if (!localOccupant) {
+      return 'Forbind til rummet for at samle op.';
+    }
+    if (selectedItemTileKey && noPickupTileKeys.has(selectedItemTileKey)) {
+      return 'Kan ikke samle op her';
+    }
+    if (
+      localOccupant.position.x !== selectedItem.tileX ||
+      localOccupant.position.y !== selectedItem.tileY
+    ) {
+      return 'Stil dig på feltet for at samle op';
+    }
+    return 'Klar til at samle op';
+  }, [localOccupant, noPickupTileKeys, selectedItem, selectedItemTileKey]);
+
+  const pickupStatusTone = useMemo(() => {
+    if (!selectedItem || !pickupStatusMessage) {
+      return 'pending';
+    }
+    if (pickupStatusMessage === 'Klar til at samle op') {
+      return 'ready';
+    }
+    if (pickupStatusMessage === 'Kan ikke samle op her') {
+      return 'blocked';
+    }
+    return 'pending';
+  }, [pickupStatusMessage, selectedItem]);
+
+  const canPickupSelectedItem = selectedItem
+    ? pickupStatusMessage === 'Klar til at samle op'
+    : false;
+
+  const shouldShowPickupHint =
+    !canPickupSelectedItem &&
+    pickupStatusMessage.length > 0 &&
+    pickupStatusMessage !== 'Kan ikke samle op her';
+
+  const handleItemClick = useCallback((item: CanvasItem): void => {
+    setSelectedItemId(item.id);
+  }, []);
+
+  const handlePickupSelectedItem = useCallback(() => {
+    if (!selectedItem || !canPickupSelectedItem) {
+      return;
+    }
+    if (import.meta.env.DEV) {
+      console.debug('[items] Pickup requested', {
+        itemId: selectedItem.id,
+        name: selectedItem.name,
+      });
+    }
+  }, [canPickupSelectedItem, selectedItem]);
+
+  const handleClearSelectedItem = useCallback(() => {
+    setSelectedItemId(null);
+  }, []);
 
   const handleTileClick = useCallback(
     (tile: GridTile): void => {
@@ -387,6 +545,8 @@ const App = (): JSX.Element => {
               tileFlags={connection.tileFlags}
               pendingMoveTarget={connection.pendingMoveTarget}
               onTileClick={handleTileClick}
+              items={roomItems}
+              onItemClick={handleItemClick}
               localOccupantId={connection.user?.id ?? null}
               showGrid={isGridVisible}
               showHoverWhenGridHidden={showHoverWhenGridHidden}
@@ -410,18 +570,74 @@ const App = (): JSX.Element => {
               </button>
             ))}
           </nav>
-          <aside className="right-panel" aria-label="Right panel placeholder">
+          <aside className="right-panel" aria-label={selectedItem ? 'Item information panel' : 'Right panel placeholder'}>
             <header className="right-panel__header">
-              <h1>Right Panel</h1>
+              <div className="right-panel__heading">
+                <h1>{selectedItem ? 'Item Info' : 'Right Panel'}</h1>
+                {selectedItem ? (
+                  <p className="right-panel__subtitle">{selectedItem.name}</p>
+                ) : null}
+              </div>
               <span className="right-panel__header-divider" aria-hidden="true" />
             </header>
-            <section className="right-panel__sections" aria-label="Upcoming panel modules">
-              {panelSections.map((section) => (
-                <article key={section.title} className="right-panel__section">
-                  <h2>{section.title}</h2>
-                  <p>{section.body}</p>
+            <section
+              className={
+                selectedItem
+                  ? 'right-panel__sections right-panel__sections--item'
+                  : 'right-panel__sections'
+              }
+              aria-label={selectedItem ? 'Selected item details' : 'Upcoming panel modules'}
+            >
+              {selectedItem ? (
+                <article key={selectedItem.id} className="item-info">
+                  <header className="item-info__header">
+                    <h2>{selectedItem.name}</h2>
+                    <p>{selectedItem.description}</p>
+                  </header>
+                  <dl className="item-info__meta">
+                    <div>
+                      <dt>Placering</dt>
+                      <dd>
+                        <span className="item-info__coordinate">
+                          ({selectedItem.tileX}, {selectedItem.tileY})
+                        </span>
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>Pickup status</dt>
+                      <dd className={`item-info__status item-info__status--${pickupStatusTone}`}>
+                        {pickupStatusMessage}
+                      </dd>
+                    </div>
+                  </dl>
+                  <div className="item-info__actions">
+                    <button
+                      type="button"
+                      onClick={handlePickupSelectedItem}
+                      disabled={!canPickupSelectedItem}
+                    >
+                      Saml Op
+                    </button>
+                    <button
+                      type="button"
+                      className="item-info__secondary"
+                      onClick={handleClearSelectedItem}
+                    >
+                      Tilbage til panel
+                    </button>
+                  </div>
+                  {shouldShowPickupHint ? (
+                    <p className="item-info__hint">{pickupStatusMessage}</p>
+                  ) : null}
                 </article>
-              ))}
+              ) : (
+                panelSections.map((section) => (
+                  <article key={section.title} className="right-panel__section">
+                    <h2>{section.title}</h2>
+                    <p>{section.body}</p>
+                  </article>
+                ))
+              )}
             </section>
           </aside>
         </div>
@@ -486,6 +702,33 @@ const App = (): JSX.Element => {
                   </button>
                 ) : null}
               </div>
+              <form
+                className="chat-drawer__composer"
+                onSubmit={handleChatSubmit}
+                aria-label="Send chat message"
+              >
+                <label htmlFor="chat-drawer-input" className="chat-drawer__composer-label">
+                  <span className="sr-only">Chat message</span>
+                </label>
+                <input
+                  id="chat-drawer-input"
+                  type="text"
+                  value={chatDraft}
+                  onChange={(event) => setChatDraft(event.target.value)}
+                  placeholder="Type a message…"
+                  autoComplete="off"
+                  disabled={connection.status !== 'connected'}
+                />
+                <button
+                  type="submit"
+                  className="chat-drawer__composer-send"
+                  disabled={
+                    connection.status !== 'connected' || chatDraft.trim().length === 0
+                  }
+                >
+                  Send
+                </button>
+              </form>
             </div>
           </div>
         </aside>

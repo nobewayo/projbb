@@ -30,7 +30,19 @@ export const roomOccupantMovedDataSchema = z.object({
   roomSeq: z.number().int().min(0, 'roomSeq must be non-negative'),
 });
 
+export const roomOccupantLeftDataSchema = z.object({
+  occupantId: z.string().min(1, 'occupant id required'),
+  lastPosition: z
+    .object({
+      x: z.number().int().min(0, 'position.x must be non-negative'),
+      y: z.number().int().min(0, 'position.y must be non-negative'),
+    })
+    .optional(),
+  roomSeq: z.number().int().min(0, 'roomSeq must be non-negative'),
+});
+
 export type RoomTileFlag = z.infer<typeof roomTileFlagSchema>;
 export type RoomOccupant = z.infer<typeof roomOccupantSchema>;
 export type RoomSnapshot = z.infer<typeof roomSnapshotSchema>;
 export type RoomOccupantMovedData = z.infer<typeof roomOccupantMovedDataSchema>;
+export type RoomOccupantLeftData = z.infer<typeof roomOccupantLeftDataSchema>;

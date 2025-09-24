@@ -38,7 +38,21 @@ const configSchema = z.object({
   TOKEN_TTL_SECONDS: z
     .preprocess((value) => numericEnv(value, 3600), z.number().int().min(60))
     .default(3600),
-  CLIENT_ORIGIN: z.string().default("http://localhost:5173")
+  CLIENT_ORIGIN: z.string().default("http://localhost:5173"),
+  PGHOST: z.string().default("127.0.0.1"),
+  PGPORT: z
+    .preprocess((value) => numericEnv(value, 5432), z.number().int().min(1).max(65535))
+    .default(5432),
+  PGDATABASE: z.string().default("bitby"),
+  PGUSER: z.string().default("bitby"),
+  PGPASSWORD: z.string().default("bitby"),
+  PG_POOL_MIN: z
+    .preprocess((value) => numericEnv(value, 0), z.number().int().min(0))
+    .default(0),
+  PG_POOL_MAX: z
+    .preprocess((value) => numericEnv(value, 10), z.number().int().min(1))
+    .default(10),
+  REDIS_URL: z.string().default("redis://127.0.0.1:6379"),
 });
 
 export type ServerConfig = z.infer<typeof configSchema>;
@@ -87,7 +101,15 @@ export const loadConfig = (env: NodeJS.ProcessEnv = process.env): ServerConfig =
     JWT_ISSUER: env.JWT_ISSUER,
     JWT_AUDIENCE: env.JWT_AUDIENCE,
     TOKEN_TTL_SECONDS: env.TOKEN_TTL_SECONDS,
-    CLIENT_ORIGIN: env.CLIENT_ORIGIN
+    CLIENT_ORIGIN: env.CLIENT_ORIGIN,
+    PGHOST: env.PGHOST,
+    PGPORT: env.PGPORT,
+    PGDATABASE: env.PGDATABASE,
+    PGUSER: env.PGUSER,
+    PGPASSWORD: env.PGPASSWORD,
+    PG_POOL_MIN: env.PG_POOL_MIN,
+    PG_POOL_MAX: env.PG_POOL_MAX,
+    REDIS_URL: env.REDIS_URL,
   });
 
   return parsed;
