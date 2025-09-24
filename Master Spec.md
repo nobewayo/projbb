@@ -6,6 +6,7 @@
 > **Maintenance:** Update this Master Spec whenever requirements shift so downstream documentation and implementations stay aligned.
 > **Platform:** Local development and deployment automation are standardized on Debian/Ubuntu Linux; Windows workflows and tooling are unsupported.
 
+
 ---
 
 ## 0) Product Overview

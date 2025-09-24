@@ -166,6 +166,7 @@ The pnpm workspace drives all packages. Run the commands below from the reposito
    ```bash
    pnpm --filter @bitby/server dev
    ```
+
    The server listens on `http://localhost:3001` by default and exposes:
    - `GET /healthz` → `{ status: "ok" }`
    - `GET /readyz` → `{ status: "ready" }` once the process is accepting traffic (503 otherwise)
@@ -173,6 +174,11 @@ The pnpm workspace drives all packages. Run the commands below from the reposito
    - `GET /ws` (WebSocket) → only accepts connections that negotiate the `bitby.v1` subprotocol. The server validates the provided JWT, replies with `auth:ok` containing the seed profile, heartbeat interval, and a development room snapshot (player + NPC occupant, plus flagged tiles), answers `ping` with `pong`, and terminates idle sessions once the 30 s heartbeat window elapses.
 
    The React client now requests a token automatically when no `VITE_BITBY_DEV_TOKEN` override is supplied, but you can inspect the login response manually via curl:
+   ```bash
+   curl -X POST http://localhost:3001/auth/login \
+     -H 'Content-Type: application/json' \
+     -d '{"username":"test","password":"password123"}'
+   ```
    ```bash
    curl -X POST http://localhost:3001/auth/login \
      -H 'Content-Type: application/json' \
@@ -189,6 +195,9 @@ The pnpm workspace drives all packages. Run the commands below from the reposito
    generated `dist/index.js` exists even on fresh clones or after dependency churn, eliminating the "Failed to resolve
    import '@bitby/schemas'" error that Vite reported previously. If you are iterating on schema definitions, start a watcher in a
    third terminal so edits rebuild automatically:
+   ```bash
+   pnpm --filter @bitby/schemas dev
+   ```
    ```bash
    pnpm --filter @bitby/schemas dev
    ```
