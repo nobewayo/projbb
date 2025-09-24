@@ -1,5 +1,16 @@
-import { useEffect, useRef, useState } from 'react';
-import { messageEnvelopeSchema, type MessageEnvelope } from '@bitby/schemas';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  messageEnvelopeSchema,
+  moveErrorDataSchema,
+  moveOkDataSchema,
+  moveRequestDataSchema,
+  roomOccupantMovedDataSchema,
+  roomSnapshotSchema,
+  type MessageEnvelope,
+  type RoomOccupant,
+  type RoomSnapshot,
+  type RoomTileFlag,
+} from '@bitby/schemas';
 
 const WS_SUBPROTOCOL = 'bitby.v1';
 const DEFAULT_HEARTBEAT_MS = 15_000;
@@ -13,12 +24,79 @@ export type ConnectionStatus =
   | 'connected'
   | 'reconnecting';
 
-export interface RealtimeConnectionState {
+interface SessionUser {
+  id: string;
+  username: string;
+  roles: string[];
+}
+
+interface SessionRoom {
+  id: string;
+  name: string;
+}
+
+const isSessionUser = (value: unknown): value is SessionUser => {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+
+  const candidate = value as Partial<SessionUser & { roles: unknown }>;
+  return (
+    typeof candidate.id === 'string' &&
+    candidate.id.length > 0 &&
+    typeof candidate.username === 'string' &&
+    Array.isArray(candidate.roles) &&
+    candidate.roles.every((role) => typeof role === 'string')
+  );
+};
+
+const isSessionRoom = (value: unknown): value is SessionRoom => {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+
+  const candidate = value as Partial<SessionRoom>;
+  return (
+    typeof candidate.id === 'string' &&
+    candidate.id.length > 0 &&
+    typeof candidate.name === 'string'
+  );
+};
+
+export interface RealtimeConnectionState extends InternalConnectionState {
+  sendMove: (x: number, y: number) => boolean;
+}
+
+interface InternalConnectionState {
   status: ConnectionStatus;
   lastError: string | null;
   retryInSeconds: number | null;
   heartbeatIntervalMs: number;
+  user: SessionUser | null;
+  room: SessionRoom | null;
+  occupants: RoomOccupant[];
+  tileFlags: RoomTileFlag[];
+  lastRoomSeq: number | null;
+  pendingMoveTarget: { x: number; y: number } | null;
+  isMoveInFlight: boolean;
 }
+
+const cloneOccupant = (occupant: RoomOccupant): RoomOccupant => ({
+  ...occupant,
+  roles: [...occupant.roles],
+  position: { ...occupant.position },
+});
+
+const sortOccupants = (map: Map<string, RoomOccupant>): RoomOccupant[] =>
+  Array.from(map.values())
+    .map((occupant) => cloneOccupant(occupant))
+    .sort((a, b) => {
+      if (a.position.y === b.position.y) {
+        return a.position.x - b.position.x;
+      }
+
+      return a.position.y - b.position.y;
+    });
 
 const buildEnvelope = (
   seq: number,
@@ -59,12 +137,29 @@ const getDevCredentials = (): { username: string; password: string } => ({
   password: import.meta.env.VITE_BITBY_DEV_PASSWORD ?? LOGIN_PASSWORD_FALLBACK,
 });
 
+const getLatestPendingTarget = (
+  pendingMoves: Map<number, { to: { x: number; y: number } }>,
+): { x: number; y: number } | null => {
+  let last: { x: number; y: number } | null = null;
+  for (const move of pendingMoves.values()) {
+    last = { ...move.to };
+  }
+  return last;
+};
+
 export const useRealtimeConnection = (): RealtimeConnectionState => {
-  const [state, setState] = useState<RealtimeConnectionState>({
+  const [state, setState] = useState<InternalConnectionState>({
     status: 'connecting',
     lastError: null,
     retryInSeconds: null,
     heartbeatIntervalMs: DEFAULT_HEARTBEAT_MS,
+    user: null,
+    room: null,
+    occupants: [],
+    tileFlags: [],
+    lastRoomSeq: null,
+    pendingMoveTarget: null,
+    isMoveInFlight: false,
   });
 
   const socketRef = useRef<WebSocket | null>(null);
@@ -77,8 +172,15 @@ export const useRealtimeConnection = (): RealtimeConnectionState => {
   const tokenRef = useRef<string | null>(getExplicitToken());
   const loginPromiseRef = useRef<Promise<string> | null>(null);
   const loginAbortRef = useRef<AbortController | null>(null);
+  const occupantMapRef = useRef(new Map<string, RoomOccupant>());
+  const pendingMovesRef = useRef(
+    new Map<number, { from: { x: number; y: number }; to: { x: number; y: number } }>(),
+  );
+  const sessionUserRef = useRef<SessionUser | null>(null);
 
   useEffect(() => {
+    disposedRef.current = false;
+
     const url = resolveWebSocketUrl();
 
     const clearPingTimer = () => {
@@ -119,11 +221,27 @@ export const useRealtimeConnection = (): RealtimeConnectionState => {
       }, intervalMs);
     };
 
-    const updateState = (partial: Partial<RealtimeConnectionState>) => {
-      setState((previous) => ({
-        ...previous,
-        ...partial,
-      }));
+    const updateState = (partial: Partial<InternalConnectionState>) => {
+      setState((previous) => {
+        const next = {
+          ...previous,
+          ...partial,
+        };
+
+        if (import.meta.env.DEV && previous.status !== next.status) {
+          console.debug('[realtime] status', previous.status, '→', next.status);
+        }
+
+        if (
+          import.meta.env.DEV &&
+          next.lastError &&
+          next.lastError !== previous.lastError
+        ) {
+          console.debug('[realtime] lastError', next.lastError);
+        }
+
+        return next;
+      });
     };
 
     const requestAuthToken = async (): Promise<string> => {
@@ -221,54 +339,13 @@ export const useRealtimeConnection = (): RealtimeConnectionState => {
       return loginPromiseRef.current;
     };
 
-    const handleEnvelope = (envelope: MessageEnvelope) => {
-      switch (envelope.op) {
-        case 'auth:ok': {
-          const intervalFromServer =
-            typeof envelope.data?.heartbeatIntervalMs === 'number'
-              ? envelope.data.heartbeatIntervalMs
-              : DEFAULT_HEARTBEAT_MS;
-
-          updateState({
-            status: 'connected',
-            lastError: null,
-            retryInSeconds: null,
-            heartbeatIntervalMs: intervalFromServer,
-          });
-          startPingTimer(intervalFromServer);
-          return;
-        }
-        case 'pong': {
-          // Latency telemetry hooks will live here; keeping stub for future metrics.
-          return;
-        }
-        case 'system:hello':
-        case 'system:room_snapshot': {
-          // Development scaffolding events; no client-side state yet.
-          return;
-        }
-        default: {
-          if (envelope.op.startsWith('error:')) {
-            const message =
-              typeof envelope.data?.message === 'string'
-                ? envelope.data.message
-                : 'Realtime error received';
-            if (
-              envelope.op === 'error:auth_invalid' ||
-              envelope.op === 'error:not_authenticated'
-            ) {
-              tokenRef.current = null;
-            }
-            updateState({ lastError: message });
-          }
-        }
-      }
-    };
-
     const scheduleReconnect = () => {
       clearPingTimer();
       clearCountdownTimer();
       abortLogin();
+      pendingMovesRef.current.clear();
+      occupantMapRef.current.clear();
+      sessionUserRef.current = null;
 
       reconnectAttemptsRef.current += 1;
       const attempt = reconnectAttemptsRef.current;
@@ -278,6 +355,10 @@ export const useRealtimeConnection = (): RealtimeConnectionState => {
       updateState({
         status: 'reconnecting',
         retryInSeconds: retrySeconds,
+        occupants: [],
+        tileFlags: [],
+        pendingMoveTarget: null,
+        isMoveInFlight: false,
       });
 
       countdownTimerRef.current = setInterval(() => {
@@ -300,6 +381,193 @@ export const useRealtimeConnection = (): RealtimeConnectionState => {
       }, delay);
     };
 
+    const handleOccupantSync = (snapshot: RoomSnapshot) => {
+      occupantMapRef.current = new Map(
+        snapshot.occupants.map((occupant: RoomOccupant) => [occupant.id, cloneOccupant(occupant)]),
+      );
+      pendingMovesRef.current.clear();
+      setState((previous) => ({
+        ...previous,
+        occupants: sortOccupants(occupantMapRef.current),
+        tileFlags: snapshot.tiles.map((tile: RoomTileFlag) => ({ ...tile })),
+        lastRoomSeq: snapshot.roomSeq,
+        pendingMoveTarget: null,
+        isMoveInFlight: false,
+      }));
+    };
+
+    const handleEnvelope = (envelope: MessageEnvelope) => {
+      switch (envelope.op) {
+        case 'auth:ok': {
+          const payload = (envelope.data ?? {}) as Record<string, unknown>;
+          const userCandidate = payload.user;
+          const roomCandidate = payload.room;
+          const snapshotResult = roomSnapshotSchema.safeParse(payload.roomSnapshot);
+          const intervalFromServer =
+            typeof envelope.data?.heartbeatIntervalMs === 'number'
+              ? envelope.data.heartbeatIntervalMs
+              : DEFAULT_HEARTBEAT_MS;
+
+          if (!isSessionUser(userCandidate) || !isSessionRoom(roomCandidate)) {
+            updateState({
+              lastError: 'Server handshake payload missing user or room',
+            });
+            return;
+          }
+
+          if (!snapshotResult.success) {
+            updateState({ lastError: 'Server snapshot payload was invalid' });
+            return;
+          }
+
+          const normalizedUser: SessionUser = {
+            id: userCandidate.id,
+            username: userCandidate.username,
+            roles: [...userCandidate.roles],
+          };
+          const normalizedRoom: SessionRoom = {
+            id: roomCandidate.id,
+            name: roomCandidate.name,
+          };
+
+          sessionUserRef.current = normalizedUser;
+
+          updateState({
+            status: 'connected',
+            lastError: null,
+            retryInSeconds: null,
+            heartbeatIntervalMs: intervalFromServer,
+            user: normalizedUser,
+            room: normalizedRoom,
+          });
+
+          handleOccupantSync(snapshotResult.data);
+          startPingTimer(intervalFromServer);
+          return;
+        }
+        case 'move:ok': {
+          const result = moveOkDataSchema.safeParse(envelope.data);
+          if (!result.success) {
+            updateState({ lastError: 'Received malformed move:ok payload' });
+            return;
+          }
+
+          const user = sessionUserRef.current;
+          if (user) {
+            const occupant = occupantMapRef.current.get(user.id);
+            if (occupant) {
+              const updated: RoomOccupant = {
+                ...occupant,
+                position: { x: result.data.x, y: result.data.y },
+              };
+              occupantMapRef.current.set(updated.id, updated);
+            }
+          }
+
+          pendingMovesRef.current.delete(envelope.seq);
+
+          setState((previous) => ({
+            ...previous,
+            occupants: sortOccupants(occupantMapRef.current),
+            lastRoomSeq: result.data.roomSeq,
+            pendingMoveTarget: getLatestPendingTarget(pendingMovesRef.current),
+            isMoveInFlight: pendingMovesRef.current.size > 0,
+          }));
+
+          return;
+        }
+        case 'move:err': {
+          const result = moveErrorDataSchema.safeParse(envelope.data);
+          if (!result.success) {
+            updateState({ lastError: 'Received malformed move:err payload' });
+            return;
+          }
+
+          const user = sessionUserRef.current;
+          if (user) {
+            const occupant = occupantMapRef.current.get(user.id);
+            if (occupant) {
+              const updated: RoomOccupant = {
+                ...occupant,
+                position: {
+                  x: result.data.current.x,
+                  y: result.data.current.y,
+                },
+              };
+              occupantMapRef.current.set(updated.id, updated);
+            }
+          }
+
+          pendingMovesRef.current.delete(envelope.seq);
+
+          setState((previous) => ({
+            ...previous,
+            occupants: sortOccupants(occupantMapRef.current),
+            lastRoomSeq: result.data.roomSeq,
+            pendingMoveTarget: getLatestPendingTarget(pendingMovesRef.current),
+            isMoveInFlight: pendingMovesRef.current.size > 0,
+          }));
+
+          return;
+        }
+        case 'room:occupant_moved': {
+          const result = roomOccupantMovedDataSchema.safeParse(envelope.data);
+          if (!result.success) {
+            updateState({ lastError: 'Received malformed occupant update' });
+            return;
+          }
+
+          const occupant = cloneOccupant(result.data.occupant);
+          occupantMapRef.current.set(occupant.id, occupant);
+
+          if (sessionUserRef.current && occupant.id === sessionUserRef.current.id) {
+            for (const [seq, pending] of pendingMovesRef.current.entries()) {
+              if (
+                pending.to.x === occupant.position.x &&
+                pending.to.y === occupant.position.y
+              ) {
+                pendingMovesRef.current.delete(seq);
+              }
+            }
+          }
+
+          setState((previous) => ({
+            ...previous,
+            occupants: sortOccupants(occupantMapRef.current),
+            lastRoomSeq: result.data.roomSeq,
+            pendingMoveTarget: sessionUserRef.current && occupant.id === sessionUserRef.current.id
+              ? getLatestPendingTarget(pendingMovesRef.current)
+              : previous.pendingMoveTarget,
+            isMoveInFlight: pendingMovesRef.current.size > 0,
+          }));
+
+          return;
+        }
+        case 'pong': {
+          return;
+        }
+        case 'system:hello':
+        case 'system:room_snapshot': {
+          return;
+        }
+        default: {
+          if (envelope.op.startsWith('error:')) {
+            const message =
+              typeof envelope.data?.message === 'string'
+                ? envelope.data.message
+                : 'Realtime error received';
+            if (
+              envelope.op === 'error:auth_invalid' ||
+              envelope.op === 'error:not_authenticated'
+            ) {
+              tokenRef.current = null;
+            }
+            updateState({ lastError: message });
+          }
+        }
+      }
+    };
+
     const connect = async () => {
       if (disposedRef.current) {
         return;
@@ -314,7 +582,13 @@ export const useRealtimeConnection = (): RealtimeConnectionState => {
 
       updateState({
         status: 'connecting',
+        pendingMoveTarget: null,
+        isMoveInFlight: false,
       });
+
+      if (import.meta.env.DEV) {
+        console.debug('[realtime] requesting auth token from server');
+      }
 
       let token: string;
       try {
@@ -323,6 +597,14 @@ export const useRealtimeConnection = (): RealtimeConnectionState => {
         if (disposedRef.current) {
           return;
         }
+
+        if (error instanceof DOMException && error.name === 'AbortError') {
+          if (import.meta.env.DEV) {
+            console.debug('[realtime] login request aborted');
+          }
+          return;
+        }
+
         const message =
           error instanceof Error ? error.message : 'Failed to fetch auth token';
         updateState({ lastError: message });
@@ -341,6 +623,10 @@ export const useRealtimeConnection = (): RealtimeConnectionState => {
 
         reconnectAttemptsRef.current = 0;
         updateState({ status: 'authenticating', lastError: null, retryInSeconds: null });
+
+        if (import.meta.env.DEV) {
+          console.debug('[realtime] websocket open, sending auth envelope');
+        }
 
         const authEnvelope = buildEnvelope(seqRef.current, 'auth', { token });
         seqRef.current += 1;
@@ -415,5 +701,65 @@ export const useRealtimeConnection = (): RealtimeConnectionState => {
     };
   }, []);
 
-  return state;
+  const sendMove = useCallback(
+    (x: number, y: number): boolean => {
+      const socket = socketRef.current;
+      if (!socket || socket.readyState !== WebSocket.OPEN) {
+        return false;
+      }
+
+      if (state.status !== 'connected') {
+        return false;
+      }
+
+      const validation = moveRequestDataSchema.safeParse({ x, y });
+      if (!validation.success) {
+        return false;
+      }
+
+      const user = sessionUserRef.current;
+      if (!user) {
+        return false;
+      }
+
+      const occupant = occupantMapRef.current.get(user.id);
+      if (!occupant) {
+        return false;
+      }
+
+      const seq = seqRef.current;
+      seqRef.current += 1;
+
+      pendingMovesRef.current.set(seq, {
+        from: { ...occupant.position },
+        to: { ...validation.data },
+      });
+
+      const optimistic: RoomOccupant = {
+        ...occupant,
+        position: { ...validation.data },
+      };
+      occupantMapRef.current.set(optimistic.id, optimistic);
+
+      setState((previous) => ({
+        ...previous,
+        occupants: sortOccupants(occupantMapRef.current),
+        pendingMoveTarget: getLatestPendingTarget(pendingMovesRef.current),
+        isMoveInFlight: true,
+      }));
+
+      const envelope = buildEnvelope(seq, 'move', validation.data);
+      socket.send(JSON.stringify(envelope));
+      return true;
+    },
+    [state.status],
+  );
+
+  return useMemo(
+    () => ({
+      ...state,
+      sendMove,
+    }),
+    [state, sendMove],
+  );
 };

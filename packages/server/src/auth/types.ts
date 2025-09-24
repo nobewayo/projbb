@@ -27,6 +27,7 @@ export interface RoomSnapshotOccupant {
 export interface RoomSnapshot {
   id: string;
   name: string;
+  roomSeq: number;
   occupants: RoomSnapshotOccupant[];
   tiles: Array<{
     x: number;

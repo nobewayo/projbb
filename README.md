@@ -3,14 +3,14 @@
 
 This repository implements the Bitby platform following the **Master Spec v3.7**. The stack is now wired together as a pnpm monorepo with:
 
-- a Vite + React client that now renders the deterministic top-right anchored grid preview with live hit-testing across the fixed 10-row field, keeps the right panel and bottom dock chrome locked to the new stage footprint, and surfaces a blocking reconnect overlay driven by the realtime WebSocket hook
-- a Fastify-based server that now issues short-lived JWTs from `/auth/login`, seeds Argon2-hashed development users, and exposes a guarded `/ws` endpoint enforcing the `bitby.v1` subprotocol while validating tokens, streaming a development room snapshot, and servicing the heartbeat loop end to end
-- shared schema utilities for the canonical WebSocket envelope (consumed by both client + server during the handshake)
+- a Vite + React client that now renders the deterministic top-right anchored grid preview with live hit-testing across the fixed 10-row field, keeps the right panel and bottom dock chrome locked to the new stage footprint, surfaces a blocking reconnect overlay driven by the realtime WebSocket hook, and renders development avatar sprites that optimistically move when you click a tile while waiting for authoritative `move:ok` / `move:err` replies
+- a Fastify-based server that now issues short-lived JWTs from `/auth/login`, seeds Argon2-hashed development users, exposes a guarded `/ws` endpoint enforcing the `bitby.v1` subprotocol, validates tokens, streams a development room snapshot, services the heartbeat loop end to end, and accepts `move` envelopes with room-sequenced `move:ok`/`move:err` acknowledgements plus `room:occupant_moved` broadcasts to every connection
+- shared schema utilities for the canonical WebSocket envelope and the development `move` / room snapshot payloads consumed by both the client and server layers
 - Docker Compose definitions for Postgres and Redis
 
 This guide explains how to clone, run, and test the project on Debian- or Ubuntu-based Linux desktops. The workflow below assumes an apt-based distribution (Debian 12 “Bookworm”, Ubuntu 22.04 “Jammy”, or newer) with sudo access.
 
-> **Note:** The deterministic grid renderer now paints the full 10-row field (10 columns on even rows, 11 on odd rows) with a development HUD so geometry can be verified. The realtime hook authenticates with the server using the new `/auth/login` JWT flow, receives a stubbed-but-structured room snapshot (player seed plus NPC + tile flags), and shows the blocking reconnect overlay mandated by the spec whenever the socket drops. Avatars, movement, and authoritative state streaming remain placeholders so subsequent milestones can build atop the verified geometry and auth loop without breaking the guardrails.
+> **Note:** The deterministic grid renderer now paints the full 10-row field (10 columns on even rows, 11 on odd rows) with a development HUD so geometry can be verified. The realtime hook authenticates with the server using the `/auth/login` JWT flow, receives a stubbed-but-structured room snapshot (player seed plus NPC + tile flags), shows the blocking reconnect overlay mandated by the spec whenever the socket drops, and drives a development movement loop: clicking a tile issues `move` envelopes, the client animates a placeholder avatar immediately, and the server answers with authoritative `move:ok` / `move:err` frames plus `room:occupant_moved` broadcasts that snap the sprite back if the move is rejected.
 
 ---
 
@@ -285,14 +285,24 @@ Copy the template to `.env.local` (git-ignored) and adjust values for your machi
 ## Next Steps in the Roadmap
 
 
-1. Layer optimistic avatar movement + snapback logic on top of the deterministic grid renderer (Master Spec §2–3).
-2. Replace the stubbed realtime handshake with JWT-backed auth, authoritative room snapshots, and movement/chat broadcast loops (§1, §3, §8).
+1. Layer sprite z-ordering, animation timing, and asset placeholders on top of the optimistic movement loop so development avatars follow the Master Spec compositing rules (§2–3, §7).
+2. Replace the remaining in-memory fixtures with Redis/Postgres-backed room authority, expand the realtime protocol with chat send/receive, and stream presence deltas alongside the new movement broadcasts (§1, §3, §8, §12).
 3. Bring up Postgres/Redis migrations and seed data via Docker Compose (§12, §13, §21).
 4. Establish automated testing harnesses (unit, integration, visual goldens) and CI workflows that exercise the heartbeat + reconnect flow.
 5. Expand the schemas package with JSON Schemas/OpenAPI definitions covering realtime operations and REST endpoints (§23).
 
 
 Progress will be tracked in future commits; this document will evolve with concrete commands as they become available.
+
+---
+
+## Handoff Notes (2025-09-25)
+
+- The realtime hook now resets its Strict Mode lifecycle guard and treats intentional `AbortController` cancellations as benign, so the `/auth/login` bootstrap no longer fails during automated runs and the reconnect overlay clears once the websocket handshake finishes.
+- Latest connectivity screenshot with the overlay dismissed: `browser:/invocations/xjwvubss/artifacts/artifacts/bitby-connected.png`.
+- Immediate follow-ups:
+  - Decide whether to demote or remove the `[realtime]` `console.debug` statements before production builds.
+  - Continue with the roadmap items above (sprite layering, persisted room authority, richer protocol coverage).
 
 ---
 
@@ -305,4 +315,4 @@ Progress will be tracked in future commits; this document will evolve with concr
 
 ---
 
-*Last updated: 2025-09-23 UTC*
+*Last updated: 2025-09-25 UTC*

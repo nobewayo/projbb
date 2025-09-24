@@ -490,19 +490,21 @@ When implementing, **Codex should**:
 
 ---
 
-## 24) Progress Snapshot — 2025-09-24
+## 24) Progress Snapshot — 2025-09-25
 
 - ✅ Client grid renderer + chrome are live with the spec-mandated blocking reconnect overlay driven by a reusable `useRealtimeConnection` hook.
-- ✅ Fastify WebSocket endpoint now enforces `bitby.v1`, validates HS256 JWTs issued from `/auth/login`, returns a development room snapshot inside `auth:ok`, and closes idle sockets after the 30 s heartbeat window.
-- ✅ Shared schema package backs both sides of the handshake so malformed envelopes are rejected before business logic runs.
+- ✅ Fastify WebSocket endpoint now enforces `bitby.v1`, validates HS256 JWTs issued from `/auth/login`, returns a development room snapshot inside `auth:ok`, closes idle sockets after the 30 s heartbeat window, and accepts `move` envelopes with `move:ok` / `move:err` replies plus `room:occupant_moved` broadcasts.
+- ✅ Shared schema package now covers the core envelope plus development room/move payloads so the client and server validate optimistic movement and room snapshots against the same definitions.
 - ✅ Client dev workflow automatically rebuilds `@bitby/schemas` before Vite starts (with a dedicated `pnpm --filter @bitby/schemas dev` watcher) so the workspace no longer crashes on fresh clones when resolving shared envelopes.
-- ✅ React client now performs the `/auth/login` flow automatically, surfaces heartbeat-driven reconnect status, and keeps the stage chrome deterministic while waiting for authoritative state streaming.
+- ✅ React client performs the `/auth/login` flow automatically, surfaces heartbeat-driven reconnect status, renders development avatar sprites, and keeps the stage chrome deterministic while reconciling optimistic moves with authoritative acks.
+- ✅ Strict Mode lifecycle handling in `useRealtimeConnection` now resets its disposal guard and treats intentional `AbortController` cancellations as benign, so `/auth/login` no longer aborts under automation. Latest overlay-free screenshot: `browser:/invocations/xjwvubss/artifacts/artifacts/bitby-connected.png`.
 
 ### Immediate Next Focus
 
-1. Layer optimistic avatar movement on the client with snapback handling tied to the server acks and the JWT-backed session context.
-2. Stand up Postgres/Redis (local Docker) and wire the server to persist/load room state ahead of catalog/item work.
-3. Extend `@bitby/schemas` with per-op definitions (`auth:ok`, `room:snapshot`, `error:*`) so the server/client no longer rely on ad-hoc payload shapes.
-4. Implement movement/chat broadcast loops that hydrate the room snapshot and drive client state updates beyond the current fixtures.
+1. Layer sprite z-ordering, animation timing, and placeholder assets on top of the optimistic movement loop so the development avatars respect the Master Spec compositing rules.
+2. Stand up Postgres/Redis (local Docker) and wire the server to persist/load room state and broadcast deltas beyond the in-memory development authority.
+3. Extend `@bitby/schemas` with additional realtime/REST definitions (chat, error envelopes, presence) so the server/client no longer rely on ad-hoc payload shapes.
+4. Implement chat and richer presence broadcast loops that hydrate the room snapshot and drive client state updates beyond the current fixtures.
+5. Decide how to handle the `[realtime]` `console.debug` statements before production builds (demote, gate, or remove).
 
 **End of AGENT.md**
