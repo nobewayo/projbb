@@ -3,14 +3,14 @@
 
 This repository implements the Bitby platform following the **Master Spec v3.7**. The stack is now wired together as a pnpm monorepo with:
 
-- a Vite + React client that now renders the deterministic top-right anchored grid preview with live hit-testing across the fixed 10-row field, keeps the right panel and bottom dock chrome locked to the new stage footprint, surfaces a blocking reconnect overlay driven by the realtime Socket.IO hook, outlines each diamond tile instead of painting opaque fills (locked/no-pickup tiles receive a translucent wash), and renders development avatar sprites that optimistically move when you click a tile while waiting for authoritative `move:ok` / `move:err` replies
+- a Vite + React client that now renders the deterministic top-right anchored grid with live hit-testing across the fixed 10-row field, keeps the right panel and bottom dock chrome locked to the stage footprint, surfaces the blocking reconnect overlay mandated by the spec, draws the development room background + tile overlays, and layers placeholder avatar PNGs with foot-anchored highlights plus eased movement interpolation while awaiting authoritative `move:ok` / `move:err` replies
 - a Fastify-based server that now issues short-lived JWTs from `/auth/login`, seeds Argon2-hashed development users, exposes a guarded Socket.IO endpoint at `/ws`, validates tokens, streams a development room snapshot, services the heartbeat loop end to end, and accepts `move` envelopes with room-sequenced `move:ok`/`move:err` acknowledgements plus `room:occupant_moved` broadcasts to every connection
 - shared schema utilities for the canonical realtime envelope and the development `move` / room snapshot payloads consumed by both the client and server layers
 - Docker Compose definitions for Postgres and Redis
 
 This guide explains how to clone, run, and test the project on Debian- or Ubuntu-based Linux desktops. The workflow below assumes an apt-based distribution (Debian 12 “Bookworm”, Ubuntu 22.04 “Jammy”, or newer) with sudo access.
 
-> **Note:** The deterministic grid renderer now paints the full 10-row field (10 columns on even rows, 11 on odd rows) with a development HUD so geometry can be verified while diamond tiles render as translucent outlines (only locked/no-pickup states add a faint wash). The realtime hook authenticates with the server using the `/auth/login` JWT flow, binds a Socket.IO client to the `/ws` namespace, receives a stubbed-but-structured room snapshot (player seed plus NPC + tile flags), shows the blocking reconnect overlay mandated by the spec whenever the socket drops, and drives a development movement loop: clicking a tile issues `move` envelopes, the client animates a placeholder avatar immediately, and the server answers with authoritative `move:ok` / `move:err` frames plus `room:occupant_moved` broadcasts that snap the sprite back if the move is rejected.
+> **Note:** The deterministic grid renderer now paints the full 10-row field (10 columns on even rows, 11 on odd rows), overlays the development room background, and keeps a HUD so geometry can be verified while diamond tiles render as translucent outlines (only locked/no-pickup states add a faint wash). The realtime hook authenticates with the server using the `/auth/login` JWT flow, binds a Socket.IO client to the `/ws` namespace, receives a stubbed-but-structured room snapshot (player seed plus NPC + tile flags), shows the blocking reconnect overlay mandated by the spec whenever the socket drops, and drives an optimistic movement loop: clicking a tile issues `move` envelopes, the client immediately animates a placeholder sprite PNG with eased motion + a foot halo, and the server answers with authoritative `move:ok` / `move:err` frames plus `room:occupant_moved` broadcasts that reconcile any drift.
 
 ---
 
@@ -293,8 +293,8 @@ Copy the template to `.env.local` (git-ignored) and adjust values for your machi
 ## Next Steps in the Roadmap
 
 
-1. Layer sprite z-ordering, animation timing, and asset placeholders on top of the optimistic movement loop so development avatars follow the Master Spec compositing rules (§2–3, §7).
-2. Replace the remaining in-memory fixtures with Redis/Postgres-backed room authority, expand the realtime protocol with chat send/receive, and stream presence deltas alongside the new movement broadcasts (§1, §3, §8, §12).
+1. Stream chat and presence deltas from the authoritative server, wiring the right-panel log and canvas bubbles to the realtime feeds with typing previews (§3–4).
+2. Replace the remaining in-memory fixtures with Redis/Postgres-backed room authority so movement, catalog, and presence state persist across instances (§1, §3, §8, §12).
 3. Bring up Postgres/Redis migrations and seed data via Docker Compose (§12, §13, §21).
 4. Establish automated testing harnesses (unit, integration, visual goldens) and CI workflows that exercise the heartbeat + reconnect flow.
 5. Expand the schemas package with JSON Schemas/OpenAPI definitions covering realtime operations and REST endpoints (§23).
@@ -304,13 +304,14 @@ Progress will be tracked in future commits; this document will evolve with concr
 
 ---
 
-## Handoff Notes (2025-09-25)
+## Handoff Notes (2025-09-26)
 
 - The realtime hook now resets its Strict Mode lifecycle guard and treats intentional `AbortController` cancellations as benign, so the `/auth/login` bootstrap no longer fails during automated runs and the reconnect overlay clears once the Socket.IO handshake finishes.
-- Latest connectivity screenshot with the overlay dismissed: `browser:/invocations/xjwvubss/artifacts/artifacts/bitby-connected.png`.
+- The grid canvas now draws the development room background, sorts occupants by tile depth, and renders placeholder avatar PNGs with eased interpolation and a local foot halo so optimistic moves stay visually coherent until the authoritative `move:ok` arrives.
+- Latest connectivity screenshot with the overlay dismissed: `browser:/invocations/hsmymagx/artifacts/artifacts/bitby-connected.png`.
 - Immediate follow-ups:
   - Decide whether to demote or remove the `[realtime]` `console.debug` statements before production builds.
-  - Continue with the roadmap items above (sprite layering, persisted room authority, richer protocol coverage).
+  - Continue with the roadmap items above (chat/presence streaming, persisted room authority, richer protocol coverage).
 
 ---
 
@@ -324,4 +325,4 @@ Progress will be tracked in future commits; this document will evolve with concr
 
 ---
 
-*Last updated: 2025-09-25 UTC*
+*Last updated: 2025-09-26 UTC*
