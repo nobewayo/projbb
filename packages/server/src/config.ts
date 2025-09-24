@@ -43,17 +43,14 @@ const configSchema = z.object({
 
 export type ServerConfig = z.infer<typeof configSchema>;
 
-const LOCALHOST_HOSTNAMES = new Set(["localhost", "127.0.0.1", "[::1]"]);
-
-const escapeForRegExp = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-
-const buildLocalhostPattern = (protocol: string): RegExp => {
-  const hostAlternatives = Array.from(LOCALHOST_HOSTNAMES, (hostname) => escapeForRegExp(hostname)).join("|");
-  const protocolPrefix = `${protocol}//`;
-  return new RegExp(`^${escapeForRegExp(protocolPrefix)}(?:${hostAlternatives})(?::\\d+)?$`);
+const buildOrigin = (protocol: string, hostname: string, port: string): string => {
+  const portSuffix = port ? `:${port}` : "";
+  return `${protocol}//${hostname}${portSuffix}`;
 };
 
-export const resolveCorsOrigins = (origin: string): string | RegExp => {
+const LOCALHOST_HOSTNAMES = new Set(["localhost", "127.0.0.1"]);
+
+export const resolveCorsOrigins = (origin: string): string | string[] => {
   let parsed: URL;
   try {
     parsed = new URL(origin);
@@ -65,7 +62,19 @@ export const resolveCorsOrigins = (origin: string): string | RegExp => {
     return parsed.origin;
   }
 
-  return buildLocalhostPattern(parsed.protocol);
+  const variants: string[] = [];
+  const addVariant = (value: string): void => {
+    if (!variants.includes(value)) {
+      variants.push(value);
+    }
+  };
+
+  addVariant(parsed.origin);
+  for (const hostname of LOCALHOST_HOSTNAMES) {
+    addVariant(buildOrigin(parsed.protocol, hostname, parsed.port));
+  }
+
+  return variants;
 };
 
 export const loadConfig = (env: NodeJS.ProcessEnv = process.env): ServerConfig => {
