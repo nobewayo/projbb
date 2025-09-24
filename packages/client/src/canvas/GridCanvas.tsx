@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { CANVAS_HEIGHT, CANVAS_WIDTH, GRID_HEIGHT } from './constants';
+import { CANVAS_HEIGHT, CANVAS_WIDTH } from './constants';
 import { buildGridDefinition, createTileKey, findTileAtPoint } from './geometry';
 import type { GridDefinition, GridTile } from './types';
 
@@ -30,21 +30,11 @@ interface PointerPosition {
   y: number;
 }
 
-const backgroundGradientStops: Array<[number, string]> = [
-  [0, 'rgba(9, 16, 27, 0.95)'],
-  [0.35, 'rgba(12, 22, 35, 0.95)'],
-  [1, 'rgba(6, 10, 18, 0.98)'],
-];
-
-const evenRowFill = '#142033';
-const oddRowFill = '#101a29';
-const tileStroke = 'rgba(42, 64, 92, 0.9)';
-const tileShadow = 'rgba(0, 0, 0, 0.2)';
-const hoveredFill = '#245fba';
-const hoveredStroke = '#7ad1ff';
-const pendingStroke = '#f2c94c';
-const lockedFill = 'rgba(209, 71, 94, 0.55)';
-const noPickupFill = 'rgba(255, 200, 99, 0.4)';
+const tileStroke = 'rgba(126, 178, 229, 0.52)';
+const hoveredStroke = 'rgba(122, 209, 255, 0.9)';
+const pendingStroke = 'rgba(242, 201, 76, 0.9)';
+const lockedFill = 'rgba(209, 71, 94, 0.24)';
+const noPickupFill = 'rgba(255, 200, 99, 0.2)';
 const centerDot = '#5ec9ff';
 const hoveredCenterDot = '#e8f6ff';
 const localOccupantFill = '#ffd166';
@@ -75,19 +65,8 @@ const prepareContext = (canvas: HTMLCanvasElement): CanvasRenderingContext2D | n
   return context;
 };
 
-const drawBackground = (context: CanvasRenderingContext2D, grid: GridDefinition): void => {
+const drawBackground = (context: CanvasRenderingContext2D): void => {
   context.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-
-  const gradient = context.createLinearGradient(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-  for (const [stop, color] of backgroundGradientStops) {
-    gradient.addColorStop(stop, color);
-  }
-
-  context.fillStyle = gradient;
-  context.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-
-  context.fillStyle = 'rgba(10, 18, 30, 0.88)';
-  context.fillRect(grid.originX, grid.originY, grid.maxRowSpan, GRID_HEIGHT);
 };
 
 const drawTile = (
@@ -98,77 +77,43 @@ const drawTile = (
   const centerX = tile.centerX;
   const centerY = tile.centerY;
 
-  context.beginPath();
-  context.moveTo(centerX, tile.screenY);
-  context.lineTo(tile.screenX + tile.width, centerY);
-  context.lineTo(centerX, tile.screenY + tile.height);
-  context.lineTo(tile.screenX, centerY);
-  context.closePath();
+  const traceDiamond = () => {
+    context.beginPath();
+    context.moveTo(centerX, tile.screenY);
+    context.lineTo(tile.screenX + tile.width, centerY);
+    context.lineTo(centerX, tile.screenY + tile.height);
+    context.lineTo(tile.screenX, centerY);
+    context.closePath();
+  };
 
-  context.shadowColor = tileShadow;
-  context.shadowBlur = options.hovered ? 16 : 8;
-  context.shadowOffsetX = 0;
-  context.shadowOffsetY = options.hovered ? 4 : 2;
+  context.save();
 
-  context.fillStyle = options.hovered
-    ? hoveredFill
-    : tile.gridY % 2 === 0
-      ? evenRowFill
-      : oddRowFill;
-  context.fill();
+  traceDiamond();
+  if (options.locked || options.noPickup) {
+    context.fillStyle = options.locked ? lockedFill : noPickupFill;
+    context.fill();
+  }
 
-  context.shadowColor = 'transparent';
+  traceDiamond();
+  context.setLineDash([]);
   context.lineWidth = options.hovered ? 2 : 1;
   context.strokeStyle = options.hovered ? hoveredStroke : tileStroke;
   context.stroke();
 
-  if (options.locked || options.noPickup) {
-    context.save();
-    context.beginPath();
-    context.moveTo(centerX, tile.screenY);
-    context.lineTo(tile.screenX + tile.width, centerY);
-    context.lineTo(centerX, tile.screenY + tile.height);
-    context.lineTo(tile.screenX, centerY);
-    context.closePath();
-    context.fillStyle = options.locked ? lockedFill : noPickupFill;
-    context.fill();
-    context.restore();
+  if (options.pending) {
+    traceDiamond();
+    context.setLineDash([6, 4]);
+    context.lineWidth = 2;
+    context.strokeStyle = pendingStroke;
+    context.stroke();
   }
 
-  if (options.pending) {
-    context.save();
-    context.beginPath();
-    context.moveTo(centerX, tile.screenY);
-    context.lineTo(tile.screenX + tile.width, centerY);
-    context.lineTo(centerX, tile.screenY + tile.height);
-    context.lineTo(tile.screenX, centerY);
-    context.closePath();
-    context.strokeStyle = pendingStroke;
-    context.lineWidth = 2;
-    context.setLineDash([6, 4]);
-    context.stroke();
-    context.restore();
-  }
+  context.restore();
 
   context.beginPath();
   context.fillStyle = options.hovered ? hoveredCenterDot : centerDot;
   context.arc(centerX, centerY, options.hovered ? 3 : 2, 0, Math.PI * 2);
   context.fill();
-};
-
-const drawOriginMarker = (context: CanvasRenderingContext2D, grid: GridDefinition): void => {
-  const rightEdge = grid.originX + grid.maxRowSpan;
-  context.save();
-  context.strokeStyle = 'rgba(122, 209, 255, 0.4)';
-  context.lineWidth = 1;
-  context.setLineDash([4, 6]);
-  const markerTop = Math.max(0, grid.originY - 12);
-  const markerBottom = Math.min(grid.canvasHeight, grid.originY + GRID_HEIGHT + 12);
-  context.beginPath();
-  context.moveTo(rightEdge, markerTop);
-  context.lineTo(rightEdge, markerBottom);
-  context.stroke();
-  context.restore();
 };
 
 const renderGrid = (
@@ -181,7 +126,7 @@ const renderGrid = (
   occupants: Array<{ tile: GridTile; occupant: CanvasOccupant }>,
   localOccupantId: string | null,
 ): void => {
-  drawBackground(context, grid);
+  drawBackground(context);
 
   for (const tile of grid.tiles) {
     drawTile(context, tile, {
@@ -191,8 +136,6 @@ const renderGrid = (
       pending: pendingTileKey === tile.key,
     });
   }
-
-  drawOriginMarker(context, grid);
 
   for (const sprite of occupants) {
     const isLocal = sprite.occupant.id === localOccupantId;

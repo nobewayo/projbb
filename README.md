@@ -3,14 +3,14 @@
 
 This repository implements the Bitby platform following the **Master Spec v3.7**. The stack is now wired together as a pnpm monorepo with:
 
-- a Vite + React client that now renders the deterministic top-right anchored grid preview with live hit-testing across the fixed 10-row field, keeps the right panel and bottom dock chrome locked to the new stage footprint, surfaces a blocking reconnect overlay driven by the realtime WebSocket hook, and renders development avatar sprites that optimistically move when you click a tile while waiting for authoritative `move:ok` / `move:err` replies
-- a Fastify-based server that now issues short-lived JWTs from `/auth/login`, seeds Argon2-hashed development users, exposes a guarded `/ws` endpoint enforcing the `bitby.v1` subprotocol, validates tokens, streams a development room snapshot, services the heartbeat loop end to end, and accepts `move` envelopes with room-sequenced `move:ok`/`move:err` acknowledgements plus `room:occupant_moved` broadcasts to every connection
-- shared schema utilities for the canonical WebSocket envelope and the development `move` / room snapshot payloads consumed by both the client and server layers
+- a Vite + React client that now renders the deterministic top-right anchored grid preview with live hit-testing across the fixed 10-row field, keeps the right panel and bottom dock chrome locked to the new stage footprint, surfaces a blocking reconnect overlay driven by the realtime Socket.IO hook, outlines each diamond tile instead of painting opaque fills (locked/no-pickup tiles receive a translucent wash), and renders development avatar sprites that optimistically move when you click a tile while waiting for authoritative `move:ok` / `move:err` replies
+- a Fastify-based server that now issues short-lived JWTs from `/auth/login`, seeds Argon2-hashed development users, exposes a guarded Socket.IO endpoint at `/ws`, validates tokens, streams a development room snapshot, services the heartbeat loop end to end, and accepts `move` envelopes with room-sequenced `move:ok`/`move:err` acknowledgements plus `room:occupant_moved` broadcasts to every connection
+- shared schema utilities for the canonical realtime envelope and the development `move` / room snapshot payloads consumed by both the client and server layers
 - Docker Compose definitions for Postgres and Redis
 
 This guide explains how to clone, run, and test the project on Debian- or Ubuntu-based Linux desktops. The workflow below assumes an apt-based distribution (Debian 12 “Bookworm”, Ubuntu 22.04 “Jammy”, or newer) with sudo access.
 
-> **Note:** The deterministic grid renderer now paints the full 10-row field (10 columns on even rows, 11 on odd rows) with a development HUD so geometry can be verified. The realtime hook authenticates with the server using the `/auth/login` JWT flow, receives a stubbed-but-structured room snapshot (player seed plus NPC + tile flags), shows the blocking reconnect overlay mandated by the spec whenever the socket drops, and drives a development movement loop: clicking a tile issues `move` envelopes, the client animates a placeholder avatar immediately, and the server answers with authoritative `move:ok` / `move:err` frames plus `room:occupant_moved` broadcasts that snap the sprite back if the move is rejected.
+> **Note:** The deterministic grid renderer now paints the full 10-row field (10 columns on even rows, 11 on odd rows) with a development HUD so geometry can be verified while diamond tiles render as translucent outlines (only locked/no-pickup states add a faint wash). The realtime hook authenticates with the server using the `/auth/login` JWT flow, binds a Socket.IO client to the `/ws` namespace, receives a stubbed-but-structured room snapshot (player seed plus NPC + tile flags), shows the blocking reconnect overlay mandated by the spec whenever the socket drops, and drives a development movement loop: clicking a tile issues `move` envelopes, the client animates a placeholder avatar immediately, and the server answers with authoritative `move:ok` / `move:err` frames plus `room:occupant_moved` broadcasts that snap the sprite back if the move is rejected.
 
 ---
 
@@ -97,7 +97,7 @@ Skip this section if you ran the script above.
 
 All commands below assume you are inside the repository root (`projbb/`). Use separate terminals/tabs for each long-running process.
 
-1. **API/WebSocket server**:
+1. **API / realtime server (Fastify + Socket.IO)**:
    ```bash
    pnpm --filter @bitby/server dev
    ```
@@ -115,7 +115,7 @@ All commands below assume you are inside the repository root (`projbb/`). Use se
 
 Environment overrides for Linux shells:
 
-- `VITE_BITBY_WS_URL=ws://localhost:3001/ws pnpm --filter @bitby/client dev`
+- `VITE_BITBY_WS_URL=http://localhost:3001/ws pnpm --filter @bitby/client dev`
 - `VITE_BITBY_DEV_TOKEN=<token> pnpm --filter @bitby/client dev`
 
 ### L6. Local Postgres & Redis via Docker
@@ -170,7 +170,7 @@ The pnpm workspace drives all packages. Run the commands below from the reposito
    ```bash
    pnpm install
    ```
-2. **Start the API/WebSocket server** (Fastify + JSON Web Tokens + `@fastify/websocket`):
+2. **Start the API/Socket.IO server** (Fastify + JSON Web Tokens + `socket.io`):
    ```bash
    pnpm --filter @bitby/server dev
    ```
@@ -179,7 +179,7 @@ The pnpm workspace drives all packages. Run the commands below from the reposito
    - `GET /healthz` → `{ status: "ok" }`
    - `GET /readyz` → `{ status: "ready" }` once the process is accepting traffic (503 otherwise)
    - `POST /auth/login` → accepts `{ "username": "test", "password": "password123" }` style payloads, verifies the Argon2id hash for that seeded user (`test`, `test2`, `test3`, `test4` all share the development password), and returns `{ token, expiresIn, user }` where `token` is an HS256 JWT signed with the development secret
-   - `GET /ws` (WebSocket) → only accepts connections that negotiate the `bitby.v1` subprotocol. The server validates the provided JWT, replies with `auth:ok` containing the seed profile, heartbeat interval, and a development room snapshot (player + NPC occupant, plus flagged tiles), answers `ping` with `pong`, and terminates idle sessions once the 30 s heartbeat window elapses.
+   - `Socket.IO /ws` namespace → validates the provided JWT from the `auth` envelope, replies with `auth:ok` containing the seed profile, heartbeat interval, and a development room snapshot (player + NPC occupant plus flagged tiles), answers `ping` with `pong`, and terminates idle sessions once the 30 s heartbeat window elapses.
 
    The React client now requests a token automatically when no `VITE_BITBY_DEV_TOKEN` override is supplied, but you can inspect the login response manually via curl:
    ```bash
@@ -216,7 +216,7 @@ The pnpm workspace drives all packages. Run the commands below from the reposito
 
 The React client reads two environment variables when booting the Vite dev server:
 
-- `VITE_BITBY_WS_URL` — optional override for the WebSocket endpoint. Defaults to `ws://localhost:3001/ws` when unset.
+- `VITE_BITBY_WS_URL` — optional override for the realtime endpoint. Provide an `http://`/`https://` origin (the client upgrades to WebSocket automatically) such as `http://localhost:3001/ws` when running locally.
 - `VITE_BITBY_DEV_TOKEN` — placeholder token forwarded in the `auth` envelope. Defaults to `local-development-token`.
 
 Set them in a `.env.local` file at the repository root or prefix them inline when running `pnpm --filter @bitby/client dev`.
@@ -237,7 +237,7 @@ The initial Docker Compose stack located at `packages/infra/docker/docker-compos
    ```
 4. To wipe persistent volumes, run `docker compose down -v`.
 
-Future updates will add API, WebSocket, and client containers that bind to the same network for end-to-end testing.
+Future updates will add API, Socket.IO, and client containers that bind to the same network for end-to-end testing.
 
 ---
 
@@ -271,7 +271,7 @@ POSTGRES_URL=postgres://bitby:bitby@localhost:5432/bitby
 REDIS_URL=redis://localhost:6379
 JWT_SECRET=<development-only-secret>
 ASSET_CDN_BASE=http://localhost:8080/assets
-VITE_BITBY_WS_URL=ws://localhost:3001/ws
+VITE_BITBY_WS_URL=http://localhost:3001/ws
 VITE_BITBY_HTTP_URL=http://localhost:3001
 VITE_BITBY_DEV_USERNAME=test
 VITE_BITBY_DEV_PASSWORD=password123
@@ -285,7 +285,7 @@ Copy the template to `.env.local` (git-ignored) and adjust values for your machi
 ## Keeping in Sync with the Master Spec
 
 - The **Master Spec.md** file in the repository root is the authoritative design document. Review it before contributing changes.
-- Non-negotiable requirements—grid determinism, top-right anchoring, WSS subprotocol enforcement, server authority—must be preserved in every feature.
+- Non-negotiable requirements—grid determinism, top-right anchoring, Socket.IO heartbeat/message limits, and server authority—must be preserved in every feature.
 - Deviations must be explicitly approved and noted via code comments referencing the request.
 
 ---
@@ -306,7 +306,7 @@ Progress will be tracked in future commits; this document will evolve with concr
 
 ## Handoff Notes (2025-09-25)
 
-- The realtime hook now resets its Strict Mode lifecycle guard and treats intentional `AbortController` cancellations as benign, so the `/auth/login` bootstrap no longer fails during automated runs and the reconnect overlay clears once the websocket handshake finishes.
+- The realtime hook now resets its Strict Mode lifecycle guard and treats intentional `AbortController` cancellations as benign, so the `/auth/login` bootstrap no longer fails during automated runs and the reconnect overlay clears once the Socket.IO handshake finishes.
 - Latest connectivity screenshot with the overlay dismissed: `browser:/invocations/xjwvubss/artifacts/artifacts/bitby-connected.png`.
 - Immediate follow-ups:
   - Decide whether to demote or remove the `[realtime]` `console.debug` statements before production builds.
@@ -318,6 +318,7 @@ Progress will be tracked in future commits; this document will evolve with concr
 
 - Use GitHub issues to track tasks aligned with Master Spec milestones.
 - Submit pull requests referencing the relevant sections of the spec.
+- Artwork, screenshots, and texture updates **must not** be generated with AI tools; request assets from design if you need new imagery and include explicit placement/size notes.
 - Run the documented tests before opening a PR; attach logs to the PR description.
 - Follow the coding guidelines in `AGENT.md` and comment intent for non-obvious logic (especially around grid math and server authority).
 

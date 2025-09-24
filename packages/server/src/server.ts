@@ -1,45 +1,13 @@
-import Fastify, { type FastifyInstance, type FastifyPluginOptions } from 'fastify';
+import Fastify, { type FastifyInstance } from 'fastify';
 import cors from '@fastify/cors';
-import websocketPlugin from '@fastify/websocket';
-import type { SocketStream } from '@fastify/websocket';
-import type { IncomingMessage, OutgoingHttpHeaders } from 'http';
+import { Server as SocketIOServer } from 'socket.io';
 import type { ReadinessController } from './readiness.js';
 import type { ServerConfig } from './config.js';
 import { handleRealtimeConnection } from './ws/connection.js';
 import { authRoutes } from './api/auth.js';
 import { resolveCorsOrigins } from './config.js';
 
-const SUPPORTED_SUBPROTOCOL = 'bitby.v1';
 const MAX_WS_MESSAGE_BYTES = 64 * 1024;
-
-const parseProtocols = (header: string | string[] | undefined): string[] => {
-  if (!header) {
-    return [];
-  }
-
-  const values = Array.isArray(header) ? header : [header];
-  return values
-    .flatMap((value) => value.split(','))
-    .map((value) => value.trim())
-    .filter((value) => value.length > 0);
-};
-
-type VerifyClientNext = (
-  result: boolean,
-  code?: number,
-  message?: string,
-  headers?: OutgoingHttpHeaders
-) => void;
-
-const enforceSubprotocol = (request: IncomingMessage, next: VerifyClientNext): void => {
-  const protocols = parseProtocols(request.headers['sec-websocket-protocol']);
-  if (!protocols.includes(SUPPORTED_SUBPROTOCOL)) {
-    next(false, 1002, `WebSocket subprotocol ${SUPPORTED_SUBPROTOCOL} required`);
-    return;
-  }
-
-  next(true);
-};
 
 export interface CreateServerOptions {
   config: ServerConfig;
@@ -57,21 +25,10 @@ export const createServer = async ({
     }
   });
 
-  await app.register(websocketPlugin, {
-    options: {
-      maxPayload: MAX_WS_MESSAGE_BYTES,
-      verifyClient: (
-        info: { req: IncomingMessage },
-        next: VerifyClientNext
-      ): void => enforceSubprotocol(info.req, next),
-      handleProtocols: (protocols: Set<string>): string | false =>
-        protocols.has(SUPPORTED_SUBPROTOCOL) ? SUPPORTED_SUBPROTOCOL : false
-    }
-  } satisfies FastifyPluginOptions);
-
   app.decorate('readiness', readiness);
+  const corsOrigins = resolveCorsOrigins(config.CLIENT_ORIGIN);
   await app.register(cors, {
-    origin: resolveCorsOrigins(config.CLIENT_ORIGIN),
+    origin: corsOrigins,
     credentials: true
   });
 
@@ -89,12 +46,28 @@ export const createServer = async ({
     return { status: 'ready' };
   });
 
-  app.get('/ws', { websocket: true }, (connection: SocketStream, request) => {
+  const io = new SocketIOServer(app.server, {
+    path: '/ws',
+    maxHttpBufferSize: MAX_WS_MESSAGE_BYTES,
+    transports: ['websocket'],
+    cors: {
+      origin: corsOrigins,
+      credentials: true
+    }
+  });
+
+  io.on('connection', (socket) => {
     handleRealtimeConnection({
       app,
-      stream: connection,
-      requestId: request.id,
+      socket,
+      requestId: socket.id,
       config
+    });
+  });
+
+  app.addHook('onClose', async () => {
+    await new Promise<void>((resolve) => {
+      io.close(() => resolve());
     });
   });
 

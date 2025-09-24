@@ -27,10 +27,10 @@
    - Client caches locked/noPickup tiles, but server is source-of-truth for **every action** (move, pickup, wear, trade, quest, teleport).
 
 5) **Transport**
-   - **WSS WebSocket** (no Socket.IO) with subprotocol **`bitby.v1`**. Max 64KB/msg. Heartbeats every 15s.
+   - **Socket.IO** (websocket transport only) mounted at `/ws`. Maintain the canonical envelope shape, keep payloads ≤ 64 KB, and continue issuing heartbeats every 15 s.
 
 6) **Blocking Reconnect Overlay**
-   - On connection loss: **block all interactions** with a full-stage overlay until WS reconnect + re-auth + room resync completes.
+   - On connection loss: **block all interactions** with a full-stage overlay until the realtime socket reconnects, re-authenticates, and streams a fresh room snapshot.
 
 7) **Pre‑Rendered 3D → 2D**
    - Rooms, avatars, items are produced from 3D but shipped as **2D sprites** (PNGs/sprite-sheets). Paper‑doll compositing allowed; no runtime 3D.
@@ -39,17 +39,20 @@
 8) **Security First**
    - JWT, CSRF protection for REST, parameterized SQL, upload allow‑list + scanning, progressive rate‑limits (see §8).
 
+9) **Art & Assets**
+   - **Do not** generate imagery with AI tools. All sprites, UI art, and references must remain human-produced; request assets from design with explicit sizing/location requirements when needed.
+
 ---
 
 ## 1) High‑Level System
 
-- **Client (TS)**: Canvas renderer (Pixi/WebGL), WS protocol client, right panel, bottom dock, context menus, optimistic movement.
-- **API/WS (Node TS)**: Auth, catalog, room authority, movement validation, chat, inventory/economy, admin, plugins.
+- **Client (TS)**: Canvas renderer (Pixi/WebGL), Socket.IO realtime client, right panel, bottom dock, context menus, optimistic movement.
+- **API/realtime (Node TS)**: Auth, catalog, room authority, movement validation, chat, inventory/economy, admin, plugins.
 - **DB**: Postgres (primary persistence). **Redis**: presence, pub/sub, fast room state, caches.
 - **CDN**: Immutable assets (sprite sheets, masks) named by **SHA‑256**.
 
 ### Process Topology
-- Stateless API+WS instances behind LB (TLS terminated), no sticky sessions (room state in Redis).
+- Stateless API + realtime instances behind LB (TLS terminated), no sticky sessions (room state in Redis).
 - Worker threads for **plugins** using **isolated‑vm**.
 
 ---
@@ -60,8 +63,8 @@
    - Implement geometric anchor and diamond hit testing.
    - Draw the full 10-row field (10/11 columns by row; vertical containment by `gridH=495`).
 
-2) **WS Skeleton + Auth**
-   - Envelope + `auth/auth:ok` frames, JWT, subprotocol `bitby.v1`, ping/pong.
+2) **Socket.IO Skeleton + Auth**
+   - Envelope + `auth/auth:ok` frames, JWT validation, heartbeat ping/pong.
 
 3) **Movement Loop**
    - Optimistic move → server validate → broadcast; snapback on reject. Backpressure queues.
@@ -203,7 +206,7 @@ Each proto has `weight` (1–10). Sum ≤ maxWeight.
 
 ---
 
-## 7) WebSocket Protocol
+## 7) Socket.IO Realtime Protocol
 
 **Envelope (always)**
 ```json
@@ -241,9 +244,9 @@ Each proto has `weight` (1–10). Sum ≤ maxWeight.
 ```
 
 **Transport rules**
-- Subprotocol **bitby.v1** required, close 1002 if missing.  
-- Server pings every 15s; drop after 2 missed pongs.  
-- **Max 64KB** per message; reject oversize.  
+- Serve the realtime namespace from **Socket.IO `/ws`** using the websocket transport only (no long‑polling fallbacks).
+- Server pings every 15 s; drop after 2 missed pongs.
+- **Max 64 KB** per message; reject oversize.
 - **Backpressure:** per‑conn queues cap at **200 msgs** or **1 MB**. Drop non‑critical first (typing).
 
 ---
@@ -255,7 +258,7 @@ Each proto has `weight` (1–10). Sum ≤ maxWeight.
 - Parameterized SQL exclusively.  
 - Rate limits (per‑IP): `/auth/login` ≤ 5/min; `/catalog` ≤ 30/min; `upload` ≤ 10/min.
 
-**WS per‑user rate limits (progressive penalties)**
+**Realtime per‑user rate limits (progressive penalties)**
 - move ≤ **12/s**, chat ≤ **6/s**, typing ≤ **6/s**, item ≤ **3/s**, join/teleport ≤ **2/min**.  
 - Per‑IP connection cap: **20**.  
 - Penalties: warn → slow mode → temp kick → ban.
@@ -364,16 +367,16 @@ Each proto has `weight` (1–10). Sum ≤ maxWeight.
 - **Region‑aware maintenance windows**; green/blue cutover with health checks:
   - `/healthz` `/readyz` 200  
   - DB pool & schema OK; Redis round‑trip p95 < 50ms  
-  - Synthetic WS auth/move/chat/catalog OK  
+  - Synthetic realtime auth/move/chat/catalog OK
   - CDN canaries OK; metrics/logging OK
 
 ---
 
 ## 16) Observability & Alerts
 
-- Prom metrics for WS, Redis, catalog, movement, items, security, plugins, rooms (see Master Spec).  
-- Alerts (examples): Redis lag {200,500}, WS capacity {85%,92%}, snapbacks/min {30,100}, full snapshots/min {20,60}, CDN 404s, DB deadlocks.  
-- Runbooks: scale out WS, enable coalescing, check catalog publisher, roll back bad asset, increase DB pool, etc.
+- Prom metrics for realtime, Redis, catalog, movement, items, security, plugins, rooms (see Master Spec).
+- Alerts (examples): Redis lag {200,500}, realtime capacity {85%,92%}, snapbacks/min {30,100}, full snapshots/min {20,60}, CDN 404s, DB deadlocks.
+- Runbooks: scale out realtime sockets, enable coalescing, check catalog publisher, roll back bad asset, increase DB pool, etc.
 - Sentry on client/server (build hashes).
 
 ---
@@ -393,7 +396,7 @@ Each proto has `weight` (1–10). Sum ≤ maxWeight.
 ## 18) Testing & Acceptance
 
 **Unit**
-- Grid math (rows, anchoring, hit tests), z‑order sorting, WS envelope validators (JSON Schemas), recolor limits.
+- Grid math (rows, anchoring, hit tests), z‑order sorting, realtime envelope validators (JSON Schemas), recolor limits.
 
 **Integration**
 - Auth→join→move→broadcast; snapback on locked tile; catalog delta apply; pickup gating (`noPickup`).
@@ -414,7 +417,7 @@ Each proto has `weight` (1–10). Sum ≤ maxWeight.
 
 ```
 /packages
-  /client        # TS, Pixi, WS client, UI
+  /client        # TS, Pixi, Socket.IO client, UI
     /src
       canvas/    # grid math, renderer, z-order, bubbles
       ws/        # protocol client, reconnect overlay
@@ -423,7 +426,7 @@ Each proto has `weight` (1–10). Sum ≤ maxWeight.
       assets/    # preload, fallback, density
       theme/     # tokens, components (chrome only)
       types/
-  /server        # Node TS API + WS
+  /server        # Node TS API + Socket.IO
     src/
       api/       # REST: auth, catalog, admin
       ws/        # handlers: auth, move, chat, item, catalog
@@ -448,7 +451,7 @@ Each proto has `weight` (1–10). Sum ≤ maxWeight.
 
 When implementing, **Codex should**:
 - Emit **TypeScript** with strict types; keep pure functions for grid math.
-- Always validate WS payloads against JSON Schemas.
+- Always validate realtime payloads against JSON Schemas.
 - Stamp all server logs with `roomId`, `userId`, `seq`, `roomSeq` where relevant.
 - Comment **intent** for non-obvious logic (especially z‑order, snapback conditions, recolor clamping).
 - Prefer small, testable modules. Provide minimal examples in module READMEs.
@@ -472,17 +475,17 @@ When implementing, **Codex should**:
 - Respect `noPickup` tiles and right‑click rules.
 
 **Don’t**
-- Don’t change the canvas layout/appearance from theme.  
-- Don’t block canvas paint on non-critical asset loads.  
-- Don’t exceed WS message size; don’t skip subprotocol check.
+- Don’t change the canvas layout/appearance from theme.
+- Don’t block canvas paint on non-critical asset loads.
+- Don’t exceed realtime message size; don’t fall back to long-polling or alternate transports.
 
 ---
 
 ## 23) Ready‑to‑Implement Tasks (First Sprint)
 
 1) Client grid renderer with top‑right anchor & diamond hit test; draw cell centers for dev overlay.
-2) WS client with subprotocol, heartbeat, blocking reconnect overlay.
-3) WS server endpoints: `auth`, `move`, `chat`; Redis room pub/sub skeleton.
+2) Socket.IO client with heartbeat + blocking reconnect overlay.
+3) Socket.IO server endpoints: `auth`, `move`, `chat`; Redis room pub/sub skeleton.
 4) Postgres schema & migrations; seed users/room.
 5) Basic right panel and bottom dock (slide-left, tab).
 6) Item click → panel info; pickup rule gating.
@@ -494,7 +497,7 @@ When implementing, **Codex should**:
 ## 24) Progress Snapshot — 2025-09-25
 
 - ✅ Client grid renderer + chrome are live with the spec-mandated blocking reconnect overlay driven by a reusable `useRealtimeConnection` hook.
-- ✅ Fastify WebSocket endpoint now enforces `bitby.v1`, validates HS256 JWTs issued from `/auth/login`, returns a development room snapshot inside `auth:ok`, closes idle sockets after the 30 s heartbeat window, and accepts `move` envelopes with `move:ok` / `move:err` replies plus `room:occupant_moved` broadcasts.
+- ✅ Fastify Socket.IO endpoint now validates HS256 JWTs issued from `/auth/login`, returns a development room snapshot inside `auth:ok`, closes idle sockets after the 30 s heartbeat window, and accepts `move` envelopes with `move:ok` / `move:err` replies plus `room:occupant_moved` broadcasts.
 - ✅ Shared schema package now covers the core envelope plus development room/move payloads so the client and server validate optimistic movement and room snapshots against the same definitions.
 - ✅ Client dev workflow automatically rebuilds `@bitby/schemas` before Vite starts (with a dedicated `pnpm --filter @bitby/schemas dev` watcher) so the workspace no longer crashes on fresh clones when resolving shared envelopes.
 - ✅ React client performs the `/auth/login` flow automatically, surfaces heartbeat-driven reconnect status, renders development avatar sprites, and keeps the stage chrome deterministic while reconciling optimistic moves with authoritative acks.
