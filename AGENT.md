@@ -4,6 +4,7 @@
 **Purpose:** Implement Bitby according to the Master Spec v3.7 (+ updates).  
 **Contract:** Follow the rules in this file **exactly** unless a human explicitly overrides. When trade-offs arise, preserve **grid determinism** and **server authority** above all else.
 **Maintenance:** Update this AGENT.md whenever project requirements change so the execution guidance never drifts.
+**Platform:** All local development, tooling, and deployment scripts target Debian/Ubuntu Linux. Windows-specific workflows are unsupported.
 
 ---
 
