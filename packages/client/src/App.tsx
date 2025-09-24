@@ -4,6 +4,7 @@ import GridCanvas from './canvas/GridCanvas';
 import './styles.css';
 import { useRealtimeConnection } from './ws/useRealtimeConnection';
 import type { GridTile } from './canvas/types';
+import { createTileKey } from './canvas/geometry';
 
 const dockButtons = [
   'Rooms',
@@ -106,6 +107,7 @@ const App = (): JSX.Element => {
   const [showBackToTop, setShowBackToTop] = useState(false);
   const [isGridVisible, setIsGridVisible] = useState(true);
   const [showHoverWhenGridHidden, setShowHoverWhenGridHidden] = useState(true);
+  const [areMoveAnimationsEnabled, setAreMoveAnimationsEnabled] = useState(true);
   const chatMessagesRef = useRef<HTMLOListElement | null>(null);
   const connection = useRealtimeConnection();
 
@@ -180,15 +182,41 @@ const App = (): JSX.Element => {
     : 'Show system messages';
   const systemToggleTooltip = showSystemMessages ? 'Hide System Logs' : 'Show System Logs';
 
+  const lockedTileKeys = useMemo(() => {
+    const keys = new Set<string>();
+    for (const flag of connection.tileFlags) {
+      if (flag.locked) {
+        keys.add(createTileKey(flag.x, flag.y));
+      }
+    }
+    return keys;
+  }, [connection.tileFlags]);
+
+  const occupiedTileKeys = useMemo(() => {
+    const keys = new Set<string>();
+    for (const occupant of connection.occupants) {
+      keys.add(createTileKey(occupant.position.x, occupant.position.y));
+    }
+    return keys;
+  }, [connection.occupants]);
+
   const handleTileClick = useCallback(
     (tile: GridTile): void => {
       if (connection.status !== 'connected') {
         return;
       }
 
+      if (lockedTileKeys.has(tile.key)) {
+        return;
+      }
+
+      if (occupiedTileKeys.has(tile.key)) {
+        return;
+      }
+
       connection.sendMove(tile.gridX, tile.gridY);
     },
-    [connection.sendMove, connection.status],
+    [connection.sendMove, connection.status, lockedTileKeys, occupiedTileKeys],
   );
 
   const overlayCopy = useMemo(() => {
@@ -259,6 +287,15 @@ const App = (): JSX.Element => {
         pressed: showHoverWhenGridHidden,
       },
       {
+        label: areMoveAnimationsEnabled
+          ? 'Disable move animations'
+          : 'Enable move animations',
+        onClick: () => {
+          setAreMoveAnimationsEnabled((prev) => !prev);
+        },
+        pressed: !areMoveAnimationsEnabled,
+      },
+      {
         label: 'Latency trace',
         onClick: () => {
           if (import.meta.env.DEV) {
@@ -267,7 +304,7 @@ const App = (): JSX.Element => {
         },
       },
     ],
-    [isGridVisible, showHoverWhenGridHidden],
+    [areMoveAnimationsEnabled, isGridVisible, showHoverWhenGridHidden],
   );
 
   return (
@@ -353,6 +390,7 @@ const App = (): JSX.Element => {
               localOccupantId={connection.user?.id ?? null}
               showGrid={isGridVisible}
               showHoverWhenGridHidden={showHoverWhenGridHidden}
+              moveAnimationsEnabled={areMoveAnimationsEnabled}
             />
           </main>
           <nav

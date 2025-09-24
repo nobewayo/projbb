@@ -28,6 +28,7 @@ type GridCanvasProps = {
   localOccupantId?: string | null;
   showGrid: boolean;
   showHoverWhenGridHidden: boolean;
+  moveAnimationsEnabled: boolean;
 };
 
 type PointerPosition = {
@@ -68,12 +69,13 @@ const noPickupFill = 'rgba(255, 200, 99, 0.2)';
 const centerDot = '#5ec9ff';
 const hoveredCenterDot = '#e8f6ff';
 const usernameFill = 'rgba(20, 35, 54, 0.55)';
-const hiddenHoverFill = 'rgba(126, 178, 229, 0.22)';
+const hiddenHoverFill = 'rgba(255, 255, 255, 0.06)';
+const hiddenHoverStroke = 'rgba(255, 255, 255, 0.18)';
 
 const AVATAR_SOURCES: string[] = [avatar1Url, avatar2Url];
 const MOVEMENT_DURATION_MS = 220;
 const FOOT_OFFSET = 6;
-const USERNAME_OFFSET = 8;
+const USERNAME_OFFSET = 2;
 const FALLBACK_AVATAR_WIDTH = 48;
 const FALLBACK_AVATAR_HEIGHT = 90;
 
@@ -178,8 +180,8 @@ const drawHiddenHoverTile = (
   context.fillStyle = hiddenHoverFill;
   context.fill();
   traceDiamond(context, tile);
-  context.lineWidth = 2;
-  context.strokeStyle = hoveredStroke;
+  context.lineWidth = 1;
+  context.strokeStyle = hiddenHoverStroke;
   context.stroke();
   context.restore();
 };
@@ -233,11 +235,13 @@ const drawOccupant = (
 const updateSpritePositions = (
   sprites: Map<string, OccupantRenderState>,
   now: number,
+  animationsEnabled: boolean,
 ): void => {
   for (const sprite of sprites.values()) {
-    if (sprite.duration <= 0) {
+    if (!animationsEnabled || sprite.duration <= 0) {
       sprite.currentX = sprite.targetX;
       sprite.currentY = sprite.targetY;
+      sprite.duration = 0;
       continue;
     }
 
@@ -283,6 +287,7 @@ const GridCanvas = ({
   localOccupantId = null,
   showGrid,
   showHoverWhenGridHidden,
+  moveAnimationsEnabled,
 }: GridCanvasProps): JSX.Element => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const grid = useMemo<GridDefinition>(() => buildGridDefinition(), []);
@@ -295,6 +300,7 @@ const GridCanvas = ({
   const animationFrameRef = useRef<number | null>(null);
   const showGridRef = useRef(showGrid);
   const showHoverWhenGridHiddenRef = useRef(showHoverWhenGridHidden);
+  const moveAnimationsEnabledRef = useRef(moveAnimationsEnabled);
 
   useEffect(() => {
     assetsRef.current = assets;
@@ -345,6 +351,10 @@ const GridCanvas = ({
   useEffect(() => {
     showHoverWhenGridHiddenRef.current = showHoverWhenGridHidden;
   }, [showHoverWhenGridHidden]);
+
+  useEffect(() => {
+    moveAnimationsEnabledRef.current = moveAnimationsEnabled;
+  }, [moveAnimationsEnabled]);
 
 
   const lockedTileKeys = useMemo(() => {
@@ -458,10 +468,13 @@ const GridCanvas = ({
         existing.startTime = now;
         existing.targetX = baseX;
         existing.targetY = baseY;
-        existing.duration = MOVEMENT_DURATION_MS;
-      } else if (existing.duration <= 0) {
+        existing.duration = moveAnimationsEnabledRef.current
+          ? MOVEMENT_DURATION_MS
+          : 0;
+      } else if (!moveAnimationsEnabledRef.current || existing.duration <= 0) {
         existing.currentX = baseX;
         existing.currentY = baseY;
+        existing.duration = 0;
       }
     }
   }, [occupantTargets, localOccupantId]);
@@ -486,7 +499,11 @@ const GridCanvas = ({
       }
 
       try {
-        updateSpritePositions(occupantSpritesRef.current, timestamp);
+        updateSpritePositions(
+          occupantSpritesRef.current,
+          timestamp,
+          moveAnimationsEnabledRef.current,
+        );
 
         drawBackground(context, assetsRef.current);
 
