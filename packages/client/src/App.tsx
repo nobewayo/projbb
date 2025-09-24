@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import GridCanvas from './canvas/GridCanvas';
 import './styles.css';
 import { useRealtimeConnection } from './ws/useRealtimeConnection';
+import type { GridTile } from './canvas/types';
 
 const dockButtons = [
   'Rooms',
@@ -163,7 +164,7 @@ const App = (): JSX.Element => {
     };
   }, [isChatVisible]);
 
-  const username = 'TestUser';
+  const username = connection.user?.username ?? 'TestUser';
   const coinBalance = 1280;
   const level = 12;
   const newsTicker = useMemo(
@@ -182,6 +183,17 @@ const App = (): JSX.Element => {
     ? 'Hide system messages'
     : 'Show system messages';
   const systemToggleTooltip = showSystemMessages ? 'Hide System Logs' : 'Show System Logs';
+
+  const handleTileClick = useCallback(
+    (tile: GridTile): void => {
+      if (connection.status !== 'connected') {
+        return;
+      }
+
+      connection.sendMove(tile.gridX, tile.gridY);
+    },
+    [connection.sendMove, connection.status],
+  );
 
   const overlayCopy = useMemo(() => {
     switch (connection.status) {
@@ -299,7 +311,13 @@ const App = (): JSX.Element => {
         </header>
         <div className="stage__content">
           <main className="canvas-area" aria-label="Bitby room canvas">
-            <GridCanvas />
+            <GridCanvas
+              occupants={connection.occupants}
+              tileFlags={connection.tileFlags}
+              pendingMoveTarget={connection.pendingMoveTarget}
+              onTileClick={handleTileClick}
+              localOccupantId={connection.user?.id ?? null}
+            />
           </main>
           <nav
             className="primary-menu"
