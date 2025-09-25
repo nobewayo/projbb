@@ -29,6 +29,19 @@ export type CanvasItem = {
   texture: string;
 };
 
+export type CanvasTypingIndicator = {
+  userId: string;
+  preview: string | null;
+  expiresAt: number;
+};
+
+export type CanvasChatBubble = {
+  userId: string;
+  messageId: string;
+  body: string;
+  expiresAt: number;
+};
+
 type GridCanvasProps = {
   occupants: CanvasOccupant[];
   tileFlags: TileFlag[];
@@ -59,6 +72,8 @@ type GridCanvasProps = {
   showGrid: boolean;
   showHoverWhenGridHidden: boolean;
   moveAnimationsEnabled: boolean;
+  typingIndicators: CanvasTypingIndicator[];
+  chatBubbles: CanvasChatBubble[];
 };
 
 type PointerPosition = {
@@ -128,6 +143,21 @@ const FALLBACK_AVATAR_HEIGHT = 90;
 const FALLBACK_ITEM_WIDTH = 96;
 const FALLBACK_ITEM_HEIGHT = 96;
 const ITEM_HIT_PADDING = 3;
+const BUBBLE_MAX_WIDTH = 220;
+const BUBBLE_PADDING_X = 12;
+const BUBBLE_PADDING_Y = 8;
+const BUBBLE_LINE_HEIGHT = 18;
+const BUBBLE_CORNER_RADIUS = 14;
+const BUBBLE_TAIL_HEIGHT = 12;
+const BUBBLE_TAIL_WIDTH = 20;
+const CHAT_BUBBLE_OFFSET = 82;
+const TYPING_BUBBLE_OFFSET = 90;
+const CHAT_BUBBLE_FILL = 'rgba(255, 255, 255, 0.96)';
+const TYPING_BUBBLE_FILL = 'rgba(255, 255, 255, 0.9)';
+const BUBBLE_STROKE = 'rgba(22, 52, 88, 0.14)';
+const CHAT_TEXT_COLOR = '#152437';
+const TYPING_TEXT_COLOR = '#243b5a';
+const BUBBLE_MARGIN = 12;
 
 const loadImage = async (source: string): Promise<HTMLImageElement> =>
   new Promise((resolve, reject) => {
@@ -251,6 +281,196 @@ const drawUsername = (
   context.restore();
 };
 
+const splitLongWord = (
+  context: CanvasRenderingContext2D,
+  word: string,
+  maxWidth: number,
+): string[] => {
+  const segments: string[] = [];
+  let buffer = '';
+  for (const char of word) {
+    const candidate = buffer + char;
+    if (context.measureText(candidate).width > maxWidth && buffer.length > 0) {
+      segments.push(buffer);
+      buffer = char;
+    } else {
+      buffer = candidate;
+    }
+  }
+
+  if (buffer.length > 0) {
+    segments.push(buffer);
+  }
+
+  return segments;
+};
+
+const wrapBubbleLines = (
+  context: CanvasRenderingContext2D,
+  text: string,
+  maxWidth: number,
+): string[] => {
+  if (!text || text.trim().length === 0) {
+    return ['…'];
+  }
+
+  const words = text.split(/\s+/).filter((word) => word.length > 0);
+  if (words.length === 0) {
+    return ['…'];
+  }
+
+  const lines: string[] = [];
+  let currentLine = '';
+
+  const pushLine = (line: string) => {
+    if (line.length > 0) {
+      lines.push(line);
+    }
+  };
+
+  for (const word of words) {
+    const testLine = currentLine ? `${currentLine} ${word}` : word;
+    if (context.measureText(testLine).width <= maxWidth) {
+      currentLine = testLine;
+      continue;
+    }
+
+    if (context.measureText(word).width > maxWidth) {
+      const segments = splitLongWord(context, word, maxWidth);
+      if (currentLine.length > 0) {
+        pushLine(currentLine);
+        currentLine = '';
+      }
+      for (let index = 0; index < segments.length; index += 1) {
+        const segment = segments[index];
+        if (context.measureText(segment).width <= maxWidth) {
+          if (segment.length === 0) {
+            continue;
+          }
+          if (index === segments.length - 1) {
+            currentLine = segment;
+          } else {
+            pushLine(segment);
+          }
+        }
+      }
+      continue;
+    }
+
+    pushLine(currentLine);
+    currentLine = word;
+  }
+
+  if (currentLine.length > 0) {
+    pushLine(currentLine);
+  }
+
+  return lines.length > 0 ? lines : ['…'];
+};
+
+const drawSpeechBubble = (
+  context: CanvasRenderingContext2D,
+  sprite: OccupantRenderState,
+  options: {
+    text: string;
+    fill: string;
+    textColor: string;
+    offset: number;
+  },
+): void => {
+  context.save();
+  context.font = '14px "Inter", "Segoe UI", sans-serif';
+  context.textAlign = 'center';
+  context.textBaseline = 'middle';
+
+  const maxLineWidth = BUBBLE_MAX_WIDTH - BUBBLE_PADDING_X * 2;
+  const lines = wrapBubbleLines(context, options.text, maxLineWidth);
+  let measuredWidth = 0;
+  for (const line of lines) {
+    measuredWidth = Math.max(measuredWidth, context.measureText(line).width);
+  }
+
+  const bubbleWidth = Math.min(BUBBLE_MAX_WIDTH, measuredWidth + BUBBLE_PADDING_X * 2);
+  const bubbleHeight = lines.length * BUBBLE_LINE_HEIGHT + BUBBLE_PADDING_Y * 2;
+  const tailBaseY = sprite.currentY - options.offset;
+  const bodyBottom = tailBaseY - BUBBLE_TAIL_HEIGHT;
+  let left = sprite.currentX - bubbleWidth / 2;
+  left = Math.max(BUBBLE_MARGIN, Math.min(left, CANVAS_WIDTH - BUBBLE_MARGIN - bubbleWidth));
+  const right = left + bubbleWidth;
+  const top = bodyBottom - bubbleHeight;
+  const tailAnchorX = Math.max(
+    left + BUBBLE_CORNER_RADIUS,
+    Math.min(right - BUBBLE_CORNER_RADIUS, sprite.currentX),
+  );
+  const tailLeft = tailAnchorX - BUBBLE_TAIL_WIDTH / 2;
+  const tailRight = tailAnchorX + BUBBLE_TAIL_WIDTH / 2;
+
+  context.beginPath();
+  context.moveTo(left + BUBBLE_CORNER_RADIUS, top);
+  context.lineTo(right - BUBBLE_CORNER_RADIUS, top);
+  context.quadraticCurveTo(right, top, right, top + BUBBLE_CORNER_RADIUS);
+  context.lineTo(right, bodyBottom - BUBBLE_CORNER_RADIUS);
+  context.quadraticCurveTo(right, bodyBottom, right - BUBBLE_CORNER_RADIUS, bodyBottom);
+  context.lineTo(tailRight, bodyBottom);
+  context.lineTo(sprite.currentX, tailBaseY);
+  context.lineTo(tailLeft, bodyBottom);
+  context.lineTo(left + BUBBLE_CORNER_RADIUS, bodyBottom);
+  context.quadraticCurveTo(left, bodyBottom, left, bodyBottom - BUBBLE_CORNER_RADIUS);
+  context.lineTo(left, top + BUBBLE_CORNER_RADIUS);
+  context.quadraticCurveTo(left, top, left + BUBBLE_CORNER_RADIUS, top);
+  context.closePath();
+
+  context.fillStyle = options.fill;
+  context.shadowColor = 'rgba(20, 32, 54, 0.25)';
+  context.shadowBlur = 14;
+  context.shadowOffsetY = 4;
+  context.fill();
+
+  context.shadowBlur = 0;
+  context.shadowOffsetY = 0;
+  context.lineWidth = 1;
+  context.strokeStyle = BUBBLE_STROKE;
+  context.stroke();
+
+  context.fillStyle = options.textColor;
+  const firstLineY = top + BUBBLE_PADDING_Y + BUBBLE_LINE_HEIGHT / 2;
+  const textCenterX = (left + right) / 2;
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+    const textY = firstLineY + index * BUBBLE_LINE_HEIGHT;
+    context.fillText(line, textCenterX, textY);
+  }
+
+  context.restore();
+};
+
+const drawTypingBubble = (
+  context: CanvasRenderingContext2D,
+  sprite: OccupantRenderState,
+  indicator: CanvasTypingIndicator,
+): void => {
+  const text = indicator.preview && indicator.preview.trim().length > 0 ? indicator.preview : '…';
+  drawSpeechBubble(context, sprite, {
+    text,
+    fill: TYPING_BUBBLE_FILL,
+    textColor: TYPING_TEXT_COLOR,
+    offset: TYPING_BUBBLE_OFFSET,
+  });
+};
+
+const drawChatBubbleForSprite = (
+  context: CanvasRenderingContext2D,
+  sprite: OccupantRenderState,
+  bubble: CanvasChatBubble,
+): void => {
+  drawSpeechBubble(context, sprite, {
+    text: bubble.body,
+    fill: CHAT_BUBBLE_FILL,
+    textColor: CHAT_TEXT_COLOR,
+    offset: CHAT_BUBBLE_OFFSET,
+  });
+};
+
 const drawOccupant = (
   context: CanvasRenderingContext2D,
   sprite: OccupantRenderState,
@@ -343,6 +563,8 @@ const GridCanvas = ({
   showGrid,
   showHoverWhenGridHidden,
   moveAnimationsEnabled,
+  typingIndicators,
+  chatBubbles,
 }: GridCanvasProps): JSX.Element => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const grid = useMemo<GridDefinition>(() => buildGridDefinition(), []);
@@ -362,6 +584,8 @@ const GridCanvas = ({
   const occupantBoundsRef = useRef<Map<string, OccupantBounds>>(new Map());
   const occupantDrawOrderRef = useRef<string[]>([]);
   const occupantTargetsRef = useRef<Map<string, { occupant: CanvasOccupant; tile: GridTile }>>(new Map());
+  const typingIndicatorsRef = useRef<Map<string, CanvasTypingIndicator>>(new Map());
+  const chatBubblesRef = useRef<Map<string, CanvasChatBubble>>(new Map());
   const occupantTargets = useMemo(() => {
     const entries = new Map<string, { occupant: CanvasOccupant; tile: GridTile }>();
     for (const occupant of occupants) {
@@ -385,6 +609,16 @@ const GridCanvas = ({
   useEffect(() => {
     occupantTargetsRef.current = occupantTargets;
   }, [occupantTargets]);
+
+  useEffect(() => {
+    typingIndicatorsRef.current = new Map(
+      typingIndicators.map((indicator) => [indicator.userId, indicator]),
+    );
+  }, [typingIndicators]);
+
+  useEffect(() => {
+    chatBubblesRef.current = new Map(chatBubbles.map((bubble) => [bubble.userId, bubble]));
+  }, [chatBubbles]);
 
   useEffect(() => {
     let isMounted = true;
@@ -729,6 +963,16 @@ const GridCanvas = ({
           const drawY = Math.round(sprite.currentY - avatarHeight + FOOT_OFFSET);
 
           drawOccupant(context, sprite, assetsRef.current);
+
+          const typingIndicator = typingIndicatorsRef.current.get(sprite.id);
+          if (typingIndicator) {
+            drawTypingBubble(context, sprite, typingIndicator);
+          } else {
+            const bubble = chatBubblesRef.current.get(sprite.id);
+            if (bubble) {
+              drawChatBubbleForSprite(context, sprite, bubble);
+            }
+          }
 
           const occupantTarget = occupantTargetsRef.current.get(sprite.id);
           if (occupantTarget) {

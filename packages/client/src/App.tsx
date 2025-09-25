@@ -8,7 +8,7 @@ import {
   useRef,
   useState,
 } from 'react';
-import type { CSSProperties, FormEvent } from 'react';
+import type { CSSProperties } from 'react';
 import GridCanvas, { type CanvasItem, type CanvasOccupant } from './canvas/GridCanvas';
 import './styles.css';
 import { useRealtimeConnection } from './ws/useRealtimeConnection';
@@ -447,11 +447,131 @@ const App = (): JSX.Element => {
   const [showHoverWhenGridHidden, setShowHoverWhenGridHidden] = useState(true);
   const [areMoveAnimationsEnabled, setAreMoveAnimationsEnabled] = useState(true);
   const [chatDraft, setChatDraft] = useState('');
+  const chatDraftRef = useRef(chatDraft);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [contextMenuState, setContextMenuState] = useState<ContextMenuState | null>(null);
   const chatMessagesRef = useRef<HTMLOListElement | null>(null);
   const contextMenuRef = useRef<HTMLDivElement | null>(null);
   const connection = useRealtimeConnection();
+  const { sendChat, updateTypingPreview, clearTypingPreview } = connection;
+
+  useEffect(() => {
+    chatDraftRef.current = chatDraft;
+  }, [chatDraft]);
+
+  useEffect(() => {
+    const isEditableElement = (element: Element | null): boolean => {
+      if (!element) {
+        return false;
+      }
+
+      if (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement) {
+        return true;
+      }
+
+      const htmlElement = element as HTMLElement;
+      return htmlElement.isContentEditable;
+    };
+
+    const commitDraft = (next: string) => {
+      chatDraftRef.current = next;
+      setChatDraft(next);
+      if (next.length === 0) {
+        clearTypingPreview();
+      } else {
+        updateTypingPreview(next);
+      }
+    };
+
+    const handleGlobalKeyDown = (event: KeyboardEvent): void => {
+      if (event.defaultPrevented) {
+        return;
+      }
+
+      if (event.metaKey || event.ctrlKey || event.altKey) {
+        return;
+      }
+
+      const active = document.activeElement;
+      if (isEditableElement(active)) {
+        return;
+      }
+
+      if (event.key === 'Enter') {
+        if (chatDraftRef.current.trim().length === 0) {
+          return;
+        }
+
+        event.preventDefault();
+        const sent = sendChat(chatDraftRef.current);
+        if (sent) {
+          commitDraft('');
+        }
+        return;
+      }
+
+      if (event.key === 'Escape') {
+        if (chatDraftRef.current.length === 0) {
+          return;
+        }
+
+        event.preventDefault();
+        commitDraft('');
+        return;
+      }
+
+      if (event.key === 'Backspace') {
+        if (chatDraftRef.current.length === 0) {
+          return;
+        }
+
+        event.preventDefault();
+        commitDraft(chatDraftRef.current.slice(0, -1));
+        return;
+      }
+
+      if (event.key === ' ') {
+        event.preventDefault();
+        commitDraft(`${chatDraftRef.current} `);
+        return;
+      }
+
+      if (event.key.length !== 1) {
+        return;
+      }
+
+      if (/^\s$/.test(event.key)) {
+        event.preventDefault();
+        commitDraft(`${chatDraftRef.current} `);
+        return;
+      }
+
+      event.preventDefault();
+      commitDraft(`${chatDraftRef.current}${event.key}`);
+    };
+
+    window.addEventListener('keydown', handleGlobalKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleGlobalKeyDown);
+    };
+  }, [clearTypingPreview, sendChat, updateTypingPreview]);
+  useEffect(() => {
+    const preferences = connection.chatPreferences;
+    if (
+      preferences &&
+      typeof preferences.showSystemMessages === 'boolean' &&
+      preferences.showSystemMessages !== showSystemMessages
+    ) {
+      setShowSystemMessages(preferences.showSystemMessages);
+    }
+  }, [connection.chatPreferences, showSystemMessages]);
+  const handleSystemToggle = useCallback(() => {
+    setShowSystemMessages((previous) => {
+      const next = !previous;
+      connection.updateShowSystemMessages(next);
+      return next;
+    });
+  }, [connection]);
   const closeContextMenu = useCallback(() => {
     setContextMenuState(null);
   }, []);
@@ -597,22 +717,6 @@ const App = (): JSX.Element => {
     ? 'Hide system messages'
     : 'Show system messages';
   const systemToggleTooltip = showSystemMessages ? 'Hide System Logs' : 'Show System Logs';
-
-  const handleChatSubmit = useCallback(
-    (event: FormEvent<HTMLFormElement>) => {
-      event.preventDefault();
-      const trimmed = chatDraft.trim();
-      if (trimmed.length === 0) {
-        return;
-      }
-
-      const sent = connection.sendChat(trimmed);
-      if (sent) {
-        setChatDraft('');
-      }
-    },
-    [chatDraft, connection],
-  );
 
   const lockedTileKeys = useMemo(() => {
     const keys = new Set<string>();
@@ -1197,6 +1301,8 @@ const App = (): JSX.Element => {
               showGrid={isGridVisible}
               showHoverWhenGridHidden={showHoverWhenGridHidden}
               moveAnimationsEnabled={areMoveAnimationsEnabled}
+              typingIndicators={connection.typingIndicators}
+              chatBubbles={connection.chatBubbles}
             />
           </main>
           <nav
@@ -1302,7 +1408,7 @@ const App = (): JSX.Element => {
                       ? 'chat-drawer__system-toggle has-tooltip'
                       : 'chat-drawer__system-toggle chat-drawer__system-toggle--muted has-tooltip'
                   }
-                  onClick={() => setShowSystemMessages((prev) => !prev)}
+                  onClick={handleSystemToggle}
                   aria-pressed={showSystemMessages}
                   aria-label={systemToggleLabel}
                   data-tooltip={systemToggleTooltip}
@@ -1348,33 +1454,6 @@ const App = (): JSX.Element => {
                   </button>
                 ) : null}
               </div>
-              <form
-                className="chat-drawer__composer"
-                onSubmit={handleChatSubmit}
-                aria-label="Send chat message"
-              >
-                <label htmlFor="chat-drawer-input" className="chat-drawer__composer-label">
-                  <span className="sr-only">Chat message</span>
-                </label>
-                <input
-                  id="chat-drawer-input"
-                  type="text"
-                  value={chatDraft}
-                  onChange={(event) => setChatDraft(event.target.value)}
-                  placeholder="Type a message…"
-                  autoComplete="off"
-                  disabled={connection.status !== 'connected'}
-                />
-                <button
-                  type="submit"
-                  className="chat-drawer__composer-send"
-                  disabled={
-                    connection.status !== 'connected' || chatDraft.trim().length === 0
-                  }
-                >
-                  Send
-                </button>
-              </form>
             </div>
           </div>
         </aside>

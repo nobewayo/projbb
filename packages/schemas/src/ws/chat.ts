@@ -2,11 +2,28 @@ import { z } from 'zod';
 import { buildEnvelopeSchema } from './envelope.js';
 
 export const chatSendRequestDataSchema = z.object({
-  body: z.string().min(1, 'body is required').max(500, 'body must be 500 characters or fewer'),
+  body: z
+    .string()
+    .min(1, 'body is required')
+    .max(500, 'body must be 500 characters or fewer'),
   idempotencyKey: z.string().min(1).max(64).optional(),
 });
 
-export const chatSendRequestEnvelopeSchema = buildEnvelopeSchema(chatSendRequestDataSchema);
+export const chatSendRequestEnvelopeSchema = buildEnvelopeSchema(
+  chatSendRequestDataSchema,
+);
+
+export const chatTypingUpdateDataSchema = z.object({
+  preview: z
+    .string()
+    .max(120, 'preview must be 120 characters or fewer')
+    .optional(),
+  isTyping: z.boolean(),
+});
+
+export const chatTypingUpdateEnvelopeSchema = buildEnvelopeSchema(
+  chatTypingUpdateDataSchema,
+);
 
 export const chatMessageBroadcastSchema = z.object({
   id: z.string().min(1, 'message id required'),
@@ -20,6 +37,30 @@ export const chatMessageBroadcastSchema = z.object({
 
 export const chatMessageBroadcastEnvelopeSchema = buildEnvelopeSchema(
   chatMessageBroadcastSchema,
+);
+
+export const chatTypingBroadcastSchema = z.object({
+  userId: z.string().min(1, 'userId required'),
+  isTyping: z.boolean(),
+  preview: z
+    .string()
+    .max(120, 'preview must be 120 characters or fewer')
+    .optional(),
+  expiresAt: z.string().datetime().optional(),
+});
+
+export const chatTypingBroadcastEnvelopeSchema = buildEnvelopeSchema(
+  chatTypingBroadcastSchema,
+);
+
+export const chatPreferencesSchema = z.object({
+  showSystemMessages: z.boolean(),
+});
+
+export const chatPreferenceUpdateDataSchema = chatPreferencesSchema;
+
+export const chatPreferenceUpdateEnvelopeSchema = buildEnvelopeSchema(
+  chatPreferenceUpdateDataSchema,
 );
 
 export const chatSendRequestJsonSchema = {
@@ -62,3 +103,6 @@ export const chatMessageBroadcastJsonSchema = {
 
 export type ChatSendRequest = z.infer<typeof chatSendRequestDataSchema>;
 export type ChatMessageBroadcast = z.infer<typeof chatMessageBroadcastSchema>;
+export type ChatTypingUpdate = z.infer<typeof chatTypingUpdateDataSchema>;
+export type ChatTypingBroadcast = z.infer<typeof chatTypingBroadcastSchema>;
+export type ChatPreferences = z.infer<typeof chatPreferencesSchema>;

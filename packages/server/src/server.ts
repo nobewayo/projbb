@@ -15,6 +15,7 @@ import { createItemStore } from './db/items.js';
 import { createRoomPubSub } from './redis/pubsub.js';
 import { createMetricsBundle } from './metrics/registry.js';
 import { createRealtimeServer } from './ws/connection.js';
+import { createPreferenceStore } from './db/preferences.js';
 
 const MAX_WS_MESSAGE_BYTES = 64 * 1024;
 
@@ -48,6 +49,7 @@ export const createServer = async ({
     logger: app.log.child({ scope: 'redis', instanceId }),
     instanceId,
   });
+  const preferenceStore = createPreferenceStore(pool);
   const realtime = await createRealtimeServer({
     config,
     roomStore,
@@ -55,6 +57,7 @@ export const createServer = async ({
     itemStore,
     pubsub,
     metrics,
+    preferenceStore,
   });
 
   app.decorate('readiness', readiness);

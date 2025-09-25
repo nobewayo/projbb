@@ -191,6 +191,18 @@ const MIGRATIONS: Migration[] = [
       ),
     ],
   },
+  {
+    id: '0005_chat_preferences',
+    statements: [
+      `CREATE TABLE IF NOT EXISTS user_chat_preference (
+        user_id uuid PRIMARY KEY REFERENCES app_user(id) ON DELETE CASCADE,
+        show_system_messages boolean NOT NULL DEFAULT true,
+        updated_at timestamptz NOT NULL DEFAULT now()
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_user_chat_preference_updated_at
+         ON user_chat_preference(updated_at)`
+    ],
+  },
 ];
 
 const ensureMigrationTable = async (pool: Pool): Promise<void> => {
