@@ -1,6 +1,15 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import type { CSSProperties, FormEvent } from 'react';
-import GridCanvas, { type CanvasItem } from './canvas/GridCanvas';
+import GridCanvas, { type CanvasItem, type CanvasOccupant } from './canvas/GridCanvas';
 import './styles.css';
 import { useRealtimeConnection } from './ws/useRealtimeConnection';
 import type { GridTile } from './canvas/types';
@@ -18,6 +27,13 @@ const dockButtons = [
   'Admin',
 ];
 
+const ITEM_TEXTURES: Record<string, string> = {
+  plant: plantTexture,
+  couch: couchTexture,
+};
+
+const DEFAULT_ITEM_TEXTURE = plantTexture;
+
 type ChatMessage = {
   id: string;
   actor: string;
@@ -25,6 +41,319 @@ type ChatMessage = {
   time: string;
   isSystem?: boolean;
 };
+
+type ContextMenuPosition = {
+  x: number;
+  y: number;
+};
+
+type TileContextMenuState = {
+  type: 'tile';
+  tile: GridTile;
+  items: CanvasItem[];
+  focusedItemId: string | null;
+  position: ContextMenuPosition;
+};
+
+type OccupantContextMenuState = {
+  type: 'occupant';
+  occupant: CanvasOccupant;
+  tile: GridTile;
+  position: ContextMenuPosition;
+};
+
+type ContextMenuState = TileContextMenuState | OccupantContextMenuState;
+
+type PickupAvailability = {
+  canPickup: boolean;
+  message: string;
+};
+
+type OccupantMenuAction = 'profile' | 'trade' | 'mute' | 'report';
+
+interface ActiveContextMenuProps {
+  state: ContextMenuState;
+  onClose: () => void;
+  onSelectItemInfo: (item: CanvasItem) => void;
+  onSelectItemPickup: (item: CanvasItem) => void;
+  getPickupAvailability: (item: CanvasItem) => PickupAvailability;
+  onSelectOccupantAction: (action: OccupantMenuAction, occupant: CanvasOccupant) => void;
+  localOccupantId: string | null;
+}
+
+const FOCUSABLE_SELECTOR = 'button:not([disabled])';
+const MENU_MARGIN = 12;
+
+const ActiveContextMenu = forwardRef<HTMLDivElement | null, ActiveContextMenuProps>(
+  (
+    {
+      state,
+      onClose,
+      onSelectItemInfo,
+      onSelectItemPickup,
+      getPickupAvailability,
+      onSelectOccupantAction,
+      localOccupantId,
+    },
+    ref,
+  ) => {
+    const menuRef = useRef<HTMLDivElement | null>(null);
+
+    useImperativeHandle<HTMLDivElement | null, HTMLDivElement | null>(
+      ref,
+      () => menuRef.current,
+    );
+
+    useLayoutEffect(() => {
+      const menu = menuRef.current;
+      if (!menu) {
+        return;
+      }
+
+      menu.style.opacity = '0';
+      menu.style.left = `${state.position.x}px`;
+      menu.style.top = `${state.position.y}px`;
+
+      const adjustPosition = (): void => {
+        const rect = menu.getBoundingClientRect();
+        let left = state.position.x;
+        let top = state.position.y;
+
+        if (left + rect.width + MENU_MARGIN > window.innerWidth) {
+          left = Math.max(MENU_MARGIN, window.innerWidth - rect.width - MENU_MARGIN);
+        } else {
+          left = Math.max(MENU_MARGIN, left);
+        }
+
+        if (top + rect.height + MENU_MARGIN > window.innerHeight) {
+          top = Math.max(MENU_MARGIN, window.innerHeight - rect.height - MENU_MARGIN);
+        } else {
+          top = Math.max(MENU_MARGIN, top);
+        }
+
+        menu.style.left = `${left}px`;
+        menu.style.top = `${top}px`;
+        menu.style.opacity = '1';
+      };
+
+      const frame = requestAnimationFrame(adjustPosition);
+      return () => {
+        cancelAnimationFrame(frame);
+      };
+    }, [state]);
+
+    useEffect(() => {
+      const menu = menuRef.current;
+      if (!menu) {
+        return;
+      }
+
+      const firstButton = menu.querySelector<HTMLButtonElement>(FOCUSABLE_SELECTOR);
+      if (firstButton) {
+        firstButton.focus();
+      } else {
+        menu.focus();
+      }
+    }, [state]);
+
+    const focusByOffset = useCallback((offset: number) => {
+      const menu = menuRef.current;
+      if (!menu) {
+        return;
+      }
+      const elements = Array.from(
+        menu.querySelectorAll<HTMLButtonElement>(FOCUSABLE_SELECTOR),
+      );
+      if (elements.length === 0) {
+        return;
+      }
+      const activeElement = document.activeElement;
+      const currentIndex = Math.max(
+        0,
+        elements.findIndex((element) => element === activeElement),
+      );
+      const nextIndex = (currentIndex + offset + elements.length) % elements.length;
+      elements[nextIndex].focus();
+    }, []);
+
+    const handleKeyDown = useCallback(
+      (event: React.KeyboardEvent<HTMLDivElement>) => {
+        if (event.key === 'Escape') {
+          event.preventDefault();
+          onClose();
+          return;
+        }
+
+        if (event.key === 'ArrowDown') {
+          event.preventDefault();
+          focusByOffset(1);
+          return;
+        }
+
+        if (event.key === 'ArrowUp') {
+          event.preventDefault();
+          focusByOffset(-1);
+        }
+      },
+      [focusByOffset, onClose],
+    );
+
+    const renderTileMenu = (payload: TileContextMenuState): JSX.Element => {
+      const { tile, items, focusedItemId } = payload;
+      return (
+        <>
+          <header className="context-menu__header">
+            <div>
+              <span className="context-menu__title">Felt ({tile.gridX}, {tile.gridY})</span>
+            </div>
+            <p className="context-menu__subtitle">
+              {items.length === 1
+                ? '1 genstand på feltet'
+                : `${items.length} genstande på feltet`}
+            </p>
+          </header>
+          {items.length === 0 ? (
+            <p className="context-menu__empty">Ingen genstande på dette felt.</p>
+          ) : (
+            <ul className="context-menu__list">
+              {items.map((item) => {
+                const availability = getPickupAvailability(item);
+                const isFocused = focusedItemId === item.id;
+                return (
+                  <li
+                    key={item.id}
+                    className={
+                      isFocused
+                        ? 'context-menu__list-item context-menu__list-item--focused'
+                        : 'context-menu__list-item'
+                    }
+                    data-can-pickup={availability.canPickup || undefined}
+                  >
+                    <div className="context-menu__item-row">
+                      <span className="context-menu__item-name">{item.name}</span>
+                      <span className="context-menu__item-meta">
+                        ({item.tileX}, {item.tileY})
+                      </span>
+                    </div>
+                    <div className="context-menu__actions" role="group" aria-label={`Handlinger for ${item.name}`}>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        onClick={() => onSelectItemInfo(item)}
+                      >
+                        Info
+                      </button>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        onClick={() => onSelectItemPickup(item)}
+                        disabled={!availability.canPickup}
+                      >
+                        Saml Op
+                      </button>
+                    </div>
+                    <p className="context-menu__status" role="status">
+                      {availability.message}
+                    </p>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </>
+      );
+    };
+
+    const renderOccupantMenu = (payload: OccupantContextMenuState): JSX.Element => {
+      const { occupant, tile } = payload;
+      const isSelf = localOccupantId !== null && localOccupantId === occupant.id;
+
+      const actions: Array<{
+        action: OccupantMenuAction;
+        label: string;
+        description?: string;
+        disabled?: boolean;
+      }> = [
+        {
+          action: 'profile',
+          label: 'View profile',
+          description: 'Åbn spillerkortet i højre panel',
+        },
+        {
+          action: 'trade',
+          label: 'Trade',
+          description: 'Start en byttehandel',
+          disabled: isSelf || occupant.roles.includes('npc'),
+        },
+        {
+          action: 'mute',
+          label: 'Mute',
+          description: 'Skjul spillerens chat',
+          disabled: isSelf,
+        },
+        {
+          action: 'report',
+          label: 'Report',
+          description: 'Indsend en rapport til moderatorerne',
+          disabled: isSelf,
+        },
+      ];
+
+      return (
+        <>
+          <header className="context-menu__header">
+            <div>
+              <span className="context-menu__title">{occupant.username}</span>
+              <span className="context-menu__roles">
+                {occupant.roles.map((role) => role.toUpperCase()).join(' · ') || 'PLAYER'}
+              </span>
+            </div>
+            <p className="context-menu__subtitle">
+              Står på felt ({tile.gridX}, {tile.gridY})
+            </p>
+          </header>
+          <ul className="context-menu__list context-menu__list--actions">
+            {actions.map((item) => (
+              <li key={item.action} className="context-menu__list-item">
+                <button
+                  type="button"
+                  role="menuitem"
+                  disabled={item.disabled}
+                  onClick={() => onSelectOccupantAction(item.action, occupant)}
+                >
+                  <span className="context-menu__item-name">{item.label}</span>
+                  {item.description ? (
+                    <span className="context-menu__item-meta">{item.description}</span>
+                  ) : null}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </>
+      );
+    };
+
+    return (
+      <div
+        ref={menuRef}
+        className={
+          state.type === 'tile'
+            ? 'context-menu context-menu--tile'
+            : 'context-menu context-menu--occupant'
+        }
+        role="menu"
+        tabIndex={-1}
+        onKeyDown={handleKeyDown}
+        data-menu-type={state.type}
+      >
+        {state.type === 'tile' ? renderTileMenu(state) : renderOccupantMenu(state)}
+      </div>
+    );
+  },
+);
+
+ActiveContextMenu.displayName = 'ActiveContextMenu';
+
 
 const placeholderChatHistory: ChatMessage[] = [
   {
@@ -119,31 +448,31 @@ const App = (): JSX.Element => {
   const [areMoveAnimationsEnabled, setAreMoveAnimationsEnabled] = useState(true);
   const [chatDraft, setChatDraft] = useState('');
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
+  const [contextMenuState, setContextMenuState] = useState<ContextMenuState | null>(null);
   const chatMessagesRef = useRef<HTMLOListElement | null>(null);
+  const contextMenuRef = useRef<HTMLDivElement | null>(null);
   const connection = useRealtimeConnection();
-  const roomItems = useMemo<CanvasItem[]>(
-    () => [
-      {
-        id: 'dev-plant-1',
-        name: 'Atrium Plant',
-        description:
-          'Lush greenery staged near the spawn tiles to verify z-ordering beneath avatars while ensuring pickup gating still works.',
-        tileX: 6,
-        tileY: 4,
-        texture: plantTexture,
-      },
-      {
-        id: 'dev-couch-1',
-        name: 'Lounge Couch',
-        description:
-          'Soft seating reserved for plaza screenshots. This tile has pickup disabled so the right panel can surface the gating copy mandated by the spec.',
-        tileX: 2,
-        tileY: 8,
-        texture: couchTexture,
-      },
-    ],
-    [],
-  );
+  const closeContextMenu = useCallback(() => {
+    setContextMenuState(null);
+  }, []);
+  const { pendingPickupItemIds, lastPickupResult, clearPickupResult, sendPickup } = connection;
+  const itemCacheRef = useRef(new Map<string, CanvasItem>());
+  const canvasItems = useMemo<CanvasItem[]>(() => {
+    const items = connection.items.map((item) => {
+      const texture = ITEM_TEXTURES[item.textureKey] ?? DEFAULT_ITEM_TEXTURE;
+      const canvasItem: CanvasItem = {
+        id: item.id,
+        name: item.name,
+        description: item.description,
+        tileX: item.tileX,
+        tileY: item.tileY,
+        texture,
+      };
+      itemCacheRef.current.set(item.id, canvasItem);
+      return canvasItem;
+    });
+    return items;
+  }, [connection.items]);
 
   const chatLogEntries = useMemo(() => {
     const formattedHistory: ChatMessage[] = connection.chatLog.map((message) => {
@@ -186,6 +515,43 @@ const App = (): JSX.Element => {
       setShowBackToTop(false);
     }
   }, [isChatVisible, chatLogEntries]);
+
+  useEffect(() => {
+    if (!contextMenuState) {
+      return;
+    }
+
+    const handlePointerDown = (event: PointerEvent): void => {
+      const menu = contextMenuRef.current;
+      if (menu && menu.contains(event.target as Node)) {
+        return;
+      }
+      setContextMenuState(null);
+    };
+
+    window.addEventListener('pointerdown', handlePointerDown);
+    return () => {
+      window.removeEventListener('pointerdown', handlePointerDown);
+    };
+  }, [contextMenuState]);
+
+  useEffect(() => {
+    if (!contextMenuState) {
+      return;
+    }
+
+    const handleKeyDown = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        setContextMenuState(null);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [contextMenuState]);
 
   useEffect(() => {
     if (!isChatVisible) {
@@ -277,8 +643,8 @@ const App = (): JSX.Element => {
   }, [connection.tileFlags]);
 
   const selectedItem = useMemo(
-    () => roomItems.find((item) => item.id === selectedItemId) ?? null,
-    [roomItems, selectedItemId],
+    () => (selectedItemId ? itemCacheRef.current.get(selectedItemId) ?? null : null),
+    [canvasItems, selectedItemId],
   );
 
   const selectedItemTileKey = useMemo(() => {
@@ -287,6 +653,23 @@ const App = (): JSX.Element => {
     }
     return createTileKey(selectedItem.tileX, selectedItem.tileY);
   }, [selectedItem]);
+
+  const pickupResultForSelectedItem = useMemo(() => {
+    if (!selectedItemId || !lastPickupResult) {
+      return null;
+    }
+    return lastPickupResult.itemId === selectedItemId ? lastPickupResult : null;
+  }, [lastPickupResult, selectedItemId]);
+
+  const isPickupPending = useMemo(
+    () => (selectedItemId ? pendingPickupItemIds.includes(selectedItemId) : false),
+    [pendingPickupItemIds, selectedItemId],
+  );
+
+  const isSelectedItemPresent = useMemo(
+    () => (selectedItemId ? connection.items.some((item) => item.id === selectedItemId) : false),
+    [connection.items, selectedItemId],
+  );
 
   const localOccupant = useMemo(() => {
     if (!connection.user) {
@@ -301,6 +684,15 @@ const App = (): JSX.Element => {
     if (!selectedItem) {
       return '';
     }
+    if (pickupResultForSelectedItem) {
+      return pickupResultForSelectedItem.message;
+    }
+    if (isPickupPending) {
+      return 'Afventer serverbekræftelse…';
+    }
+    if (!isSelectedItemPresent) {
+      return 'Genstanden er ikke længere i rummet.';
+    }
     if (!localOccupant) {
       return 'Forbind til rummet for at samle op.';
     }
@@ -314,49 +706,300 @@ const App = (): JSX.Element => {
       return 'Stil dig på feltet for at samle op';
     }
     return 'Klar til at samle op';
-  }, [localOccupant, noPickupTileKeys, selectedItem, selectedItemTileKey]);
+  }, [
+    isPickupPending,
+    isSelectedItemPresent,
+    localOccupant,
+    noPickupTileKeys,
+    pickupResultForSelectedItem,
+    selectedItem,
+    selectedItemTileKey,
+  ]);
 
   const pickupStatusTone = useMemo(() => {
     if (!selectedItem || !pickupStatusMessage) {
       return 'pending';
     }
+    if (pickupResultForSelectedItem?.status === 'ok') {
+      return 'ready';
+    }
+    if (pickupResultForSelectedItem?.status === 'error') {
+      return 'blocked';
+    }
+    if (isPickupPending) {
+      return 'pending';
+    }
+    if (!isSelectedItemPresent || pickupStatusMessage === 'Kan ikke samle op her') {
+      return 'blocked';
+    }
     if (pickupStatusMessage === 'Klar til at samle op') {
       return 'ready';
     }
-    if (pickupStatusMessage === 'Kan ikke samle op her') {
-      return 'blocked';
-    }
     return 'pending';
-  }, [pickupStatusMessage, selectedItem]);
+  }, [
+    isPickupPending,
+    isSelectedItemPresent,
+    pickupResultForSelectedItem,
+    pickupStatusMessage,
+    selectedItem,
+  ]);
 
-  const canPickupSelectedItem = selectedItem
-    ? pickupStatusMessage === 'Klar til at samle op'
-    : false;
+  const canPickupSelectedItem = Boolean(
+    selectedItem &&
+      isSelectedItemPresent &&
+      !isPickupPending &&
+      (!pickupResultForSelectedItem || pickupResultForSelectedItem.status === 'error') &&
+      localOccupant &&
+      localOccupant.position.x === selectedItem.tileX &&
+      localOccupant.position.y === selectedItem.tileY &&
+      !(selectedItemTileKey && noPickupTileKeys.has(selectedItemTileKey)),
+  );
 
   const shouldShowPickupHint =
-    !canPickupSelectedItem &&
     pickupStatusMessage.length > 0 &&
-    pickupStatusMessage !== 'Kan ikke samle op her';
+    (pickupResultForSelectedItem !== null ||
+      isPickupPending ||
+      pickupStatusMessage !== 'Klar til at samle op');
 
-  const handleItemClick = useCallback((item: CanvasItem): void => {
-    setSelectedItemId(item.id);
-  }, []);
+  const getPickupAvailability = useCallback(
+    (item: CanvasItem): PickupAvailability => {
+      const tileKey = createTileKey(item.tileX, item.tileY);
+      const isPending = pendingPickupItemIds.includes(item.id);
+      const result =
+        lastPickupResult && lastPickupResult.itemId === item.id
+          ? lastPickupResult
+          : null;
+      const isPresent = connection.items.some((candidate) => candidate.id === item.id);
+
+      if (isPending) {
+        return { canPickup: false, message: 'Pickup behandles…' };
+      }
+
+      if (!localOccupant) {
+        return { canPickup: false, message: 'Afventer forbindelse' };
+      }
+
+      if (
+        localOccupant.position.x !== item.tileX ||
+        localOccupant.position.y !== item.tileY
+      ) {
+        return { canPickup: false, message: 'Stå på feltet for at samle op' };
+      }
+
+      if (noPickupTileKeys.has(tileKey)) {
+        return { canPickup: false, message: 'Pickup blokeret på dette felt' };
+      }
+
+      if (!isPresent && (!result || result.status !== 'ok')) {
+        return { canPickup: false, message: 'Genstanden er allerede væk' };
+      }
+
+      if (result?.status === 'ok') {
+        return { canPickup: false, message: 'Allerede samlet op' };
+      }
+
+      if (result?.status === 'error') {
+        return { canPickup: true, message: 'Prøv igen' };
+      }
+
+      return { canPickup: true, message: 'Klar til at samle op' };
+    },
+    [
+      connection.items,
+      lastPickupResult,
+      localOccupant,
+      noPickupTileKeys,
+      pendingPickupItemIds,
+    ],
+  );
+
+  const handleItemClick = useCallback(
+    (item: CanvasItem): void => {
+      itemCacheRef.current.set(item.id, item);
+      if (lastPickupResult && lastPickupResult.itemId !== item.id) {
+        clearPickupResult(lastPickupResult.itemId);
+      }
+      setSelectedItemId(item.id);
+    },
+    [clearPickupResult, lastPickupResult],
+  );
 
   const handlePickupSelectedItem = useCallback(() => {
     if (!selectedItem || !canPickupSelectedItem) {
       return;
     }
-    if (import.meta.env.DEV) {
+    const sent = sendPickup(selectedItem.id);
+    if (sent && import.meta.env.DEV) {
       console.debug('[items] Pickup requested', {
         itemId: selectedItem.id,
         name: selectedItem.name,
       });
     }
-  }, [canPickupSelectedItem, selectedItem]);
+  }, [canPickupSelectedItem, selectedItem, sendPickup]);
 
   const handleClearSelectedItem = useCallback(() => {
+    if (selectedItemId) {
+      clearPickupResult(selectedItemId);
+    }
     setSelectedItemId(null);
-  }, []);
+  }, [clearPickupResult, selectedItemId]);
+
+  const handleContextMenuItemInfo = useCallback(
+    (item: CanvasItem) => {
+      handleItemClick(item);
+      closeContextMenu();
+    },
+    [closeContextMenu, handleItemClick],
+  );
+
+  const handleContextMenuItemPickup = useCallback(
+    (item: CanvasItem) => {
+      const availability = getPickupAvailability(item);
+      if (!availability.canPickup) {
+        return;
+      }
+      const sent = sendPickup(item.id);
+      if (sent && import.meta.env.DEV) {
+        console.debug('[items] Pickup requested from context menu', {
+          itemId: item.id,
+          name: item.name,
+        });
+      }
+      closeContextMenu();
+    },
+    [closeContextMenu, getPickupAvailability, sendPickup],
+  );
+
+  const handleOccupantMenuAction = useCallback(
+    (action: OccupantMenuAction, occupant: CanvasOccupant) => {
+      closeContextMenu();
+      if (import.meta.env.DEV) {
+        console.debug('[avatars] Context menu action', { action, occupant });
+      }
+    },
+    [closeContextMenu],
+  );
+
+  const handleTileContextMenu = useCallback(
+    ({ tile, items, clientX, clientY }: {
+      tile: GridTile;
+      items: CanvasItem[];
+      clientX: number;
+      clientY: number;
+    }) => {
+      items.forEach((entry) => {
+        itemCacheRef.current.set(entry.id, entry);
+      });
+      setContextMenuState({
+        type: 'tile',
+        tile,
+        items,
+        focusedItemId: null,
+        position: { x: clientX, y: clientY },
+      });
+    },
+    [],
+  );
+
+  const handleItemContextMenu = useCallback(
+    ({
+      tile,
+      item,
+      items,
+      clientX,
+      clientY,
+    }: {
+      tile: GridTile;
+      item: CanvasItem;
+      items: CanvasItem[];
+      clientX: number;
+      clientY: number;
+    }) => {
+      items.forEach((entry) => {
+        itemCacheRef.current.set(entry.id, entry);
+      });
+      setContextMenuState({
+        type: 'tile',
+        tile,
+        items,
+        focusedItemId: item.id,
+        position: { x: clientX, y: clientY },
+      });
+    },
+    [],
+  );
+
+  const handleOccupantContextMenu = useCallback(
+    ({
+      occupant,
+      tile,
+      clientX,
+      clientY,
+    }: {
+      occupant: CanvasOccupant;
+      tile: GridTile;
+      clientX: number;
+      clientY: number;
+    }) => {
+      setContextMenuState({
+        type: 'occupant',
+        occupant,
+        tile,
+        position: { x: clientX, y: clientY },
+      });
+    },
+    [],
+  );
+
+  useEffect(() => {
+    if (!contextMenuState) {
+      return;
+    }
+
+    setContextMenuState((previous) => {
+      if (!previous) {
+        return previous;
+      }
+
+      if (previous.type === 'tile') {
+        const latestItems = canvasItems.filter(
+          (item) =>
+            item.tileX === previous.tile.gridX && item.tileY === previous.tile.gridY,
+        );
+        const focusedExists =
+          previous.focusedItemId !== null &&
+          latestItems.some((item) => item.id === previous.focusedItemId);
+        const sameLength = latestItems.length === previous.items.length;
+        const sameIds =
+          sameLength &&
+          latestItems.every((item, index) => item.id === previous.items[index]?.id);
+        if (sameIds && (focusedExists || previous.focusedItemId === null)) {
+          return previous;
+        }
+        return {
+          ...previous,
+          items: latestItems,
+          focusedItemId: focusedExists ? previous.focusedItemId : null,
+        };
+      }
+
+      const latestOccupant = connection.occupants.find(
+        (candidate) => candidate.id === previous.occupant.id,
+      );
+      if (!latestOccupant) {
+        return null;
+      }
+
+      if (
+        latestOccupant.position.x !== previous.tile.gridX ||
+        latestOccupant.position.y !== previous.tile.gridY
+      ) {
+        return null;
+      }
+
+      return previous;
+    });
+  }, [canvasItems, connection.occupants, contextMenuState]);
 
   const handleTileClick = useCallback(
     (tile: GridTile): void => {
@@ -545,8 +1188,11 @@ const App = (): JSX.Element => {
               tileFlags={connection.tileFlags}
               pendingMoveTarget={connection.pendingMoveTarget}
               onTileClick={handleTileClick}
-              items={roomItems}
+              items={canvasItems}
               onItemClick={handleItemClick}
+              onTileContextMenu={handleTileContextMenu}
+              onItemContextMenu={handleItemContextMenu}
+              onOccupantContextMenu={handleOccupantContextMenu}
               localOccupantId={connection.user?.id ?? null}
               showGrid={isGridVisible}
               showHoverWhenGridHidden={showHoverWhenGridHidden}
@@ -756,6 +1402,18 @@ const App = (): JSX.Element => {
           </button>
         ))}
       </nav>
+      {contextMenuState ? (
+        <ActiveContextMenu
+          ref={contextMenuRef}
+          state={contextMenuState}
+          onClose={closeContextMenu}
+          onSelectItemInfo={handleContextMenuItemInfo}
+          onSelectItemPickup={handleContextMenuItemPickup}
+          getPickupAvailability={getPickupAvailability}
+          onSelectOccupantAction={handleOccupantMenuAction}
+          localOccupantId={connection.user?.id ?? null}
+        />
+      ) : null}
     </div>
   );
 };

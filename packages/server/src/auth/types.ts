@@ -35,4 +35,12 @@ export interface RoomSnapshot {
     locked: boolean;
     noPickup: boolean;
   }>;
+  items: Array<{
+    id: string;
+    name: string;
+    description: string;
+    tileX: number;
+    tileY: number;
+    textureKey: string;
+  }>;
 }

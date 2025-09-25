@@ -485,27 +485,29 @@ When implementing, **Codex should**:
 
 1) Wire the item pickup loop (server validation, inventory persistence, optimistic UI) so the panel’s “Saml Op” control reflects authoritative acknowledgements.
 2) Add realtime typing bubbles and chat bubble rendering on the canvas while persisting the chat drawer’s system-message preference per user.
-3) Build right-click context menus for tiles, items, and avatars with the gating rules outlined in the Master Spec (Info/Saml Op, player actions).
+3) Wire the new right-click context menus into authoritative flows so Info/Saml Op respect server state and avatar actions trigger real profile/trade/mute/report plumbing.
 4) Extend the admin quick menu so each toggle calls the authoritative API (lock/noPickup, latency trace) and persists dev overrides via Postgres/Redis.
 5) Establish automated integration/E2E tests that exercise auth → chat → move → item flows against the Postgres/Redis stack and wire them into CI.
 6) Audit `[realtime]` debug logging before release (demote, gate, or remove) so production builds ship without noisy console output.
 
 ---
 
-## 24) Progress Snapshot — 2025-09-25
+## 24) Progress Snapshot — 2025-09-24
 
 - ✅ `useRealtimeConnection` authenticates via `/auth/login`, maintains heartbeats, hydrates the room snapshot, streams historical chat, appends live `chat:new` envelopes, and exposes a composer that emits `chat:send` while the blocking overlay clears automatically after reconnect.
 - ✅ The React client now renders seeded room items beneath avatars, tracks per-item hit boxes, routes selections into the right panel’s item info view, and honours the chat drawer’s system-message toggle alongside the existing admin quick toggles and movement gating.
+- ✅ Right-click context menus now surface tile, item, and avatar actions per spec, gating “Saml Op” to same-tile, non-`noPickup` squares while leaving avatar actions ready for future authority wiring and keeping the admin quick toggles non-blocking.
+- ✅ The “Saml Op” button now emits real `item:pickup` envelopes; the server validates tile/noPickup rules, persists the transfer to Postgres, increments `roomSeq`, broadcasts `room:item_removed`, and the client performs optimistic removal with pending/success/error copy while restoring items on authoritative rejection.
 - ✅ The Fastify server boots Postgres migrations/seeds, validates `auth`/`move`/`chat` envelopes, persists chat history to Postgres, relays cross-instance chat through Redis pub/sub, and exposes `/healthz`, `/readyz`, and `/metrics` endpoints instrumented with Prometheus counters.
 - ✅ `@bitby/schemas` publishes JSON Schemas for `auth`, `move`, and `chat` plus an OpenAPI document for `/auth/login`, keeping both tiers on a single contract for realtime and REST payloads.
 - ✅ Workspace scripts rebuild shared schemas before Vite launches, and lint/typecheck/test/build workflows cover the new chat, item, and observability codepaths.
-- Latest connectivity screenshot with chat + item panel: `browser:/invocations/nkjxmmlj/artifacts/artifacts/bitby-connected.png`.
+- Latest connectivity screenshot with chat + item panel: `browser:/invocations/mdaqbhvm/artifacts/artifacts/context-menu-connected.png`.
 
 ### Immediate Next Focus
 
-1. Wire the pickup pipeline end-to-end (server validation, inventory persistence, optimistic UI) so the right panel button reflects authoritative acknowledgements.
+1. Surface the newly persisted inventory/backpack data in the UI so pickups appear instantly after authoritative acknowledgement.
 2. Add typing bubbles and chat bubble rendering on the canvas while persisting the system-message preference.
-3. Implement the spec’d context menus for tiles/items/avatars and extend the admin quick menu to call authoritative toggles.
+3. Promote the new context menu actions from local stubs to authoritative flows (profile panel, trade bootstrap, mute/report) while preserving the gating rules.
 4. Stand up integration/E2E tests that drive auth → chat → move → item flows against Postgres/Redis and gate CI on them.
 5. Gate or demote the `[realtime]` debug logging before shipping production builds.
 

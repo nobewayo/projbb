@@ -3,6 +3,7 @@ import type { FastifyBaseLogger, FastifyInstance } from 'fastify';
 import type { Socket } from 'socket.io';
 import {
   chatSendRequestDataSchema,
+  itemPickupRequestDataSchema,
   messageEnvelopeSchema,
   moveRequestDataSchema,
   type ChatMessageBroadcast,
@@ -17,6 +18,11 @@ import type { RoomStore, TileFlagRecord } from '../db/rooms.js';
 import type { ChatStore } from '../db/chat.js';
 import type { RoomPubSub, RoomChatEvent } from '../redis/pubsub.js';
 import type { MetricsBundle } from '../metrics/registry.js';
+import type {
+  ItemStore,
+  InventoryItemRecord,
+  RoomItemRecord,
+} from '../db/items.js';
 
 const HEARTBEAT_INTERVAL_MS = 15_000;
 const HEARTBEAT_GRACE_MS = HEARTBEAT_INTERVAL_MS * 2;
@@ -52,6 +58,16 @@ interface DevelopmentRoomState {
   tileIndex: Map<string, TileFlag>;
   occupants: Map<string, RoomOccupant>;
   connections: Map<string, RegisteredConnection>;
+  items: Map<string, RoomItem>;
+}
+
+interface RoomItem {
+  id: string;
+  name: string;
+  description: string;
+  textureKey: string;
+  tileX: number;
+  tileY: number;
 }
 
 interface RoomOccupant {
@@ -71,6 +87,7 @@ interface RealtimeDependencies {
   config: ServerConfig;
   roomStore: RoomStore;
   chatStore: ChatStore;
+  itemStore: ItemStore;
   pubsub: RoomPubSub;
   metrics: MetricsBundle;
 }
@@ -93,7 +110,18 @@ type AuthOkPayload = EnvelopeData & {
   heartbeatIntervalMs: number;
   roomSnapshot: RoomSnapshot;
   chatHistory: ChatMessageBroadcast[];
+  inventory: InventoryItemPayload[];
 };
+
+interface InventoryItemPayload {
+  id: string;
+  roomItemId: string;
+  roomId: string;
+  name: string;
+  description: string;
+  textureKey: string;
+  acquiredAt: string;
+}
 
 const authPayloadSchema = z.object({
   token: z.string().min(1, 'token is required'),
@@ -113,11 +141,39 @@ const createEnvelope = (op: string, seq: number, data: EnvelopeData = {}): Envel
   data,
 });
 
+const toRoomItem = (record: RoomItemRecord): RoomItem => ({
+  id: record.id,
+  name: record.name,
+  description: record.description,
+  textureKey: record.textureKey,
+  tileX: record.tileX,
+  tileY: record.tileY,
+});
+
+const toInventoryPayload = (record: InventoryItemRecord): InventoryItemPayload => ({
+  id: record.id,
+  roomItemId: record.roomItemId,
+  roomId: record.roomId,
+  name: record.name,
+  description: record.description,
+  textureKey: record.textureKey,
+  acquiredAt: record.acquiredAt.toISOString(),
+});
+
 const cloneOccupant = (occupant: RoomOccupant): RoomOccupant => ({
   id: occupant.id,
   username: occupant.username,
   roles: [...occupant.roles],
   position: { x: occupant.position.x, y: occupant.position.y },
+});
+
+const cloneItem = (item: RoomItem): RoomItem => ({
+  id: item.id,
+  name: item.name,
+  description: item.description,
+  textureKey: item.textureKey,
+  tileX: item.tileX,
+  tileY: item.tileY,
 });
 
 const sortOccupants = (map: Map<string, RoomOccupant>): RoomOccupant[] =>
@@ -129,6 +185,17 @@ const sortOccupants = (map: Map<string, RoomOccupant>): RoomOccupant[] =>
       }
 
       return a.position.y - b.position.y;
+    });
+
+const sortItems = (map: Map<string, RoomItem>): RoomItem[] =>
+  Array.from(map.values())
+    .map((item) => cloneItem(item))
+    .sort((a, b) => {
+      if (a.tileY === b.tileY) {
+        return a.tileX - b.tileX;
+      }
+
+      return a.tileY - b.tileY;
     });
 
 const safeSend = (
@@ -166,6 +233,7 @@ export const createRealtimeServer = async ({
   config,
   roomStore,
   chatStore,
+  itemStore,
   pubsub,
   metrics,
 }: RealtimeDependencies): Promise<RealtimeServer> => {
@@ -176,6 +244,7 @@ export const createRealtimeServer = async ({
 
   const tileFlags = await roomStore.getTileFlags(roomRecord.id);
   const occupantList = await roomStore.listOccupants(roomRecord.id);
+  const roomItems = await itemStore.listRoomItems(roomRecord.id);
 
   const developmentRoomState: DevelopmentRoomState = {
     id: roomRecord.id,
@@ -185,6 +254,7 @@ export const createRealtimeServer = async ({
     tileIndex: new Map(tileFlags.map((flag) => [createTileKey(flag.x, flag.y), flag])),
     occupants: new Map(),
     connections: new Map(),
+    items: new Map(roomItems.map((record) => [record.id, toRoomItem(record)])),
   };
 
   for (const occupant of occupantList) {
@@ -208,6 +278,7 @@ export const createRealtimeServer = async ({
       locked: tile.locked,
       noPickup: tile.noPickup,
     })),
+    items: sortItems(developmentRoomState.items),
   });
 
   const isTileLocked = (x: number, y: number): boolean =>
@@ -292,13 +363,20 @@ export const createRealtimeServer = async ({
     logger: FastifyBaseLogger,
     socket: Socket,
     user: AuthenticatedUser,
-  ): Promise<{ snapshot: RoomSnapshot; occupant: RoomOccupant }> => {
+  ): Promise<{
+    snapshot: RoomSnapshot;
+    occupant: RoomOccupant;
+    inventory: InventoryItemRecord[];
+  }> => {
     const { occupant } = await ensureOccupant(user);
     developmentRoomState.connections.set(socket.id, { socket, logger, userId: user.id });
+
+    const inventory = await itemStore.listInventoryForUser(user.id);
 
     return {
       snapshot: buildSnapshot(),
       occupant,
+      inventory,
     };
   };
 
@@ -348,6 +426,27 @@ export const createRealtimeServer = async ({
         connection.socket,
         createEnvelope('room:occupant_moved', 0, {
           occupant: cloneOccupant(occupant),
+          roomSeq,
+        }),
+      );
+    }
+  };
+
+  const broadcastItemRemoved = (
+    itemId: string,
+    roomSeq: number,
+    excludeSocketId?: string,
+  ): void => {
+    for (const connection of developmentRoomState.connections.values()) {
+      if (excludeSocketId && connection.socket.id === excludeSocketId) {
+        continue;
+      }
+
+      safeSend(
+        connection.logger,
+        connection.socket,
+        createEnvelope('room:item_removed', 0, {
+          itemId,
           roomSeq,
         }),
       );
@@ -477,7 +576,11 @@ export const createRealtimeServer = async ({
       return null;
     }
 
-    const { snapshot } = await registerConnection(logger, socket, authenticatedUser);
+    const { snapshot, inventory } = await registerConnection(
+      logger,
+      socket,
+      authenticatedUser,
+    );
     const chatHistoryRecords = await chatStore.listRecentMessages(
       developmentRoomState.id,
       50,
@@ -500,6 +603,7 @@ export const createRealtimeServer = async ({
         createdAt: record.createdAt.toISOString(),
         roomSeq: record.roomSeq,
       })),
+      inventory: inventory.map((item) => toInventoryPayload(item)),
     };
 
     acknowledge(logger, socket, envelope, 'auth:ok', payload);
@@ -573,6 +677,118 @@ export const createRealtimeServer = async ({
     acknowledge(logger, socket, envelope, 'chat:ok', {
       messageId: record.id,
     });
+  };
+
+  const handleItemPickup = async (
+    logger: FastifyBaseLogger,
+    socket: Socket,
+    envelope: Envelope,
+    user: AuthenticatedUser,
+  ): Promise<void> => {
+    const candidateItemId =
+      typeof (envelope.data as { itemId?: unknown })?.itemId === 'string'
+        ? ((envelope.data as { itemId: string }).itemId ?? 'unknown')
+        : 'unknown';
+
+    const sendError = (
+      code:
+        | 'validation_failed'
+        | 'not_in_room'
+        | 'not_found'
+        | 'tile_blocked'
+        | 'not_on_tile'
+        | 'already_picked_up'
+        | 'persist_failed',
+      message: string,
+      itemId: string,
+    ): void => {
+      acknowledge(logger, socket, envelope, 'item:pickup:err', {
+        itemId,
+        roomSeq: developmentRoomState.roomSeq,
+        code,
+        message,
+      });
+    };
+
+    const parsed = itemPickupRequestDataSchema.safeParse(envelope.data);
+    if (!parsed.success) {
+      sendError('validation_failed', 'Ugyldig anmodning om pickup.', candidateItemId);
+      return;
+    }
+
+    const itemId = parsed.data.itemId;
+    const occupant = developmentRoomState.occupants.get(user.id);
+    if (!occupant) {
+      sendError('not_in_room', 'Du er ikke registreret i dette rum.', itemId);
+      return;
+    }
+
+    const item = developmentRoomState.items.get(itemId);
+    if (!item) {
+      sendError('not_found', 'Genstanden findes ikke længere.', itemId);
+      return;
+    }
+
+    if (occupant.position.x !== item.tileX || occupant.position.y !== item.tileY) {
+      sendError('not_on_tile', 'Stil dig på feltet for at samle op.', itemId);
+      return;
+    }
+
+    const tile = developmentRoomState.tileIndex.get(createTileKey(item.tileX, item.tileY));
+    if (tile?.noPickup) {
+      sendError('tile_blocked', 'Kan ikke samle op her.', itemId);
+      return;
+    }
+
+    let result;
+    try {
+      result = await itemStore.attemptPickup({
+        itemId,
+        userId: user.id,
+        roomId: developmentRoomState.id,
+      });
+    } catch (error) {
+      logger.error({ err: error }, 'Failed to persist item pickup');
+      sendError('persist_failed', 'Kunne ikke gemme din genstand. Prøv igen.', itemId);
+      return;
+    }
+
+    if (!result.ok) {
+      if (result.reason === 'already_picked_up' || result.reason === 'not_found') {
+        developmentRoomState.items.delete(itemId);
+      }
+
+      const message =
+        result.reason === 'already_picked_up'
+          ? 'Genstanden er allerede samlet op.'
+          : result.reason === 'not_found'
+            ? 'Genstanden findes ikke længere.'
+            : 'Kunne ikke gemme din genstand. Prøv igen.';
+
+      const code =
+        result.reason === 'already_picked_up'
+          ? 'already_picked_up'
+          : result.reason === 'not_found'
+            ? 'not_found'
+            : 'persist_failed';
+
+      sendError(code, message, itemId);
+      return;
+    }
+
+    developmentRoomState.items.delete(itemId);
+    const newRoomSeq = await roomStore.incrementRoomSequence(developmentRoomState.id);
+    updateRoomSeq(newRoomSeq);
+
+    metrics.itemPickups.inc();
+
+    acknowledge(logger, socket, envelope, 'item:pickup:ok', {
+      itemId,
+      roomSeq: developmentRoomState.roomSeq,
+      inventoryItem: toInventoryPayload(result.inventoryItem),
+    });
+
+    broadcastItemRemoved(itemId, developmentRoomState.roomSeq, socket.id);
   };
 
   const handleConnection = ({ app, socket, requestId }: ConnectionContext): void => {
@@ -729,6 +945,24 @@ export const createRealtimeServer = async ({
             }
 
             await handleChatSend(logger, socket, envelope, sessionUser);
+            return;
+          }
+          case 'item:pickup': {
+            if (!isAuthenticated || !sessionUser) {
+              const candidateItemId =
+                typeof (envelope.data as { itemId?: unknown })?.itemId === 'string'
+                  ? ((envelope.data as { itemId: string }).itemId ?? 'unknown')
+                  : 'unknown';
+              acknowledge(logger, socket, envelope, 'item:pickup:err', {
+                itemId: candidateItemId,
+                roomSeq: developmentRoomState.roomSeq,
+                code: 'validation_failed',
+                message: 'Authenticate before issuing realtime operations',
+              });
+              return;
+            }
+
+            await handleItemPickup(logger, socket, envelope, sessionUser);
             return;
           }
           default: {
