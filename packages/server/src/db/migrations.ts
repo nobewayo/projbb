@@ -43,6 +43,29 @@ const INITIAL_TILE_FLAGS = [
   { x: 7, y: 3, locked: true, noPickup: false },
 ];
 
+const INITIAL_ROOM_ITEMS = [
+  {
+    id: '11111111-1111-1111-1111-222222222201',
+    name: 'Atrium Plant',
+    description:
+      'Lush greenery staged near the spawn tiles to verify z-ordering beneath avatars while ensuring pickup gating still works.',
+    textureKey: 'plant',
+    tileX: 6,
+    tileY: 4,
+  },
+  {
+    id: '11111111-1111-1111-1111-222222222202',
+    name: 'Lounge Couch',
+    description:
+      'Soft seating reserved for plaza screenshots. This tile has pickup disabled so the right panel can surface the gating copy mandated by the spec.',
+    textureKey: 'couch',
+    tileX: 2,
+    tileY: 8,
+  },
+];
+
+const escapeSqlString = (value: string): string => value.replace(/'/g, "''");
+
 const MIGRATIONS: Migration[] = [
   {
     id: '0001_initial',
@@ -116,6 +139,56 @@ const MIGRATIONS: Migration[] = [
     statements: [
       `ALTER TABLE chat_message ADD COLUMN IF NOT EXISTS room_seq bigint NOT NULL DEFAULT 1`,
       `CREATE INDEX IF NOT EXISTS idx_chat_message_room_seq ON chat_message(room_id, room_seq)`
+    ],
+  },
+  {
+    id: '0004_room_items',
+    statements: [
+      `CREATE TABLE IF NOT EXISTS room_item (
+        id uuid PRIMARY KEY,
+        room_id uuid NOT NULL REFERENCES room(id) ON DELETE CASCADE,
+        name text NOT NULL,
+        description text NOT NULL,
+        texture_key text NOT NULL,
+        tile_x integer NOT NULL,
+        tile_y integer NOT NULL,
+        picked_up_at timestamptz,
+        picked_up_by uuid REFERENCES app_user(id) ON DELETE SET NULL,
+        created_at timestamptz NOT NULL DEFAULT now(),
+        updated_at timestamptz NOT NULL DEFAULT now()
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_room_item_room_available
+         ON room_item(room_id)
+         WHERE picked_up_at IS NULL`,
+      `CREATE TABLE IF NOT EXISTS user_inventory_item (
+        id uuid PRIMARY KEY,
+        user_id uuid NOT NULL REFERENCES app_user(id) ON DELETE CASCADE,
+        room_item_id uuid NOT NULL REFERENCES room_item(id) ON DELETE CASCADE,
+        room_id uuid NOT NULL REFERENCES room(id) ON DELETE CASCADE,
+        acquired_at timestamptz NOT NULL DEFAULT now()
+      )`,
+      `CREATE UNIQUE INDEX IF NOT EXISTS idx_user_inventory_unique
+         ON user_inventory_item(user_id, room_item_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_user_inventory_user
+         ON user_inventory_item(user_id)`,
+      ...INITIAL_ROOM_ITEMS.map((item) =>
+        `DELETE FROM user_inventory_item WHERE room_item_id = '${item.id}'`,
+      ),
+      ...INITIAL_ROOM_ITEMS.map(
+        (item) =>
+          `INSERT INTO room_item (id, room_id, name, description, texture_key, tile_x, tile_y, picked_up_at, picked_up_by)
+            VALUES ('${item.id}', '${DEV_ROOM_ID}', '${escapeSqlString(item.name)}', '${escapeSqlString(item.description)}', '${escapeSqlString(item.textureKey)}', ${item.tileX}, ${item.tileY}, NULL, NULL)
+            ON CONFLICT (id) DO UPDATE SET
+              room_id = EXCLUDED.room_id,
+              name = EXCLUDED.name,
+              description = EXCLUDED.description,
+              texture_key = EXCLUDED.texture_key,
+              tile_x = EXCLUDED.tile_x,
+              tile_y = EXCLUDED.tile_y,
+              picked_up_at = NULL,
+              picked_up_by = NULL,
+              updated_at = now()`
+      ),
     ],
   },
 ];

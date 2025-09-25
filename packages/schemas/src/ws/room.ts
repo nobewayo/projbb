@@ -17,12 +17,22 @@ export const roomOccupantSchema = z.object({
   }),
 });
 
+export const roomItemSchema = z.object({
+  id: z.string().min(1, 'item id required'),
+  name: z.string().min(1, 'item name required'),
+  description: z.string().min(1, 'item description required'),
+  tileX: z.number().int().min(0, 'item tileX must be non-negative'),
+  tileY: z.number().int().min(0, 'item tileY must be non-negative'),
+  textureKey: z.string().min(1, 'item texture key required'),
+});
+
 export const roomSnapshotSchema = z.object({
   id: z.string().min(1, 'room id required'),
   name: z.string().min(1, 'room name required'),
   roomSeq: z.number().int().min(0, 'roomSeq must be non-negative'),
   occupants: z.array(roomOccupantSchema),
   tiles: z.array(roomTileFlagSchema),
+  items: z.array(roomItemSchema),
 });
 
 export const roomOccupantMovedDataSchema = z.object({
@@ -44,5 +54,6 @@ export const roomOccupantLeftDataSchema = z.object({
 export type RoomTileFlag = z.infer<typeof roomTileFlagSchema>;
 export type RoomOccupant = z.infer<typeof roomOccupantSchema>;
 export type RoomSnapshot = z.infer<typeof roomSnapshotSchema>;
+export type RoomItem = z.infer<typeof roomItemSchema>;
 export type RoomOccupantMovedData = z.infer<typeof roomOccupantMovedDataSchema>;
 export type RoomOccupantLeftData = z.infer<typeof roomOccupantLeftDataSchema>;

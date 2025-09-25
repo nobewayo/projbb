@@ -6,7 +6,7 @@ import devRoomUrl from '../assets/rooms/dev_room.png';
 import avatar1Url from '../assets/avatars/avatar1.png';
 import avatar2Url from '../assets/avatars/avatar2.png';
 
-type CanvasOccupant = {
+export type CanvasOccupant = {
   id: string;
   username: string;
   roles: string[];
@@ -36,6 +36,25 @@ type GridCanvasProps = {
   onTileClick?: (tile: GridTile) => void;
   items: CanvasItem[];
   onItemClick?: (item: CanvasItem) => void;
+  onTileContextMenu?: (payload: {
+    tile: GridTile;
+    items: CanvasItem[];
+    clientX: number;
+    clientY: number;
+  }) => void;
+  onItemContextMenu?: (payload: {
+    tile: GridTile;
+    item: CanvasItem;
+    items: CanvasItem[];
+    clientX: number;
+    clientY: number;
+  }) => void;
+  onOccupantContextMenu?: (payload: {
+    occupant: CanvasOccupant;
+    tile: GridTile;
+    clientX: number;
+    clientY: number;
+  }) => void;
   localOccupantId?: string | null;
   showGrid: boolean;
   showHoverWhenGridHidden: boolean;
@@ -59,6 +78,14 @@ type ItemBounds = {
   width: number;
   height: number;
   item: CanvasItem;
+};
+
+type OccupantBounds = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  occupant: CanvasOccupant;
 };
 
 type OccupantRenderState = {
@@ -309,6 +336,9 @@ const GridCanvas = ({
   onTileClick,
   items,
   onItemClick,
+  onTileContextMenu,
+  onItemContextMenu,
+  onOccupantContextMenu,
   localOccupantId = null,
   showGrid,
   showHoverWhenGridHidden,
@@ -329,6 +359,20 @@ const GridCanvas = ({
   const itemsRef = useRef<CanvasItem[]>(items);
   const itemBoundsRef = useRef<Map<string, ItemBounds>>(new Map());
   const itemDrawOrderRef = useRef<string[]>([]);
+  const occupantBoundsRef = useRef<Map<string, OccupantBounds>>(new Map());
+  const occupantDrawOrderRef = useRef<string[]>([]);
+  const occupantTargetsRef = useRef<Map<string, { occupant: CanvasOccupant; tile: GridTile }>>(new Map());
+  const occupantTargets = useMemo(() => {
+    const entries = new Map<string, { occupant: CanvasOccupant; tile: GridTile }>();
+    for (const occupant of occupants) {
+      const tile = grid.tileMap.get(createTileKey(occupant.position.x, occupant.position.y));
+      if (!tile) {
+        continue;
+      }
+      entries.set(occupant.id, { occupant, tile });
+    }
+    return entries;
+  }, [grid, occupants]);
 
   useEffect(() => {
     assetsRef.current = assets;
@@ -337,6 +381,10 @@ const GridCanvas = ({
   useEffect(() => {
     itemsRef.current = items;
   }, [items]);
+
+  useEffect(() => {
+    occupantTargetsRef.current = occupantTargets;
+  }, [occupantTargets]);
 
   useEffect(() => {
     let isMounted = true;
@@ -492,18 +540,6 @@ const GridCanvas = ({
   useEffect(() => {
     pendingTileKeyRef.current = pendingTileKey;
   }, [pendingTileKey]);
-
-  const occupantTargets = useMemo(() => {
-    const entries = new Map<string, { occupant: CanvasOccupant; tile: GridTile }>();
-    for (const occupant of occupants) {
-      const tile = grid.tileMap.get(createTileKey(occupant.position.x, occupant.position.y));
-      if (!tile) {
-        continue;
-      }
-      entries.set(occupant.id, { occupant, tile });
-    }
-    return entries;
-  }, [grid, occupants]);
 
   useEffect(() => {
     const sprites = occupantSpritesRef.current;
@@ -679,8 +715,32 @@ const GridCanvas = ({
           return a.gridY - b.gridY;
         });
 
+        occupantBoundsRef.current.clear();
+        occupantDrawOrderRef.current = [];
+
         for (const sprite of orderedSprites) {
+          const avatarImage =
+            (sprite.avatarIndex >= 0
+              ? assetsRef.current?.avatars[sprite.avatarIndex] ?? null
+              : null);
+          const avatarWidth = avatarImage?.width ?? FALLBACK_AVATAR_WIDTH;
+          const avatarHeight = avatarImage?.height ?? FALLBACK_AVATAR_HEIGHT;
+          const drawX = Math.round(sprite.currentX - avatarWidth / 2);
+          const drawY = Math.round(sprite.currentY - avatarHeight + FOOT_OFFSET);
+
           drawOccupant(context, sprite, assetsRef.current);
+
+          const occupantTarget = occupantTargetsRef.current.get(sprite.id);
+          if (occupantTarget) {
+            occupantBoundsRef.current.set(sprite.id, {
+              x: drawX,
+              y: drawY,
+              width: avatarWidth,
+              height: avatarHeight,
+              occupant: occupantTarget.occupant,
+            });
+            occupantDrawOrderRef.current.push(sprite.id);
+          }
         }
       } finally {
         context.restore();
@@ -770,16 +830,107 @@ const GridCanvas = ({
       }
     };
 
+    const handleContextMenu = (event: MouseEvent): void => {
+      event.preventDefault();
+
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = CANVAS_WIDTH / rect.width;
+      const scaleY = CANVAS_HEIGHT / rect.height;
+      const x = (event.clientX - rect.left) * scaleX;
+      const y = (event.clientY - rect.top) * scaleY;
+
+      if (onOccupantContextMenu) {
+        for (let index = occupantDrawOrderRef.current.length - 1; index >= 0; index -= 1) {
+          const id = occupantDrawOrderRef.current[index];
+          if (!id) {
+            continue;
+          }
+          const bounds = occupantBoundsRef.current.get(id);
+          if (
+            bounds &&
+            x >= bounds.x &&
+            x <= bounds.x + bounds.width &&
+            y >= bounds.y &&
+            y <= bounds.y + bounds.height
+          ) {
+            const tile = occupantTargetsRef.current.get(id)?.tile ?? null;
+            if (tile) {
+              onOccupantContextMenu({
+                occupant: bounds.occupant,
+                tile,
+                clientX: event.clientX,
+                clientY: event.clientY,
+              });
+              return;
+            }
+          }
+        }
+      }
+
+      const tile = findTileAtPoint(grid, x, y);
+      if (!tile) {
+        return;
+      }
+
+      const itemsOnTile = itemsRef.current.filter(
+        (item) => item.tileX === tile.gridX && item.tileY === tile.gridY,
+      );
+
+      if (itemsOnTile.length > 0 && onItemContextMenu) {
+        for (let index = itemDrawOrderRef.current.length - 1; index >= 0; index -= 1) {
+          const id = itemDrawOrderRef.current[index];
+          if (!id) {
+            continue;
+          }
+          const bounds = itemBoundsRef.current.get(id);
+          if (
+            bounds &&
+            x >= bounds.x &&
+            x <= bounds.x + bounds.width &&
+            y >= bounds.y &&
+            y <= bounds.y + bounds.height
+          ) {
+            onItemContextMenu({
+              tile,
+              item: bounds.item,
+              items: itemsOnTile,
+              clientX: event.clientX,
+              clientY: event.clientY,
+            });
+            return;
+          }
+        }
+      }
+
+      if (onTileContextMenu) {
+        onTileContextMenu({
+          tile,
+          items: itemsOnTile,
+          clientX: event.clientX,
+          clientY: event.clientY,
+        });
+      }
+    };
+
     canvas.addEventListener('pointermove', handlePointerMove);
     canvas.addEventListener('pointerleave', handlePointerLeave);
     canvas.addEventListener('pointerdown', handlePointerDown);
+    canvas.addEventListener('contextmenu', handleContextMenu);
 
     return () => {
       canvas.removeEventListener('pointermove', handlePointerMove);
       canvas.removeEventListener('pointerleave', handlePointerLeave);
       canvas.removeEventListener('pointerdown', handlePointerDown);
+      canvas.removeEventListener('contextmenu', handleContextMenu);
     };
-  }, [grid, onItemClick, onTileClick]);
+  }, [
+    grid,
+    onItemClick,
+    onTileClick,
+    onItemContextMenu,
+    onTileContextMenu,
+    onOccupantContextMenu,
+  ]);
 
   return (
     <div className="grid-canvas" aria-hidden={false}>
