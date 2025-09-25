@@ -2,11 +2,16 @@ import { randomUUID } from 'node:crypto';
 import type { FastifyBaseLogger, FastifyInstance } from 'fastify';
 import type { Socket } from 'socket.io';
 import {
+  chatPreferenceUpdateDataSchema,
+  chatPreferencesSchema,
   chatSendRequestDataSchema,
+  chatTypingUpdateDataSchema,
   itemPickupRequestDataSchema,
   messageEnvelopeSchema,
   moveRequestDataSchema,
   type ChatMessageBroadcast,
+  type ChatPreferences,
+  type ChatTypingBroadcast,
   type MessageEnvelope,
   type MoveErrorCode,
 } from '@bitby/schemas';
@@ -23,10 +28,12 @@ import type {
   InventoryItemRecord,
   RoomItemRecord,
 } from '../db/items.js';
+import type { PreferenceStore } from '../db/preferences.js';
 
 const HEARTBEAT_INTERVAL_MS = 15_000;
 const HEARTBEAT_GRACE_MS = HEARTBEAT_INTERVAL_MS * 2;
 const DEVELOPMENT_ROOM_SLUG = 'dev-room';
+const TYPING_INDICATOR_TTL_MS = 6_000;
 
 const GRID_ROW_COUNT = 10;
 const EVEN_ROW_COLUMNS = 10;
@@ -59,6 +66,7 @@ interface DevelopmentRoomState {
   occupants: Map<string, RoomOccupant>;
   connections: Map<string, RegisteredConnection>;
   items: Map<string, RoomItem>;
+  typingIndicators: Map<string, TypingIndicatorState>;
 }
 
 interface RoomItem {
@@ -77,6 +85,12 @@ interface RoomOccupant {
   position: { x: number; y: number };
 }
 
+interface TypingIndicatorState {
+  userId: string;
+  preview: string | null;
+  expiresAt: number;
+}
+
 interface ConnectionContext {
   app: FastifyInstance;
   socket: Socket;
@@ -90,6 +104,7 @@ interface RealtimeDependencies {
   itemStore: ItemStore;
   pubsub: RoomPubSub;
   metrics: MetricsBundle;
+  preferenceStore: PreferenceStore;
 }
 
 interface RealtimeServer {
@@ -111,6 +126,8 @@ type AuthOkPayload = EnvelopeData & {
   roomSnapshot: RoomSnapshot;
   chatHistory: ChatMessageBroadcast[];
   inventory: InventoryItemPayload[];
+  typingIndicators: ChatTypingBroadcast[];
+  chatPreferences: ChatPreferences;
 };
 
 interface InventoryItemPayload {
@@ -236,6 +253,7 @@ export const createRealtimeServer = async ({
   itemStore,
   pubsub,
   metrics,
+  preferenceStore,
 }: RealtimeDependencies): Promise<RealtimeServer> => {
   const roomRecord = await roomStore.getRoomBySlug(DEVELOPMENT_ROOM_SLUG);
   if (!roomRecord) {
@@ -255,6 +273,7 @@ export const createRealtimeServer = async ({
     occupants: new Map(),
     connections: new Map(),
     items: new Map(roomItems.map((record) => [record.id, toRoomItem(record)])),
+    typingIndicators: new Map(),
   };
 
   for (const occupant of occupantList) {
@@ -388,6 +407,17 @@ export const createRealtimeServer = async ({
 
     developmentRoomState.connections.delete(socket.id);
 
+    if (developmentRoomState.typingIndicators.has(connection.userId)) {
+      clearTypingIndicator(connection.userId);
+      const payload: ChatTypingBroadcast = { userId: connection.userId, isTyping: false };
+      broadcastTypingEvent(payload, socket.id);
+      await pubsub.publishChat({
+        type: 'chat:typing',
+        roomId: developmentRoomState.id,
+        payload,
+      });
+    }
+
     const occupant = developmentRoomState.occupants.get(connection.userId);
     if (!occupant) {
       return;
@@ -453,19 +483,97 @@ export const createRealtimeServer = async ({
     }
   };
 
-  const broadcastChatEvent = (event: RoomChatEvent): void => {
-    updateRoomSeq(event.payload.roomSeq);
+  const pruneTypingIndicators = (now: number = Date.now()): void => {
+    for (const indicator of developmentRoomState.typingIndicators.values()) {
+      if (indicator.expiresAt <= now) {
+        developmentRoomState.typingIndicators.delete(indicator.userId);
+      }
+    }
+  };
+
+  const serialiseTypingIndicators = (): ChatTypingBroadcast[] => {
+    pruneTypingIndicators();
+    return Array.from(developmentRoomState.typingIndicators.values()).map(
+      (indicator) => ({
+        userId: indicator.userId,
+        isTyping: true,
+        preview: indicator.preview ?? undefined,
+        expiresAt: new Date(indicator.expiresAt).toISOString(),
+      }),
+    );
+  };
+
+  const broadcastTypingEvent = (
+    payload: ChatTypingBroadcast,
+    excludeSocketId?: string,
+  ): void => {
     for (const connection of developmentRoomState.connections.values()) {
+      if (excludeSocketId && connection.socket.id === excludeSocketId) {
+        continue;
+      }
+
       safeSend(
         connection.logger,
         connection.socket,
-        createEnvelope('chat:new', 0, event.payload),
+        createEnvelope('chat:typing', 0, payload),
       );
     }
   };
 
+  const setTypingIndicator = (
+    userId: string,
+    preview: string | null,
+  ): TypingIndicatorState => {
+    pruneTypingIndicators();
+    const text = preview && preview.trim().length > 0 ? preview.trim().slice(0, 120) : null;
+    const indicator: TypingIndicatorState = {
+      userId,
+      preview: text,
+      expiresAt: Date.now() + TYPING_INDICATOR_TTL_MS,
+    };
+    developmentRoomState.typingIndicators.set(userId, indicator);
+    return indicator;
+  };
+
+  const clearTypingIndicator = (userId: string): void => {
+    developmentRoomState.typingIndicators.delete(userId);
+  };
+
+  const broadcastChatEvent = (event: RoomChatEvent): void => {
+    if (event.type === 'chat:new') {
+      updateRoomSeq(event.payload.roomSeq);
+      clearTypingIndicator(event.payload.userId);
+      for (const connection of developmentRoomState.connections.values()) {
+        safeSend(
+          connection.logger,
+          connection.socket,
+          createEnvelope('chat:new', 0, event.payload),
+        );
+      }
+      return;
+    }
+
+    if (event.type === 'chat:typing') {
+      if (event.payload.isTyping) {
+        const indicator = setTypingIndicator(event.payload.userId, event.payload.preview ?? null);
+        const serialised: ChatTypingBroadcast = {
+          userId: indicator.userId,
+          isTyping: true,
+          preview: indicator.preview ?? undefined,
+          expiresAt: new Date(indicator.expiresAt).toISOString(),
+        };
+        broadcastTypingEvent(serialised);
+      } else {
+        clearTypingIndicator(event.payload.userId);
+        broadcastTypingEvent({ userId: event.payload.userId, isTyping: false });
+      }
+    }
+  };
+
   await pubsub.subscribeToChat(developmentRoomState.id, (event) => {
-    metrics.chatEvents.inc();
+    if (event.type === 'chat:new') {
+      metrics.chatEvents.inc();
+    }
     broadcastChatEvent(event);
   });
 
@@ -585,6 +693,12 @@ export const createRealtimeServer = async ({
       developmentRoomState.id,
       50,
     );
+    const preferenceRecord = await preferenceStore.getChatPreferences(
+      authenticatedUser.id,
+    );
+    const chatPreferences = chatPreferencesSchema.parse({
+      showSystemMessages: preferenceRecord.showSystemMessages,
+    });
 
     const payload: AuthOkPayload = {
       user: authenticatedUser,
@@ -604,6 +718,8 @@ export const createRealtimeServer = async ({
         roomSeq: record.roomSeq,
       })),
       inventory: inventory.map((item) => toInventoryPayload(item)),
+      typingIndicators: serialiseTypingIndicators(),
+      chatPreferences,
     };
 
     acknowledge(logger, socket, envelope, 'auth:ok', payload);
@@ -677,6 +793,88 @@ export const createRealtimeServer = async ({
     acknowledge(logger, socket, envelope, 'chat:ok', {
       messageId: record.id,
     });
+  };
+
+  const handleTypingUpdate = async (
+    logger: FastifyBaseLogger,
+    socket: Socket,
+    envelope: Envelope,
+    user: AuthenticatedUser,
+  ): Promise<void> => {
+    const parsed = chatTypingUpdateDataSchema.safeParse(envelope.data);
+    if (!parsed.success) {
+      acknowledge(logger, socket, envelope, 'error:chat_typing_payload', {
+        message: 'Invalid typing payload',
+        issues: parsed.error.issues,
+      });
+      return;
+    }
+
+    if (parsed.data.isTyping) {
+      const indicator = setTypingIndicator(user.id, parsed.data.preview ?? null);
+      const payload: ChatTypingBroadcast = {
+        userId: indicator.userId,
+        isTyping: true,
+        preview: indicator.preview ?? undefined,
+        expiresAt: new Date(indicator.expiresAt).toISOString(),
+      };
+      broadcastTypingEvent(payload, socket.id);
+      const event: RoomChatEvent = {
+        type: 'chat:typing',
+        roomId: developmentRoomState.id,
+        payload,
+      };
+      await pubsub.publishChat(event);
+      acknowledge(logger, socket, envelope, 'chat:typing:ok', {
+        isTyping: true,
+        expiresAt: payload.expiresAt,
+      });
+      return;
+    }
+
+    clearTypingIndicator(user.id);
+    const payload: ChatTypingBroadcast = { userId: user.id, isTyping: false };
+    broadcastTypingEvent(payload, socket.id);
+    await pubsub.publishChat({
+      type: 'chat:typing',
+      roomId: developmentRoomState.id,
+      payload,
+    });
+    acknowledge(logger, socket, envelope, 'chat:typing:ok', {
+      isTyping: false,
+    });
+  };
+
+  const handleChatPreferenceUpdate = async (
+    logger: FastifyBaseLogger,
+    socket: Socket,
+    envelope: Envelope,
+    user: AuthenticatedUser,
+  ): Promise<void> => {
+    const parsed = chatPreferenceUpdateDataSchema.safeParse(envelope.data);
+    if (!parsed.success) {
+      acknowledge(logger, socket, envelope, 'error:chat_preferences_payload', {
+        message: 'Invalid chat preference payload',
+        issues: parsed.error.issues,
+      });
+      return;
+    }
+
+    try {
+      const record = await preferenceStore.updateChatShowSystemMessages(
+        user.id,
+        parsed.data.showSystemMessages,
+      );
+      const preferences = chatPreferencesSchema.parse({
+        showSystemMessages: record.showSystemMessages,
+      });
+      acknowledge(logger, socket, envelope, 'chat:preferences:ok', preferences);
+    } catch (error) {
+      logger.error({ err: error }, 'Failed to persist chat preferences');
+      acknowledge(logger, socket, envelope, 'chat:preferences:err', {
+        message: 'Failed to update chat preferences',
+      });
+    }
   };
 
   const handleItemPickup = async (
@@ -945,6 +1143,28 @@ export const createRealtimeServer = async ({
             }
 
             await handleChatSend(logger, socket, envelope, sessionUser);
+            return;
+          }
+          case 'chat:typing': {
+            if (!isAuthenticated || !sessionUser) {
+              acknowledge(logger, socket, envelope, 'error:not_authenticated', {
+                message: 'Authenticate before issuing realtime operations',
+              });
+              return;
+            }
+
+            await handleTypingUpdate(logger, socket, envelope, sessionUser);
+            return;
+          }
+          case 'chat:preferences:update': {
+            if (!isAuthenticated || !sessionUser) {
+              acknowledge(logger, socket, envelope, 'error:not_authenticated', {
+                message: 'Authenticate before issuing realtime operations',
+              });
+              return;
+            }
+
+            await handleChatPreferenceUpdate(logger, socket, envelope, sessionUser);
             return;
           }
           case 'item:pickup': {

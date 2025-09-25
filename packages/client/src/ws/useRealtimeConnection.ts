@@ -1,7 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { io, type Socket } from 'socket.io-client';
 import {
+  chatPreferenceUpdateDataSchema,
+  chatPreferencesSchema,
   chatMessageBroadcastSchema,
+  chatTypingBroadcastSchema,
+  chatTypingUpdateDataSchema,
   inventoryItemSchema,
   itemPickupErrorDataSchema,
   itemPickupOkDataSchema,
@@ -15,6 +19,7 @@ import {
   roomItemRemovedDataSchema,
   roomSnapshotSchema,
   type ChatMessageBroadcast,
+  type ChatPreferences,
   type InventoryItem,
   type MessageEnvelope,
   type RoomOccupant,
@@ -26,6 +31,8 @@ const DEFAULT_HEARTBEAT_MS = 15_000;
 const MAX_RECONNECT_DELAY_MS = 15_000;
 const LOGIN_USERNAME_FALLBACK = 'test';
 const LOGIN_PASSWORD_FALLBACK = 'password123';
+const TYPING_TTL_MS = 6_000;
+const CHAT_BUBBLE_TTL_MS = 7_000;
 
 const sortRoomItems = (items: Iterable<RoomItem>): RoomItem[] =>
   Array.from(items).sort((a, b) => {
@@ -98,6 +105,9 @@ export interface RealtimeConnectionState extends InternalConnectionState {
   sendChat: (body: string) => boolean;
   sendPickup: (itemId: string) => boolean;
   clearPickupResult: (itemId?: string) => void;
+  updateTypingPreview: (preview: string) => void;
+  clearTypingPreview: () => void;
+  updateShowSystemMessages: (show: boolean) => void;
 }
 
 interface PickupResultState {
@@ -105,6 +115,22 @@ interface PickupResultState {
   status: 'ok' | 'error';
   message: string;
 }
+
+interface TypingIndicatorView {
+  userId: string;
+  preview: string | null;
+  expiresAt: number;
+}
+
+interface ChatBubbleView {
+  userId: string;
+  messageId: string;
+  body: string;
+  expiresAt: number;
+}
+
+type TypingIndicatorInternal = { preview: string | null; expiresAt: number };
+type ChatBubbleInternal = { body: string; messageId: string; expiresAt: number };
 
 interface InternalConnectionState {
   status: ConnectionStatus;
@@ -123,6 +149,9 @@ interface InternalConnectionState {
   inventory: InventoryItem[];
   pendingPickupItemIds: string[];
   lastPickupResult: PickupResultState | null;
+  typingIndicators: TypingIndicatorView[];
+  chatBubbles: ChatBubbleView[];
+  chatPreferences: ChatPreferences | null;
 }
 
 const cloneOccupant = (occupant: RoomOccupant): RoomOccupant => ({
@@ -218,6 +247,36 @@ const getLatestPendingTarget = (
   return last;
 };
 
+const normaliseTypingPreview = (input: string | null | undefined): string | null => {
+  if (typeof input !== 'string') {
+    return null;
+  }
+  const trimmed = input.trim();
+  if (trimmed.length === 0) {
+    return null;
+  }
+  return trimmed.slice(0, 120);
+};
+
+const snapshotTypingIndicators = (
+  source: Map<string, TypingIndicatorInternal>,
+): TypingIndicatorView[] =>
+  Array.from(source.entries()).map(([userId, indicator]) => ({
+    userId,
+    preview: indicator.preview,
+    expiresAt: indicator.expiresAt,
+  }));
+
+const snapshotChatBubbles = (
+  source: Map<string, ChatBubbleInternal>,
+): ChatBubbleView[] =>
+  Array.from(source.entries()).map(([userId, bubble]) => ({
+    userId,
+    messageId: bubble.messageId,
+    body: bubble.body,
+    expiresAt: bubble.expiresAt,
+  }));
+
 export const useRealtimeConnection = (): RealtimeConnectionState => {
   const [state, setState] = useState<InternalConnectionState>({
     status: 'connecting',
@@ -236,6 +295,9 @@ export const useRealtimeConnection = (): RealtimeConnectionState => {
     inventory: [],
     pendingPickupItemIds: [],
     lastPickupResult: null,
+    typingIndicators: [],
+    chatBubbles: [],
+    chatPreferences: null,
   });
 
   const socketRef = useRef<Socket | null>(null);
@@ -257,6 +319,12 @@ export const useRealtimeConnection = (): RealtimeConnectionState => {
   const inventoryRef = useRef(new Map<string, InventoryItem>());
   const pendingPickupsRef = useRef(new Map<number, RoomItem>());
   const pendingPickupItemIdRef = useRef(new Map<string, number>());
+  const typingIndicatorsRef = useRef(new Map<string, TypingIndicatorInternal>());
+  const chatBubblesRef = useRef(new Map<string, ChatBubbleInternal>());
+  const typingStopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const typingCleanupIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const bubbleCleanupIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const lastTypingPreviewRef = useRef('');
 
   useEffect(() => {
     disposedRef.current = false;
@@ -274,6 +342,20 @@ export const useRealtimeConnection = (): RealtimeConnectionState => {
       if (countdownTimerRef.current) {
         clearInterval(countdownTimerRef.current);
         countdownTimerRef.current = null;
+      }
+    };
+
+    const clearTypingCleanupTimer = () => {
+      if (typingCleanupIntervalRef.current) {
+        clearInterval(typingCleanupIntervalRef.current);
+        typingCleanupIntervalRef.current = null;
+      }
+    };
+
+    const clearBubbleCleanupTimer = () => {
+      if (bubbleCleanupIntervalRef.current) {
+        clearInterval(bubbleCleanupIntervalRef.current);
+        bubbleCleanupIntervalRef.current = null;
       }
     };
 
@@ -296,6 +378,16 @@ export const useRealtimeConnection = (): RealtimeConnectionState => {
         active.disconnect();
       }
       socketRef.current = null;
+      typingIndicatorsRef.current.clear();
+      chatBubblesRef.current.clear();
+      clearTypingCleanupTimer();
+      clearBubbleCleanupTimer();
+      if (typingStopTimerRef.current) {
+        clearTimeout(typingStopTimerRef.current);
+        typingStopTimerRef.current = null;
+      }
+      lastTypingPreviewRef.current = '';
+      updateState({ typingIndicators: [], chatBubbles: [] });
     };
 
     const startPingTimer = (intervalMs: number) => {
@@ -440,6 +532,15 @@ export const useRealtimeConnection = (): RealtimeConnectionState => {
       pendingMovesRef.current.clear();
       occupantMapRef.current.clear();
       sessionUserRef.current = null;
+      typingIndicatorsRef.current.clear();
+      chatBubblesRef.current.clear();
+      clearTypingCleanupTimer();
+      clearBubbleCleanupTimer();
+      if (typingStopTimerRef.current) {
+        clearTimeout(typingStopTimerRef.current);
+        typingStopTimerRef.current = null;
+      }
+      lastTypingPreviewRef.current = '';
 
       reconnectAttemptsRef.current += 1;
       const attempt = reconnectAttemptsRef.current;
@@ -454,6 +555,8 @@ export const useRealtimeConnection = (): RealtimeConnectionState => {
         pendingMoveTarget: null,
         isMoveInFlight: false,
         chatLog: [],
+        typingIndicators: [],
+        chatBubbles: [],
       });
 
       countdownTimerRef.current = setInterval(() => {
@@ -489,6 +592,107 @@ export const useRealtimeConnection = (): RealtimeConnectionState => {
               : Math.max(previous.lastRoomSeq ?? 0, nextSeq),
         };
       });
+    };
+
+    const publishTypingIndicators = () => {
+      updateState({ typingIndicators: snapshotTypingIndicators(typingIndicatorsRef.current) });
+    };
+
+    const pruneTypingIndicators = (now: number = Date.now()): void => {
+      let changed = false;
+      for (const [userId, indicator] of typingIndicatorsRef.current.entries()) {
+        if (indicator.expiresAt <= now) {
+          typingIndicatorsRef.current.delete(userId);
+          changed = true;
+        }
+      }
+      if (changed) {
+        publishTypingIndicators();
+      }
+    };
+
+    const scheduleTypingCleanup = () => {
+      if (!typingCleanupIntervalRef.current) {
+        typingCleanupIntervalRef.current = setInterval(() => {
+          pruneTypingIndicators();
+          if (typingIndicatorsRef.current.size === 0) {
+            clearTypingCleanupTimer();
+          }
+        }, 1000);
+      }
+    };
+
+    const upsertTypingIndicator = (
+      userId: string,
+      preview: string | null,
+      expiresAt?: number,
+    ): void => {
+      const expiry =
+        typeof expiresAt === 'number' && Number.isFinite(expiresAt)
+          ? expiresAt
+          : Date.now() + TYPING_TTL_MS;
+      typingIndicatorsRef.current.set(userId, {
+        preview: normaliseTypingPreview(preview),
+        expiresAt: expiry,
+      });
+      publishTypingIndicators();
+      scheduleTypingCleanup();
+    };
+
+    const removeTypingIndicator = (userId: string): void => {
+      if (typingIndicatorsRef.current.delete(userId)) {
+        publishTypingIndicators();
+        if (typingIndicatorsRef.current.size === 0) {
+          clearTypingCleanupTimer();
+        }
+      }
+    };
+
+    const publishChatBubbles = () => {
+      updateState({ chatBubbles: snapshotChatBubbles(chatBubblesRef.current) });
+    };
+
+    const pruneChatBubbles = (now: number = Date.now()): void => {
+      let changed = false;
+      for (const [userId, bubble] of chatBubblesRef.current.entries()) {
+        if (bubble.expiresAt <= now) {
+          chatBubblesRef.current.delete(userId);
+          changed = true;
+        }
+      }
+      if (changed) {
+        publishChatBubbles();
+      }
+    };
+
+    const scheduleBubbleCleanup = () => {
+      if (!bubbleCleanupIntervalRef.current) {
+        bubbleCleanupIntervalRef.current = setInterval(() => {
+          pruneChatBubbles();
+          if (chatBubblesRef.current.size === 0) {
+            clearBubbleCleanupTimer();
+          }
+        }, 1000);
+      }
+    };
+
+    const upsertChatBubble = (userId: string, messageId: string, body: string): void => {
+      chatBubblesRef.current.set(userId, {
+        messageId,
+        body,
+        expiresAt: Date.now() + CHAT_BUBBLE_TTL_MS,
+      });
+      publishChatBubbles();
+      scheduleBubbleCleanup();
+    };
+
+    const removeChatBubble = (userId: string): void => {
+      if (chatBubblesRef.current.delete(userId)) {
+        publishChatBubbles();
+        if (chatBubblesRef.current.size === 0) {
+          clearBubbleCleanupTimer();
+        }
+      }
     };
 
     const handleEnvelope = (envelope: MessageEnvelope) => {
@@ -560,6 +764,53 @@ export const useRealtimeConnection = (): RealtimeConnectionState => {
           );
           pendingPickupsRef.current.clear();
           pendingPickupItemIdRef.current.clear();
+          typingIndicatorsRef.current.clear();
+          chatBubblesRef.current.clear();
+          clearTypingCleanupTimer();
+          clearBubbleCleanupTimer();
+          if (typingStopTimerRef.current) {
+            clearTimeout(typingStopTimerRef.current);
+            typingStopTimerRef.current = null;
+          }
+          lastTypingPreviewRef.current = '';
+
+          const typingIndicatorsList: TypingIndicatorView[] = [];
+          const typingRaw = Array.isArray(payload.typingIndicators)
+            ? payload.typingIndicators
+            : [];
+          for (const entry of typingRaw) {
+            const parsedTyping = chatTypingBroadcastSchema.safeParse(entry);
+            if (!parsedTyping.success || !parsedTyping.data.isTyping) {
+              continue;
+            }
+            const expiryMs =
+              typeof parsedTyping.data.expiresAt === 'string'
+                ? Date.parse(parsedTyping.data.expiresAt)
+                : Date.now() + TYPING_TTL_MS;
+            const expiresAt = Number.isFinite(expiryMs)
+              ? expiryMs
+              : Date.now() + TYPING_TTL_MS;
+            const preview = normaliseTypingPreview(parsedTyping.data.preview ?? null);
+            typingIndicatorsRef.current.set(parsedTyping.data.userId, {
+              preview,
+              expiresAt,
+            });
+            typingIndicatorsList.push({
+              userId: parsedTyping.data.userId,
+              preview,
+              expiresAt,
+            });
+          }
+          if (typingIndicatorsRef.current.size > 0) {
+            scheduleTypingCleanup();
+          }
+
+          const preferencesResult = chatPreferencesSchema.safeParse(
+            payload.chatPreferences,
+          );
+          const chatPreferences: ChatPreferences = preferencesResult.success
+            ? preferencesResult.data
+            : { showSystemMessages: true };
 
           const maxSeqCandidates: number[] = [snapshotResult.data.roomSeq];
           for (const entry of chatHistory) {
@@ -587,6 +838,9 @@ export const useRealtimeConnection = (): RealtimeConnectionState => {
             inventory: sortInventoryItems(inventoryRef.current.values()),
             pendingPickupItemIds: [],
             lastPickupResult: null,
+            typingIndicators: typingIndicatorsList,
+            chatBubbles: [],
+            chatPreferences,
           }));
 
           startPingTimer(intervalFromServer);
@@ -698,6 +952,8 @@ export const useRealtimeConnection = (): RealtimeConnectionState => {
           }
 
           occupantMapRef.current.delete(result.data.occupantId);
+          removeTypingIndicator(result.data.occupantId);
+          removeChatBubble(result.data.occupantId);
 
           setState((previous) => ({
             ...previous,
@@ -716,10 +972,66 @@ export const useRealtimeConnection = (): RealtimeConnectionState => {
             return;
           }
 
+          removeTypingIndicator(parsed.data.userId);
+          const isSystemMessage = parsed.data.roles.some(
+            (role) => role.toLowerCase() === 'system',
+          );
+          if (!isSystemMessage) {
+            upsertChatBubble(parsed.data.userId, parsed.data.id, parsed.data.body);
+          }
           appendChatMessage(parsed.data);
           return;
         }
+        case 'chat:typing': {
+          const parsed = chatTypingBroadcastSchema.safeParse(envelope.data);
+          if (!parsed.success) {
+            updateState({ lastError: 'Received malformed chat:typing payload' });
+            return;
+          }
+
+          if (parsed.data.isTyping) {
+            const expiryMs =
+              typeof parsed.data.expiresAt === 'string'
+                ? Date.parse(parsed.data.expiresAt)
+                : Date.now() + TYPING_TTL_MS;
+            const expiresAt = Number.isFinite(expiryMs)
+              ? expiryMs
+              : Date.now() + TYPING_TTL_MS;
+            upsertTypingIndicator(parsed.data.userId, parsed.data.preview ?? null, expiresAt);
+          } else {
+            removeTypingIndicator(parsed.data.userId);
+          }
+          return;
+        }
         case 'chat:ok': {
+          return;
+        }
+        case 'chat:typing:ok': {
+          return;
+        }
+        case 'chat:typing:err': {
+          updateState({ lastError: 'Typing update rejected by server' });
+          return;
+        }
+        case 'chat:preferences:ok': {
+          const parsed = chatPreferencesSchema.safeParse(envelope.data);
+          if (!parsed.success) {
+            updateState({ lastError: 'Received malformed chat preferences payload' });
+            return;
+          }
+
+          setState((previous) => ({
+            ...previous,
+            chatPreferences: parsed.data,
+          }));
+          return;
+        }
+        case 'chat:preferences:err': {
+          const message =
+            typeof envelope.data?.message === 'string'
+              ? envelope.data.message
+              : 'Failed to update chat preferences';
+          updateState({ lastError: message });
           return;
         }
         case 'item:pickup:ok': {
@@ -1061,6 +1373,131 @@ export const useRealtimeConnection = (): RealtimeConnectionState => {
     [state.status],
   );
 
+  const clearTypingPreview = useCallback(() => {
+    if (typingStopTimerRef.current) {
+      clearTimeout(typingStopTimerRef.current);
+      typingStopTimerRef.current = null;
+    }
+
+    const userId = sessionUserRef.current?.id ?? null;
+    if (userId && typingIndicatorsRef.current.delete(userId)) {
+      setState((previous) => ({
+        ...previous,
+        typingIndicators: snapshotTypingIndicators(typingIndicatorsRef.current),
+      }));
+    }
+
+    if (typingIndicatorsRef.current.size === 0 && typingCleanupIntervalRef.current) {
+      clearInterval(typingCleanupIntervalRef.current);
+      typingCleanupIntervalRef.current = null;
+    }
+
+    const shouldSend = state.status === 'connected' && lastTypingPreviewRef.current !== '';
+    lastTypingPreviewRef.current = '';
+
+    const socket = socketRef.current;
+    if (!shouldSend || !socket || !socket.connected) {
+      return;
+    }
+
+    const payloadResult = chatTypingUpdateDataSchema.safeParse({ isTyping: false });
+    if (!payloadResult.success) {
+      return;
+    }
+
+    const seq = seqRef.current;
+    seqRef.current += 1;
+    socket.emit('message', buildEnvelope(seq, 'chat:typing', payloadResult.data));
+  }, [state.status]);
+
+  const updateTypingPreview = useCallback(
+    (preview: string) => {
+      const normalized = normaliseTypingPreview(preview);
+      if (normalized === null) {
+        clearTypingPreview();
+        return;
+      }
+
+      const userId = sessionUserRef.current?.id ?? null;
+      if (userId) {
+        typingIndicatorsRef.current.set(userId, {
+          preview: normalized,
+          expiresAt: Date.now() + TYPING_TTL_MS,
+        });
+        setState((previous) => ({
+          ...previous,
+          typingIndicators: snapshotTypingIndicators(typingIndicatorsRef.current),
+        }));
+      }
+
+      if (!typingCleanupIntervalRef.current) {
+        typingCleanupIntervalRef.current = setInterval(() => {
+          const now = Date.now();
+          let changed = false;
+          for (const [id, indicator] of typingIndicatorsRef.current.entries()) {
+            if (indicator.expiresAt <= now) {
+              typingIndicatorsRef.current.delete(id);
+              changed = true;
+            }
+          }
+          if (changed) {
+            setState((previous) => ({
+              ...previous,
+              typingIndicators: snapshotTypingIndicators(typingIndicatorsRef.current),
+            }));
+          }
+          if (typingIndicatorsRef.current.size === 0 && typingCleanupIntervalRef.current) {
+            clearInterval(typingCleanupIntervalRef.current);
+            typingCleanupIntervalRef.current = null;
+          }
+        }, 1000);
+      }
+
+      const socket = socketRef.current;
+      if (state.status !== 'connected' || !socket || !socket.connected) {
+        lastTypingPreviewRef.current = normalized;
+        if (typingStopTimerRef.current) {
+          clearTimeout(typingStopTimerRef.current);
+        }
+        typingStopTimerRef.current = setTimeout(() => {
+          clearTypingPreview();
+        }, 4000);
+        return;
+      }
+
+      if (typingStopTimerRef.current) {
+        clearTimeout(typingStopTimerRef.current);
+      }
+
+      if (normalized === lastTypingPreviewRef.current) {
+        typingStopTimerRef.current = setTimeout(() => {
+          clearTypingPreview();
+        }, 4000);
+        return;
+      }
+
+      const payloadResult = chatTypingUpdateDataSchema.safeParse({
+        preview: normalized,
+        isTyping: true,
+      });
+      if (!payloadResult.success) {
+        if (import.meta.env.DEV) {
+          console.warn('[chat] Ignoring invalid typing payload', payloadResult.error);
+        }
+        return;
+      }
+
+      const seq = seqRef.current;
+      seqRef.current += 1;
+      socket.emit('message', buildEnvelope(seq, 'chat:typing', payloadResult.data));
+      lastTypingPreviewRef.current = normalized;
+      typingStopTimerRef.current = setTimeout(() => {
+        clearTypingPreview();
+      }, 4000);
+    },
+    [clearTypingPreview, state.status],
+  );
+
   const sendChat = useCallback(
     (body: string): boolean => {
       if (state.status !== 'connected') {
@@ -1081,9 +1518,10 @@ export const useRealtimeConnection = (): RealtimeConnectionState => {
       seqRef.current += 1;
       const envelope = buildEnvelope(seq, 'chat:send', { body: trimmed });
       socket.emit('message', envelope);
+      clearTypingPreview();
       return true;
     },
-    [state.status],
+    [clearTypingPreview, state.status],
   );
 
   const sendPickup = useCallback(
@@ -1152,6 +1590,42 @@ export const useRealtimeConnection = (): RealtimeConnectionState => {
     });
   }, []);
 
+  const updateShowSystemMessages = useCallback(
+    (show: boolean) => {
+      setState((previous) => ({
+        ...previous,
+        chatPreferences: {
+          ...(previous.chatPreferences ?? { showSystemMessages: true }),
+          showSystemMessages: show,
+        },
+      }));
+
+      if (state.status !== 'connected') {
+        return;
+      }
+
+      const socket = socketRef.current;
+      if (!socket || !socket.connected) {
+        return;
+      }
+
+      const payloadResult = chatPreferenceUpdateDataSchema.safeParse({
+        showSystemMessages: show,
+      });
+      if (!payloadResult.success) {
+        if (import.meta.env.DEV) {
+          console.warn('[chat] Invalid preference payload', payloadResult.error);
+        }
+        return;
+      }
+
+      const seq = seqRef.current;
+      seqRef.current += 1;
+      socket.emit('message', buildEnvelope(seq, 'chat:preferences:update', payloadResult.data));
+    },
+    [state.status],
+  );
+
   return useMemo(
     () => ({
       ...state,
@@ -1159,7 +1633,19 @@ export const useRealtimeConnection = (): RealtimeConnectionState => {
       sendChat,
       sendPickup,
       clearPickupResult,
+      updateTypingPreview,
+      clearTypingPreview,
+      updateShowSystemMessages,
     }),
-    [state, sendMove, sendChat, sendPickup, clearPickupResult],
+    [
+      state,
+      sendMove,
+      sendChat,
+      sendPickup,
+      clearPickupResult,
+      updateTypingPreview,
+      clearTypingPreview,
+      updateShowSystemMessages,
+    ],
   );
 };

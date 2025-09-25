@@ -492,23 +492,24 @@ When implementing, **Codex should**:
 
 ---
 
-## 24) Progress Snapshot — 2025-09-24
+## 24) Progress Snapshot — 2025-09-25
 
 - ✅ `useRealtimeConnection` authenticates via `/auth/login`, maintains heartbeats, hydrates the room snapshot, streams historical chat, appends live `chat:new` envelopes, and exposes a composer that emits `chat:send` while the blocking overlay clears automatically after reconnect.
-- ✅ The React client now renders seeded room items beneath avatars, tracks per-item hit boxes, routes selections into the right panel’s item info view, and honours the chat drawer’s system-message toggle alongside the existing admin quick toggles and movement gating.
+- ✅ The React client now renders seeded room items beneath avatars, tracks per-item hit boxes, routes selections into the right panel’s item info view, and overlays realtime typing previews plus authoritative chat bubbles on the canvas while the chat composer listens globally (type anywhere, Enter to send, Esc to cancel) and honours the chat drawer’s per-user system-message preference alongside the admin quick toggles and movement gating.
 - ✅ Right-click context menus now surface tile, item, and avatar actions per spec, gating “Saml Op” to same-tile, non-`noPickup` squares while leaving avatar actions ready for future authority wiring and keeping the admin quick toggles non-blocking.
 - ✅ The “Saml Op” button now emits real `item:pickup` envelopes; the server validates tile/noPickup rules, persists the transfer to Postgres, increments `roomSeq`, broadcasts `room:item_removed`, and the client performs optimistic removal with pending/success/error copy while restoring items on authoritative rejection.
-- ✅ The Fastify server boots Postgres migrations/seeds, validates `auth`/`move`/`chat` envelopes, persists chat history to Postgres, relays cross-instance chat through Redis pub/sub, and exposes `/healthz`, `/readyz`, and `/metrics` endpoints instrumented with Prometheus counters.
+- ✅ The Fastify server boots Postgres migrations/seeds, validates `auth`/`move`/`chat` envelopes, persists chat history to Postgres, relays cross-instance chat through Redis pub/sub, persists per-user chat drawer preferences, and exposes `/healthz`, `/readyz`, and `/metrics` endpoints instrumented with Prometheus counters.
 - ✅ `@bitby/schemas` publishes JSON Schemas for `auth`, `move`, and `chat` plus an OpenAPI document for `/auth/login`, keeping both tiers on a single contract for realtime and REST payloads.
 - ✅ Workspace scripts rebuild shared schemas before Vite launches, and lint/typecheck/test/build workflows cover the new chat, item, and observability codepaths.
-- Latest connectivity screenshot with chat + item panel: `browser:/invocations/mdaqbhvm/artifacts/artifacts/context-menu-connected.png`.
+- ✅ `@bitby/server` now ships a Vitest-backed integration/E2E suite that boots Postgres/Redis via Testcontainers (or `BITBY_TEST_STACK=external`) and drives auth, heartbeat, reconnect, typing, chat, movement, and item pickup flows to guard regressions across the realtime pipeline.
+- Latest connectivity screenshot with chat + item panel: `browser:/invocations/kmpruogw/artifacts/artifacts/connected-room.png`.
+- **Infra fallback:** When Docker is unavailable, install Postgres/Redis via `apt` (`sudo apt-get install -y postgresql redis-server`), start them with `sudo pg_ctlcluster 16 main start` and `redis-server --daemonize yes`, then create the `bitby` role/database before launching the server (see README §L6b).
 
 ### Immediate Next Focus
 
 1. Surface the newly persisted inventory/backpack data in the UI so pickups appear instantly after authoritative acknowledgement.
-2. Add typing bubbles and chat bubble rendering on the canvas while persisting the system-message preference.
-3. Promote the new context menu actions from local stubs to authoritative flows (profile panel, trade bootstrap, mute/report) while preserving the gating rules.
-4. Stand up integration/E2E tests that drive auth → chat → move → item flows against Postgres/Redis and gate CI on them.
-5. Gate or demote the `[realtime]` debug logging before shipping production builds.
+2. Promote the new context menu actions from local stubs to authoritative flows (profile panel, trade bootstrap, mute/report) while preserving the gating rules.
+3. Extend the admin quick menu so authoritative toggles (lock/noPickup, latency trace) persist via Postgres/Redis.
+4. Gate or demote the `[realtime]` debug logging before shipping production builds.
 
 **End of AGENT.md**

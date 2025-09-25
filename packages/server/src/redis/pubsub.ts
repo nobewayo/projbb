@@ -4,19 +4,30 @@ import type { ServerConfig } from '../config.js';
 
 const ROOM_CHAT_CHANNEL = (roomId: string): string => `room.${roomId}.chat`;
 
-export interface RoomChatEvent {
-  type: 'chat:new';
-  roomId: string;
-  payload: {
-    id: string;
-    userId: string;
-    username: string;
-    roles: string[];
-    body: string;
-    createdAt: string;
-    roomSeq: number;
-  };
-}
+export type RoomChatEvent =
+  | {
+      type: 'chat:new';
+      roomId: string;
+      payload: {
+        id: string;
+        userId: string;
+        username: string;
+        roles: string[];
+        body: string;
+        createdAt: string;
+        roomSeq: number;
+      };
+    }
+  | {
+      type: 'chat:typing';
+      roomId: string;
+      payload: {
+        userId: string;
+        isTyping: boolean;
+        preview?: string;
+        expiresAt?: string;
+      };
+    };
 
 export interface RoomPubSub {
   publishChat(event: RoomChatEvent): Promise<void>;

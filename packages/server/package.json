@@ -10,7 +10,7 @@
     "start": "node dist/index.js",
     "lint": "eslint \"src/**/*.{ts,tsx}\"",
     "typecheck": "tsc -p tsconfig.build.json --noEmit",
-    "test": "vitest run --passWithNoTests"
+    "test": "pnpm --filter @bitby/schemas build && vitest run"
   },
   "dependencies": {
     "@bitby/schemas": "workspace:*",
@@ -28,11 +28,15 @@
   },
   "devDependencies": {
     "@types/jsonwebtoken": "^9.0.6",
+    "@testcontainers/postgresql": "^11.6.0",
+    "@testcontainers/redis": "^11.6.0",
     "@types/node": "^20.12.7",
     "@types/pg": "^8.6.6",
     "eslint": "^8.57.0",
     "prettier": "^3.2.5",
     "tslib": "^2.6.2",
+    "socket.io-client": "^4.8.1",
+    "testcontainers": "^11.6.0",
     "tsx": "^4.7.1",
     "typescript": "^5.4.5",
     "vitest": "^1.5.2"
