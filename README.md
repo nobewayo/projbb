@@ -4,15 +4,16 @@
 This repository implements the Bitby platform following the **Master Spec v3.7**. The stack is now wired together as a pnpm monorepo with:
 
 - a Vite + React client that renders the deterministic top-right anchored grid, keeps the blocking reconnect overlay mandated by the spec, streams authoritative chat history with a freeform composer that listens globally (type anywhere on the stage, press **Enter** to send, **Esc** to cancel), paints dev room items beneath avatars with click-through hit testing so the right panel can surface spec-compliant pickup gating copy, exposes spec-compliant right-click context menus for tiles, items, and avatars, and now renders realtime typing previews plus authoritative chat bubbles on the canvas while persisting each user’s chat drawer system-message preference.
+- an admin quick menu that hydrates the authoritative `/admin/rooms/:roomId/state` REST endpoint so grid/hover visibility, movement animation, tile lock/noPickup, and latency trace flags persist in Postgres while Redis broadcasts keep every connected client in sync.
 - a Fastify-based server backed by Postgres and Redis that issues short-lived JWTs from `/auth/login`, runs migrations/seeds on boot, exposes Socket.IO handlers for `auth`, `move`, and `chat`, publishes cross-instance chat via Redis, and exports `/healthz`, `/readyz`, and `/metrics` endpoints instrumented with Prometheus counters.
 - a Vitest integration harness under `@bitby/server` that authenticates through `/auth/login`, drives heartbeat, typing, chat, movement, and item pickup flows against Postgres/Redis, and can launch via Testcontainers or a locally installed stack (`BITBY_TEST_STACK`).
 - shared schema utilities covering the canonical realtime envelope plus JSON Schemas for `auth`, `move`, and `chat` alongside an OpenAPI description of the `/auth/login` REST endpoint so both tiers validate identical payloads.
 - Docker Compose definitions for Postgres and Redis plus pnpm workflows that hydrate the entire stack for local development.
-- Latest connected client screenshot (freeform canvas chat): `browser:/invocations/kmpruogw/artifacts/artifacts/connected-room.png`.
+- Latest connected client screenshot (authoritative admin toggles visible): `browser:/invocations/wlrtdird/artifacts/artifacts/connected-room.png`.
 
 This guide explains how to clone, run, and test the project on Debian- or Ubuntu-based Linux desktops. The workflow below assumes an apt-based distribution (Debian 12 “Bookworm”, Ubuntu 22.04 “Jammy”, or newer) with sudo access.
 
-> **Note:** The deterministic grid renderer still paints the full 10-row field (10 columns on even rows, 11 on odd rows) with the development background and HUD overlays, but the realtime hook now authenticates, maintains heartbeats, hydrates chat history, appends live `chat:new` envelopes alongside movement deltas, and surfaces realtime typing previews plus committed chat bubbles directly on the canvas. Item sprites render beneath avatars with alpha-aware hit tests so left-clicking opens the panel’s item view, which shows “Kan ikke samle op her” vs. “Klar til at samle op” copy based on tile flags and the local avatar’s position while the server remains authoritative for `move`, `chat`, and presence snapshots sourced from Postgres/Redis. Right-clicking tiles, items, or avatars now spawns spec-mandated context menus, including “Saml Op” buttons that only enable when the local avatar stands on a pickup-eligible tile. The chat drawer’s system-message toggle persists per user via the authoritative server preference store, and the chat composer now runs entirely in the canvas: typing anywhere starts a preview bubble, Enter commits to the server, and Esc clears the draft.
+> **Note:** The deterministic grid renderer still paints the full 10-row field (10 columns on even rows, 11 on odd rows) with the development background and HUD overlays, but the realtime hook now authenticates, maintains heartbeats, hydrates chat history, appends live `chat:new` envelopes alongside movement deltas, and surfaces realtime typing previews plus committed chat bubbles directly on the canvas. Item sprites render beneath avatars with alpha-aware hit tests so left-clicking opens the panel’s item view, which shows “Kan ikke samle op her” vs. “Klar til at samle op” copy based on tile flags and the local avatar’s position while the server remains authoritative for `move`, `chat`, and presence snapshots sourced from Postgres/Redis. Right-clicking tiles, items, or avatars now spawns spec-mandated context menus, including “Saml Op” buttons that only enable when the local avatar stands on a pickup-eligible tile. The chat drawer’s system-message toggle persists per user via the authoritative server preference store, and the chat composer now runs entirely in the canvas: typing anywhere starts a preview bubble, Enter commits to the server, and Esc clears the draft. Admin quick-menu toggles now follow the same pattern: the client hydrates `adminState` from the realtime handshake, optimistically marks pending flags, calls the REST patch helper, then reconciles once the authoritative payload arrives.
 
 ---
 
@@ -24,6 +25,16 @@ This guide explains how to clone, run, and test the project on Debian- or Ubuntu
 - **Backspace editing** — standard editing keys (Backspace, character keys, space) update the preview in realtime while staying within the 120-character spec limit.
 
 The chat drawer no longer carries a dedicated hint card—the composer lives exclusively on the canvas while the drawer focuses on history and the system-message toggle.
+
+### Admin quick menu (authoritative toggles)
+
+- **Show grid** — flips the development grid overlay by calling `PATCH /admin/rooms/:roomId/state` with `{ "showGrid": boolean }`. The button shows a pressed state when the override hides the grid and disables itself while the REST request is in flight.
+- **Hidden hover highlight** — controls whether tile hover affordances render when the grid is hidden (`showHoverWhenGridHidden`).
+- **Move animations** — toggles avatar lerp animations (`moveAnimationsEnabled`).
+- **Lock tiles / Pickup block** — gates tile locks (`lockTilesEnabled`) and no-pickup enforcement (`noPickupEnabled`).
+- **Latency trace** — flips `latencyTraceEnabled` so the server can emit high-frequency latency logs during debugging.
+
+State changes persist to Postgres via the new `room_admin_state` table, echo to connected realtime clients through Redis pub/sub, and hydrate automatically on the websocket handshake so reconnecting browsers mirror the authoritative toggles instantly.
 
 ---
 
@@ -114,7 +125,7 @@ All commands below assume you are inside the repository root (`projbb/`). Use se
    ```bash
    pnpm --filter @bitby/server dev
    ```
-   The server listens on `http://localhost:3001`, runs migrations/seeds against Postgres on boot, exposes `/auth/login`, `/healthz`, `/readyz`, and `/metrics`, and bridges chat traffic through Redis pub/sub.
+   The server listens on `http://localhost:3001`, runs migrations/seeds against Postgres on boot, exposes `/auth/login`, `/healthz`, `/readyz`, `/metrics`, and `/admin/rooms/:roomId/state`, and bridges chat traffic plus admin toggles through Redis pub/sub.
 2. **Client (Vite + React)**:
    ```bash
    pnpm --filter @bitby/client dev
@@ -354,8 +365,8 @@ Copy the template to `.env.local` (git-ignored) and adjust values for your machi
 
 1. Surface the persisted backpack inventory in the right panel so newly acquired items appear immediately after authoritative acknowledgement (§5, §A.5).
 2. Wire the new context menu actions into authoritative flows so “Info”, “Saml Op”, and avatar options surface the correct right-panel views and server mutations instead of local placeholders (§3, §A.6).
-3. Extend the admin quick menu so the controls call authoritative endpoints for lock/noPickup toggles, latency tracing, and dev affordances, persisting state in Postgres/Redis (§A.5, §21).
-4. Establish automated integration and E2E tests (move + chat + item flows) that run against the Postgres/Redis stack to guard regressions in the heartbeat, reconnect, and chat pipelines (§8, §23).
+3. Backfill integration coverage for `/admin/rooms/:roomId/state` (REST) and the Redis admin pub/sub pipeline, including client quick-menu regression tests around pending state and reconnect flows (§A.5, §21).
+4. Expand the automated integration/E2E suite beyond movement/chat/item flows to exercise admin toggles, reconnect overlays, and concurrent admin updates against Postgres/Redis (§8, §23).
 5. Polish the chat surfaces with bubble fade-out/animation work, 500 ms timestamp tooltips, and multi-instance QA to ensure typing previews and canvas bubbles stay consistent across clusters (§3–4, §A.7).
 
 

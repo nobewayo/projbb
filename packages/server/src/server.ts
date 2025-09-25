@@ -5,6 +5,7 @@ import { Server as SocketIOServer } from 'socket.io';
 import type { ReadinessController } from './readiness.js';
 import type { ServerConfig } from './config.js';
 import { authRoutes } from './api/auth.js';
+import { adminRoutes } from './api/admin.js';
 import { resolveCorsOrigins } from './config.js';
 import { createPgPool } from './db/pool.js';
 import { runMigrations } from './db/migrations.js';
@@ -16,6 +17,7 @@ import { createRoomPubSub } from './redis/pubsub.js';
 import { createMetricsBundle } from './metrics/registry.js';
 import { createRealtimeServer } from './ws/connection.js';
 import { createPreferenceStore } from './db/preferences.js';
+import { createAdminStateStore } from './db/admin.js';
 
 const MAX_WS_MESSAGE_BYTES = 64 * 1024;
 
@@ -42,6 +44,7 @@ export const createServer = async ({
   const roomStore = createRoomStore(pool);
   const chatStore = createChatStore(pool);
   const itemStore = createItemStore(pool);
+  const adminStateStore = createAdminStateStore(pool);
   const metrics = createMetricsBundle();
   const instanceId = randomUUID();
   const pubsub = await createRoomPubSub({
@@ -58,6 +61,7 @@ export const createServer = async ({
     pubsub,
     metrics,
     preferenceStore,
+    adminStateStore,
   });
 
   app.decorate('readiness', readiness);
@@ -68,6 +72,13 @@ export const createServer = async ({
   });
 
   await app.register(authRoutes, { config, userStore });
+  await app.register(adminRoutes, {
+    config,
+    adminStateStore,
+    roomStore,
+    pubsub,
+    realtime,
+  });
 
   app.get('/healthz', async () => ({ status: 'ok' }));
 

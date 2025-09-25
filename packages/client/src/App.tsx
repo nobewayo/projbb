@@ -305,7 +305,9 @@ const ActiveContextMenu = forwardRef<HTMLDivElement | null, ActiveContextMenuPro
             <div>
               <span className="context-menu__title">{occupant.username}</span>
               <span className="context-menu__roles">
-                {occupant.roles.map((role) => role.toUpperCase()).join(' · ') || 'PLAYER'}
+                {occupant.roles
+                  .map((role: string) => role.toUpperCase())
+                  .join(' · ') || 'PLAYER'}
               </span>
             </div>
             <p className="context-menu__subtitle">
@@ -443,9 +445,6 @@ const App = (): JSX.Element => {
   );
   const [showSystemMessages, setShowSystemMessages] = useState(true);
   const [showBackToTop, setShowBackToTop] = useState(false);
-  const [isGridVisible, setIsGridVisible] = useState(true);
-  const [showHoverWhenGridHidden, setShowHoverWhenGridHidden] = useState(true);
-  const [areMoveAnimationsEnabled, setAreMoveAnimationsEnabled] = useState(true);
   const [chatDraft, setChatDraft] = useState('');
   const chatDraftRef = useRef(chatDraft);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
@@ -453,7 +452,29 @@ const App = (): JSX.Element => {
   const chatMessagesRef = useRef<HTMLOListElement | null>(null);
   const contextMenuRef = useRef<HTMLDivElement | null>(null);
   const connection = useRealtimeConnection();
-  const { sendChat, updateTypingPreview, clearTypingPreview } = connection;
+  const adminState = connection.adminState ?? {
+    showGrid: true,
+    showHoverWhenGridHidden: true,
+    moveAnimationsEnabled: true,
+    latencyTraceEnabled: false,
+    lockTilesEnabled: false,
+    noPickupEnabled: false,
+    updatedAt: '',
+    updatedBy: null,
+  };
+  const {
+    showGrid,
+    showHoverWhenGridHidden,
+    moveAnimationsEnabled,
+    latencyTraceEnabled,
+    lockTilesEnabled,
+    noPickupEnabled,
+  } = adminState;
+  const pendingAdminKeys = useMemo(
+    () => new Set(connection.adminStatePendingKeys ?? []),
+    [connection.adminStatePendingKeys],
+  );
+  const { sendChat, updateTypingPreview, clearTypingPreview, updateAdminState } = connection;
 
   useEffect(() => {
     chatDraftRef.current = chatDraft;
@@ -600,7 +621,9 @@ const App = (): JSX.Element => {
       const time = Number.isNaN(timestamp.getTime())
         ? ''
         : timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-      const isSystem = message.roles.some((role) => role.toLowerCase() === 'system');
+      const isSystem = message.roles.some(
+        (role: string) => role.toLowerCase() === 'system',
+      );
       return {
         id: message.id,
         actor: message.username,
@@ -1166,50 +1189,92 @@ const App = (): JSX.Element => {
   };
 
   const adminShortcuts = useMemo(
-    () => [
-      {
-        label: 'Reload room',
-        onClick: () => {
-          if (import.meta.env.DEV) {
-            console.debug('[admin] Reload room requested');
-          }
+    () => {
+      const shortcuts = [
+        {
+          label: 'Reload room',
+          onClick: () => {
+            if (import.meta.env.DEV) {
+              console.debug('[admin] Reload room requested');
+            }
+          },
         },
-      },
-      {
-        label: isGridVisible ? 'Hide grid' : 'Show grid',
-        onClick: () => {
-          setIsGridVisible((prev) => !prev);
+        {
+          label: showGrid ? 'Hide grid' : 'Show grid',
+          onClick: () => {
+            void updateAdminState({ showGrid: !showGrid });
+          },
+          pressed: !showGrid,
+          disabled: pendingAdminKeys.has('showGrid'),
         },
-        pressed: !isGridVisible,
-      },
-      {
-        label: showHoverWhenGridHidden
-          ? 'Disable hidden hover highlight'
-          : 'Enable hidden hover highlight',
-        onClick: () => {
-          setShowHoverWhenGridHidden((prev) => !prev);
+        {
+          label: showHoverWhenGridHidden
+            ? 'Disable hidden hover highlight'
+            : 'Enable hidden hover highlight',
+          onClick: () => {
+            void updateAdminState({
+              showHoverWhenGridHidden: !showHoverWhenGridHidden,
+            });
+          },
+          pressed: showHoverWhenGridHidden,
+          disabled: pendingAdminKeys.has('showHoverWhenGridHidden'),
         },
-        pressed: showHoverWhenGridHidden,
-      },
-      {
-        label: areMoveAnimationsEnabled
-          ? 'Disable move animations'
-          : 'Enable move animations',
-        onClick: () => {
-          setAreMoveAnimationsEnabled((prev) => !prev);
+        {
+          label: moveAnimationsEnabled
+            ? 'Disable move animations'
+            : 'Enable move animations',
+          onClick: () => {
+            void updateAdminState({
+              moveAnimationsEnabled: !moveAnimationsEnabled,
+            });
+          },
+          pressed: !moveAnimationsEnabled,
+          disabled: pendingAdminKeys.has('moveAnimationsEnabled'),
         },
-        pressed: !areMoveAnimationsEnabled,
-      },
-      {
-        label: 'Latency trace',
-        onClick: () => {
-          if (import.meta.env.DEV) {
-            console.debug('[admin] Latency trace requested');
-          }
+        {
+          label: lockTilesEnabled ? 'Disable lock tiles' : 'Enable lock tiles',
+          onClick: () => {
+            void updateAdminState({
+              lockTilesEnabled: !lockTilesEnabled,
+            });
+          },
+          pressed: lockTilesEnabled,
+          disabled: pendingAdminKeys.has('lockTilesEnabled'),
         },
-      },
+        {
+          label: noPickupEnabled ? 'Disable pickup block' : 'Enable pickup block',
+          onClick: () => {
+            void updateAdminState({
+              noPickupEnabled: !noPickupEnabled,
+            });
+          },
+          pressed: noPickupEnabled,
+          disabled: pendingAdminKeys.has('noPickupEnabled'),
+        },
+        {
+          label: latencyTraceEnabled ? 'Stop latency trace' : 'Start latency trace',
+          onClick: () => {
+            void updateAdminState({
+              latencyTraceEnabled: !latencyTraceEnabled,
+            });
+          },
+          pressed: latencyTraceEnabled,
+          disabled: pendingAdminKeys.has('latencyTraceEnabled'),
+        },
+      ];
+
+      return shortcuts;
+    },
+    [
+      updateAdminState,
+      latencyTraceEnabled,
+      lockTilesEnabled,
+      moveAnimationsEnabled,
+      noPickupEnabled,
+      pendingAdminKeys,
+      showGrid,
+      showHoverWhenGridHidden,
     ],
-    [areMoveAnimationsEnabled, isGridVisible, showHoverWhenGridHidden],
   );
 
   return (
@@ -1298,9 +1363,9 @@ const App = (): JSX.Element => {
               onItemContextMenu={handleItemContextMenu}
               onOccupantContextMenu={handleOccupantContextMenu}
               localOccupantId={connection.user?.id ?? null}
-              showGrid={isGridVisible}
+              showGrid={showGrid}
               showHoverWhenGridHidden={showHoverWhenGridHidden}
-              moveAnimationsEnabled={areMoveAnimationsEnabled}
+              moveAnimationsEnabled={moveAnimationsEnabled}
               typingIndicators={connection.typingIndicators}
               chatBubbles={connection.chatBubbles}
             />
@@ -1476,6 +1541,7 @@ const App = (): JSX.Element => {
             onClick={item.onClick}
             aria-pressed={item.pressed}
             data-active={item.pressed}
+            disabled={item.disabled}
           >
             {item.label}
           </button>

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { io, type Socket } from 'socket.io-client';
 import {
+  adminQuickMenuStateSchema,
   chatPreferenceUpdateDataSchema,
   chatPreferencesSchema,
   chatMessageBroadcastSchema,
@@ -25,6 +26,7 @@ import {
   type RoomOccupant,
   type RoomItem,
   type RoomTileFlag,
+  type AdminQuickMenuState,
 } from '@bitby/schemas';
 
 const DEFAULT_HEARTBEAT_MS = 15_000;
@@ -33,6 +35,27 @@ const LOGIN_USERNAME_FALLBACK = 'test';
 const LOGIN_PASSWORD_FALLBACK = 'password123';
 const TYPING_TTL_MS = 6_000;
 const CHAT_BUBBLE_TTL_MS = 7_000;
+
+type AdminFlagKey =
+  | 'showGrid'
+  | 'showHoverWhenGridHidden'
+  | 'moveAnimationsEnabled'
+  | 'latencyTraceEnabled'
+  | 'lockTilesEnabled'
+  | 'noPickupEnabled';
+
+type AdminQuickMenuFlags = Pick<AdminQuickMenuState, AdminFlagKey>;
+
+const DEFAULT_ADMIN_STATE: AdminQuickMenuState = {
+  showGrid: true,
+  showHoverWhenGridHidden: true,
+  moveAnimationsEnabled: true,
+  latencyTraceEnabled: false,
+  lockTilesEnabled: false,
+  noPickupEnabled: false,
+  updatedAt: new Date(0).toISOString(),
+  updatedBy: null,
+};
 
 const sortRoomItems = (items: Iterable<RoomItem>): RoomItem[] =>
   Array.from(items).sort((a, b) => {
@@ -108,6 +131,7 @@ export interface RealtimeConnectionState extends InternalConnectionState {
   updateTypingPreview: (preview: string) => void;
   clearTypingPreview: () => void;
   updateShowSystemMessages: (show: boolean) => void;
+  updateAdminState: (patch: Partial<AdminQuickMenuFlags>) => Promise<boolean>;
 }
 
 interface PickupResultState {
@@ -152,6 +176,8 @@ interface InternalConnectionState {
   typingIndicators: TypingIndicatorView[];
   chatBubbles: ChatBubbleView[];
   chatPreferences: ChatPreferences | null;
+  adminState: AdminQuickMenuState | null;
+  adminStatePendingKeys: AdminFlagKey[];
 }
 
 const cloneOccupant = (occupant: RoomOccupant): RoomOccupant => ({
@@ -298,6 +324,8 @@ export const useRealtimeConnection = (): RealtimeConnectionState => {
     typingIndicators: [],
     chatBubbles: [],
     chatPreferences: null,
+    adminState: null,
+    adminStatePendingKeys: [],
   });
 
   const socketRef = useRef<Socket | null>(null);
@@ -325,6 +353,123 @@ export const useRealtimeConnection = (): RealtimeConnectionState => {
   const typingCleanupIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const bubbleCleanupIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const lastTypingPreviewRef = useRef('');
+  const adminStateRef = useRef<AdminQuickMenuState>(DEFAULT_ADMIN_STATE);
+  const adminPendingRef = useRef(new Set<AdminFlagKey>());
+  const roomIdRef = useRef<string | null>(null);
+
+  const updateState = useCallback((partial: Partial<InternalConnectionState>) => {
+    setState((previous) => {
+      const next = {
+        ...previous,
+        ...partial,
+      };
+
+      if (import.meta.env.DEV && previous.status !== next.status) {
+        console.debug('[realtime] status', previous.status, '→', next.status);
+      }
+
+      if (import.meta.env.DEV && next.lastError && next.lastError !== previous.lastError) {
+        console.debug('[realtime] lastError', next.lastError);
+      }
+
+      return next;
+    });
+  }, []);
+
+  const requestAuthToken = useCallback(async (): Promise<string> => {
+    if (disposedRef.current) {
+      throw new Error('Realtime connection disposed');
+    }
+
+    const explicit = getExplicitToken();
+    if (explicit) {
+      tokenRef.current = explicit;
+      return explicit;
+    }
+
+    if (tokenRef.current) {
+      return tokenRef.current;
+    }
+
+    if (loginPromiseRef.current) {
+      return loginPromiseRef.current;
+    }
+
+    const { username, password } = getDevCredentials();
+    const baseUrl = resolveHttpBaseUrl();
+
+    if (loginAbortRef.current) {
+      loginAbortRef.current.abort();
+    }
+
+    const controller = new AbortController();
+    loginAbortRef.current = controller;
+
+    const promise = fetch(`${baseUrl}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password }),
+      credentials: 'include',
+      signal: controller.signal,
+    })
+      .then(async (response) => {
+        if (!response.ok) {
+          const clone = response.clone();
+          let message = `Login failed (${response.status})`;
+          try {
+            const errorJson = await clone.json();
+            if (errorJson && typeof errorJson.message === 'string') {
+              message = `${message}: ${errorJson.message}`;
+            }
+          } catch {
+            const errorText = await clone.text().catch(() => '');
+            if (errorText) {
+              message = `${message}: ${errorText}`;
+            }
+          }
+          throw new Error(message);
+        }
+
+        let payload: unknown;
+        try {
+          payload = await response.json();
+        } catch (error) {
+          throw new Error('Unable to parse login response');
+        }
+
+        if (!payload || typeof payload !== 'object') {
+          throw new Error('Login response missing token');
+        }
+
+        const tokenValue = (payload as { token?: unknown }).token;
+        if (typeof tokenValue !== 'string' || tokenValue.length === 0) {
+          throw new Error('Login response missing token');
+        }
+
+        tokenRef.current = tokenValue;
+        return tokenValue;
+      });
+
+    loginPromiseRef.current = promise
+      .catch((error) => {
+        tokenRef.current = null;
+        throw error;
+      })
+      .finally(() => {
+        if (loginPromiseRef.current === promise) {
+          loginPromiseRef.current = null;
+        }
+        if (loginAbortRef.current === controller) {
+          loginAbortRef.current = null;
+        }
+      });
+
+    if (!loginPromiseRef.current) {
+      throw new Error('Failed to start login request');
+    }
+
+    return loginPromiseRef.current;
+  }, []);
 
   useEffect(() => {
     disposedRef.current = false;
@@ -406,124 +551,6 @@ export const useRealtimeConnection = (): RealtimeConnectionState => {
       }, intervalMs);
     };
 
-    const updateState = (partial: Partial<InternalConnectionState>) => {
-      setState((previous) => {
-        const next = {
-          ...previous,
-          ...partial,
-        };
-
-        if (import.meta.env.DEV && previous.status !== next.status) {
-          console.debug('[realtime] status', previous.status, '→', next.status);
-        }
-
-        if (
-          import.meta.env.DEV &&
-          next.lastError &&
-          next.lastError !== previous.lastError
-        ) {
-          console.debug('[realtime] lastError', next.lastError);
-        }
-
-        return next;
-      });
-    };
-
-    const requestAuthToken = async (): Promise<string> => {
-      if (disposedRef.current) {
-        throw new Error('Realtime connection disposed');
-      }
-
-      const explicit = getExplicitToken();
-      if (explicit) {
-        tokenRef.current = explicit;
-        return explicit;
-      }
-
-      if (tokenRef.current) {
-        return tokenRef.current;
-      }
-
-      if (loginPromiseRef.current) {
-        return loginPromiseRef.current;
-      }
-
-      const { username, password } = getDevCredentials();
-      const baseUrl = resolveHttpBaseUrl();
-
-      if (loginAbortRef.current) {
-        loginAbortRef.current.abort();
-      }
-
-      const controller = new AbortController();
-      loginAbortRef.current = controller;
-
-      const promise = fetch(`${baseUrl}/auth/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password }),
-        credentials: 'include',
-        signal: controller.signal,
-      })
-        .then(async (response) => {
-          if (!response.ok) {
-            const clone = response.clone();
-            let message = `Login failed (${response.status})`;
-            try {
-              const errorJson = await clone.json();
-              if (errorJson && typeof errorJson.message === 'string') {
-                message = `${message}: ${errorJson.message}`;
-              }
-            } catch {
-              const errorText = await clone.text().catch(() => '');
-              if (errorText) {
-                message = `${message}: ${errorText}`;
-              }
-            }
-            throw new Error(message);
-          }
-
-          let payload: unknown;
-          try {
-            payload = await response.json();
-          } catch (error) {
-            throw new Error('Unable to parse login response');
-          }
-
-          if (!payload || typeof payload !== 'object') {
-            throw new Error('Login response missing token');
-          }
-
-          const tokenValue = (payload as { token?: unknown }).token;
-          if (typeof tokenValue !== 'string' || tokenValue.length === 0) {
-            throw new Error('Login response missing token');
-          }
-
-          tokenRef.current = tokenValue;
-          return tokenValue;
-        });
-
-      loginPromiseRef.current = promise
-        .catch((error) => {
-          tokenRef.current = null;
-          throw error;
-        })
-        .finally(() => {
-          if (loginPromiseRef.current === promise) {
-            loginPromiseRef.current = null;
-          }
-          if (loginAbortRef.current === controller) {
-            loginAbortRef.current = null;
-          }
-        });
-
-      if (!loginPromiseRef.current) {
-        throw new Error('Failed to initialise login flow');
-      }
-
-      return loginPromiseRef.current;
-    };
-
     const scheduleReconnect = () => {
       clearPingTimer();
       clearCountdownTimer();
@@ -541,6 +568,7 @@ export const useRealtimeConnection = (): RealtimeConnectionState => {
         typingStopTimerRef.current = null;
       }
       lastTypingPreviewRef.current = '';
+      roomIdRef.current = null;
 
       reconnectAttemptsRef.current += 1;
       const attempt = reconnectAttemptsRef.current;
@@ -812,6 +840,14 @@ export const useRealtimeConnection = (): RealtimeConnectionState => {
             ? preferencesResult.data
             : { showSystemMessages: true };
 
+          const adminStateResult = adminQuickMenuStateSchema.safeParse(payload.adminState);
+          const adminState: AdminQuickMenuState = adminStateResult.success
+            ? adminStateResult.data
+            : DEFAULT_ADMIN_STATE;
+          adminStateRef.current = adminState;
+          adminPendingRef.current.clear();
+          roomIdRef.current = normalizedRoom.id;
+
           const maxSeqCandidates: number[] = [snapshotResult.data.roomSeq];
           for (const entry of chatHistory) {
             if (typeof entry.roomSeq === 'number') {
@@ -841,6 +877,8 @@ export const useRealtimeConnection = (): RealtimeConnectionState => {
             typingIndicators: typingIndicatorsList,
             chatBubbles: [],
             chatPreferences,
+            adminState,
+            adminStatePendingKeys: [],
           }));
 
           startPingTimer(intervalFromServer);
@@ -980,6 +1018,22 @@ export const useRealtimeConnection = (): RealtimeConnectionState => {
             upsertChatBubble(parsed.data.userId, parsed.data.id, parsed.data.body);
           }
           appendChatMessage(parsed.data);
+          return;
+        }
+        case 'admin:state': {
+          const parsed = adminQuickMenuStateSchema.safeParse(envelope.data);
+          if (!parsed.success) {
+            updateState({ lastError: 'Received malformed admin:state payload' });
+            return;
+          }
+
+          adminStateRef.current = parsed.data;
+          adminPendingRef.current.clear();
+          setState((previous) => ({
+            ...previous,
+            adminState: parsed.data,
+            adminStatePendingKeys: [],
+          }));
           return;
         }
         case 'chat:typing': {
@@ -1626,6 +1680,90 @@ export const useRealtimeConnection = (): RealtimeConnectionState => {
     [state.status],
   );
 
+  const updateAdminState = useCallback(
+    async (patch: Partial<AdminQuickMenuFlags>): Promise<boolean> => {
+      const entries = Object.entries(patch) as Array<[AdminFlagKey, boolean]>;
+      if (entries.length === 0) {
+        return true;
+      }
+
+      const roomId = roomIdRef.current;
+      if (!roomId) {
+        updateState({ lastError: 'Room context unavailable' });
+        return false;
+      }
+
+      for (const [key] of entries) {
+        adminPendingRef.current.add(key);
+      }
+      updateState({ adminStatePendingKeys: Array.from(adminPendingRef.current) });
+
+      try {
+        const token = await requestAuthToken();
+        const response = await fetch(`${resolveHttpBaseUrl()}/admin/rooms/${roomId}/state`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(Object.fromEntries(entries)),
+        });
+
+        if (!response.ok) {
+          let message = `Failed to update admin state (${response.status})`;
+          try {
+            const payload = await response.json();
+            if (payload && typeof payload.message === 'string') {
+              message = payload.message;
+            }
+          } catch {
+            const text = await response.text().catch(() => '');
+            if (text) {
+              message = text;
+            }
+          }
+          throw new Error(message);
+        }
+
+        let payload: unknown;
+        try {
+          payload = await response.json();
+        } catch (error) {
+          throw new Error('Failed to parse admin state response');
+        }
+
+        const parsed = adminQuickMenuStateSchema.safeParse(payload);
+        if (!parsed.success) {
+          throw new Error('Server returned invalid admin state payload');
+        }
+
+        adminStateRef.current = parsed.data;
+        for (const [key] of entries) {
+          adminPendingRef.current.delete(key);
+        }
+
+        setState((previous) => ({
+          ...previous,
+          adminState: parsed.data,
+          adminStatePendingKeys: Array.from(adminPendingRef.current),
+        }));
+
+        return true;
+      } catch (error) {
+        for (const [key] of entries) {
+          adminPendingRef.current.delete(key);
+        }
+        const message = error instanceof Error ? error.message : 'Failed to update admin state';
+        updateState({
+          lastError: message,
+          adminStatePendingKeys: Array.from(adminPendingRef.current),
+        });
+        return false;
+      }
+    },
+    [requestAuthToken, updateState],
+  );
+
   return useMemo(
     () => ({
       ...state,
@@ -1636,6 +1774,7 @@ export const useRealtimeConnection = (): RealtimeConnectionState => {
       updateTypingPreview,
       clearTypingPreview,
       updateShowSystemMessages,
+      updateAdminState,
     }),
     [
       state,
@@ -1646,6 +1785,7 @@ export const useRealtimeConnection = (): RealtimeConnectionState => {
       updateTypingPreview,
       clearTypingPreview,
       updateShowSystemMessages,
+      updateAdminState,
     ],
   );
 };

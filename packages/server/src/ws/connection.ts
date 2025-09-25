@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { FastifyBaseLogger, FastifyInstance } from 'fastify';
 import type { Socket } from 'socket.io';
 import {
+  adminQuickMenuStateSchema,
   chatPreferenceUpdateDataSchema,
   chatPreferencesSchema,
   chatSendRequestDataSchema,
@@ -9,6 +10,7 @@ import {
   itemPickupRequestDataSchema,
   messageEnvelopeSchema,
   moveRequestDataSchema,
+  type AdminQuickMenuState,
   type ChatMessageBroadcast,
   type ChatPreferences,
   type ChatTypingBroadcast,
@@ -29,6 +31,8 @@ import type {
   RoomItemRecord,
 } from '../db/items.js';
 import type { PreferenceStore } from '../db/preferences.js';
+import type { AdminStateStore, RoomAdminStateRecord } from '../db/admin.js';
+import { toAdminStatePayload } from '../db/admin.js';
 
 const HEARTBEAT_INTERVAL_MS = 15_000;
 const HEARTBEAT_GRACE_MS = HEARTBEAT_INTERVAL_MS * 2;
@@ -67,6 +71,7 @@ interface DevelopmentRoomState {
   connections: Map<string, RegisteredConnection>;
   items: Map<string, RoomItem>;
   typingIndicators: Map<string, TypingIndicatorState>;
+  adminState: RoomAdminStateRecord;
 }
 
 interface RoomItem {
@@ -105,11 +110,13 @@ interface RealtimeDependencies {
   pubsub: RoomPubSub;
   metrics: MetricsBundle;
   preferenceStore: PreferenceStore;
+  adminStateStore: AdminStateStore;
 }
 
-interface RealtimeServer {
+export interface RealtimeServer {
   handleConnection(context: ConnectionContext): void;
   shutdown(): Promise<void>;
+  applyAdminStateUpdate(state: RoomAdminStateRecord): void;
 }
 
 type EnvelopeData = Record<string, unknown>;
@@ -128,6 +135,7 @@ type AuthOkPayload = EnvelopeData & {
   inventory: InventoryItemPayload[];
   typingIndicators: ChatTypingBroadcast[];
   chatPreferences: ChatPreferences;
+  adminState: AdminQuickMenuState;
 };
 
 interface InventoryItemPayload {
@@ -254,6 +262,7 @@ export const createRealtimeServer = async ({
   pubsub,
   metrics,
   preferenceStore,
+  adminStateStore,
 }: RealtimeDependencies): Promise<RealtimeServer> => {
   const roomRecord = await roomStore.getRoomBySlug(DEVELOPMENT_ROOM_SLUG);
   if (!roomRecord) {
@@ -263,6 +272,7 @@ export const createRealtimeServer = async ({
   const tileFlags = await roomStore.getTileFlags(roomRecord.id);
   const occupantList = await roomStore.listOccupants(roomRecord.id);
   const roomItems = await itemStore.listRoomItems(roomRecord.id);
+  const adminStateRecord = await adminStateStore.getRoomState(roomRecord.id);
 
   const developmentRoomState: DevelopmentRoomState = {
     id: roomRecord.id,
@@ -274,6 +284,7 @@ export const createRealtimeServer = async ({
     connections: new Map(),
     items: new Map(roomItems.map((record) => [record.id, toRoomItem(record)])),
     typingIndicators: new Map(),
+    adminState: adminStateRecord,
   };
 
   for (const occupant of occupantList) {
@@ -483,6 +494,18 @@ export const createRealtimeServer = async ({
     }
   };
 
+  const broadcastAdminState = (state: RoomAdminStateRecord): void => {
+    const payload = toAdminStatePayload(state);
+    for (const connection of developmentRoomState.connections.values()) {
+      safeSend(connection.logger, connection.socket, createEnvelope('admin:state', 0, payload));
+    }
+  };
+
+  const applyAdminStateUpdate = (state: RoomAdminStateRecord): void => {
+    developmentRoomState.adminState = state;
+    broadcastAdminState(state);
+  };
+
   const pruneTypingIndicators = (now: number = Date.now()): void => {
     for (const indicator of developmentRoomState.typingIndicators.values()) {
       if (indicator.expiresAt <= now) {
@@ -575,6 +598,36 @@ export const createRealtimeServer = async ({
       metrics.chatEvents.inc();
     }
     broadcastChatEvent(event);
+  });
+
+  await pubsub.subscribeToAdminState(developmentRoomState.id, (event) => {
+    if (event.type !== 'admin:state') {
+      return;
+    }
+
+    const parsed = adminQuickMenuStateSchema.safeParse(event.payload);
+    if (!parsed.success) {
+      return;
+    }
+
+    const updatedAt = new Date(parsed.data.updatedAt);
+    if (Number.isNaN(updatedAt.getTime())) {
+      return;
+    }
+
+    const record: RoomAdminStateRecord = {
+      roomId: event.roomId,
+      showGrid: parsed.data.showGrid,
+      showHoverWhenGridHidden: parsed.data.showHoverWhenGridHidden,
+      moveAnimationsEnabled: parsed.data.moveAnimationsEnabled,
+      latencyTraceEnabled: parsed.data.latencyTraceEnabled,
+      lockTilesEnabled: parsed.data.lockTilesEnabled,
+      noPickupEnabled: parsed.data.noPickupEnabled,
+      updatedAt,
+      updatedBy: parsed.data.updatedBy ?? null,
+    };
+
+    applyAdminStateUpdate(record);
   });
 
   const attemptMove = async (
@@ -720,6 +773,7 @@ export const createRealtimeServer = async ({
       inventory: inventory.map((item) => toInventoryPayload(item)),
       typingIndicators: serialiseTypingIndicators(),
       chatPreferences,
+      adminState: toAdminStatePayload(developmentRoomState.adminState),
     };
 
     acknowledge(logger, socket, envelope, 'auth:ok', payload);
@@ -1236,5 +1290,6 @@ export const createRealtimeServer = async ({
   return {
     handleConnection,
     shutdown,
+    applyAdminStateUpdate,
   };
 };

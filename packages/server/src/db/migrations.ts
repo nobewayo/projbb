@@ -203,6 +203,48 @@ const MIGRATIONS: Migration[] = [
          ON user_chat_preference(updated_at)`
     ],
   },
+  {
+    id: '0006_admin_state',
+    statements: [
+      `CREATE TABLE IF NOT EXISTS room_admin_state (
+        room_id uuid PRIMARY KEY REFERENCES room(id) ON DELETE CASCADE,
+        show_grid boolean NOT NULL DEFAULT true,
+        show_hover_when_grid_hidden boolean NOT NULL DEFAULT true,
+        move_animations_enabled boolean NOT NULL DEFAULT true,
+        latency_trace_enabled boolean NOT NULL DEFAULT false,
+        lock_tiles_enabled boolean NOT NULL DEFAULT false,
+        no_pickup_enabled boolean NOT NULL DEFAULT false,
+        updated_at timestamptz NOT NULL DEFAULT now(),
+        updated_by uuid REFERENCES app_user(id) ON DELETE SET NULL
+      )`,
+      `INSERT INTO room_admin_state (
+          room_id,
+          show_grid,
+          show_hover_when_grid_hidden,
+          move_animations_enabled,
+          latency_trace_enabled,
+          lock_tiles_enabled,
+          no_pickup_enabled
+        ) VALUES (
+          '${DEV_ROOM_ID}',
+          true,
+          true,
+          true,
+          false,
+          false,
+          false
+        )
+        ON CONFLICT (room_id) DO UPDATE SET
+          show_grid = EXCLUDED.show_grid,
+          show_hover_when_grid_hidden = EXCLUDED.show_hover_when_grid_hidden,
+          move_animations_enabled = EXCLUDED.move_animations_enabled,
+          latency_trace_enabled = EXCLUDED.latency_trace_enabled,
+          lock_tiles_enabled = EXCLUDED.lock_tiles_enabled,
+          no_pickup_enabled = EXCLUDED.no_pickup_enabled,
+          updated_at = now(),
+          updated_by = NULL`
+    ],
+  },
 ];
 
 const ensureMigrationTable = async (pool: Pool): Promise<void> => {
