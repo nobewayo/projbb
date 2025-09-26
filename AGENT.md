@@ -501,7 +501,7 @@ When implementing, **Codex should**:
 - ✅ React Testing Library suites cover the new profile/inventory/ toast utilities (requires `@testing-library/jest-dom` inside the client workspace).
 - Latest connectivity screenshot with chat + social/trade chrome: `browser:/invocations/frztrbea/artifacts/artifacts/connected-room.png`.
 - **Infra fallback:** When Docker is unavailable, install Postgres/Redis via `apt` (`sudo apt-get install -y postgresql redis-server`), start them with `sudo pg_ctlcluster 16 main start` and `redis-server --daemonize yes`, then create the `bitby` role/database before launching the server (see README §L6b).
-- **Cosmos deployment:** `packages/infra/docker/docker-compose.cosmos.yml` + `Cosmos-Setup.md` document the no-SSH Cosmos Cloud workflow (nginx fronts the Fastify server, Postgres, and Redis so only the client is publicly routed).
+- **Docker deployment:** `packages/infra/docker/docker-compose.full.yml` + `Docker-Setup.md` document the Debian/Ubuntu Compose workflow (nginx fronts the production client while Fastify, Postgres, and Redis stay on the internal network).
 
 ### Immediate Next Focus
 

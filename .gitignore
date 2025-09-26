@@ -4,6 +4,8 @@ dist/
 build/
 .DS_Store
 .env*
+!.env.example
+packages/infra/docker/Caddyfile
 coverage/
 *.log
 .tsbuildinfo
