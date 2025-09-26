@@ -9,6 +9,10 @@ import {
   moveOkDataSchema,
   roomOccupantLeftDataSchema,
   roomOccupantMovedDataSchema,
+  occupantProfileResponseSchema,
+  tradeBootstrapResponseSchema,
+  muteResponseSchema,
+  reportResponseSchema,
   type MessageEnvelope,
 } from '@bitby/schemas';
 import type { FastifyInstance } from 'fastify';
@@ -20,6 +24,7 @@ import { createPgPool } from '../db/pool.js';
 import { runMigrations } from '../db/migrations.js';
 
 const PLANT_ITEM_ID = '11111111-1111-1111-1111-222222222201';
+const DEV_ROOM_ID = '11111111-1111-1111-1111-111111111111';
 const HEARTBEAT_PING_OP = 'ping';
 const HEARTBEAT_PONG_OP = 'pong';
 
@@ -248,6 +253,9 @@ describe.sequential('realtime integration', () => {
     const pool = createPgPool(config);
     await pool.query('DELETE FROM chat_message');
     await pool.query('DELETE FROM user_inventory_item');
+    await pool.query('DELETE FROM user_mute');
+    await pool.query('DELETE FROM user_report');
+    await pool.query('DELETE FROM trade_session');
     await pool.query('UPDATE room_item SET picked_up_at = NULL, picked_up_by = NULL');
     await pool.query(
       `UPDATE room_avatar SET room_id = NULL WHERE user_id = '11111111-1111-1111-1111-111111111299'`,
@@ -454,5 +462,121 @@ describe.sequential('realtime integration', () => {
     } finally {
       await db.end();
     }
+  });
+
+  it('returns occupant profile summaries over REST', async () => {
+    const token = await login('test');
+    const alice = await createAuthedClient('test');
+    const bob = await createAuthedClient('test2');
+
+    expect(alice.userId).not.toBeNull();
+    expect(bob.userId).not.toBeNull();
+
+    const response = await fetch(
+      `${httpBaseUrl}/rooms/${DEV_ROOM_ID}/occupants/${bob.userId}/profile`,
+      {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      },
+    );
+
+    expect(response.status).toBe(200);
+    const payload = await response.json();
+    const parsed = occupantProfileResponseSchema.parse(payload);
+
+    expect(parsed.profile.id).toBe(bob.userId);
+    expect(parsed.profile.room.id).toBe(DEV_ROOM_ID);
+    expect(parsed.profile.username).toBe('test2');
+    expect(parsed.profile.inventoryCount).toBeGreaterThanOrEqual(0);
+  });
+
+  it('creates trade sessions via the occupant trade endpoint', async () => {
+    const token = await login('test');
+    const alice = await createAuthedClient('test');
+    const bob = await createAuthedClient('test2');
+
+    expect(alice.userId).not.toBeNull();
+    expect(bob.userId).not.toBeNull();
+
+    const response = await fetch(
+      `${httpBaseUrl}/rooms/${DEV_ROOM_ID}/occupants/${bob.userId}/trade`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ context: 'context_menu' }),
+      },
+    );
+
+    expect(response.status).toBe(200);
+    const payload = await response.json();
+    const parsed = tradeBootstrapResponseSchema.parse(payload);
+
+    expect(parsed.trade.initiatorId).toBe(alice.userId);
+    expect(parsed.trade.recipientId).toBe(bob.userId);
+    expect(parsed.trade.roomId).toBe(DEV_ROOM_ID);
+  });
+
+  it('records mute requests for occupants', async () => {
+    const token = await login('test');
+    const alice = await createAuthedClient('test');
+    const bob = await createAuthedClient('test2');
+
+    expect(alice.userId).not.toBeNull();
+    expect(bob.userId).not.toBeNull();
+
+    const response = await fetch(
+      `${httpBaseUrl}/rooms/${DEV_ROOM_ID}/occupants/${bob.userId}/mute`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ reason: 'integration-test' }),
+      },
+    );
+
+    expect(response.status).toBe(200);
+    const payload = await response.json();
+    const parsed = muteResponseSchema.parse(payload);
+
+    expect(parsed.mute.userId).toBe(alice.userId);
+    expect(parsed.mute.mutedUserId).toBe(bob.userId);
+    expect(parsed.mute.roomId).toBe(DEV_ROOM_ID);
+  });
+
+  it('submits occupant reports', async () => {
+    const token = await login('test');
+    const alice = await createAuthedClient('test');
+    const bob = await createAuthedClient('test2');
+
+    expect(alice.userId).not.toBeNull();
+    expect(bob.userId).not.toBeNull();
+
+    const response = await fetch(
+      `${httpBaseUrl}/rooms/${DEV_ROOM_ID}/occupants/${bob.userId}/report`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ reason: 'integration-test-report' }),
+      },
+    );
+
+    expect(response.status).toBe(200);
+    const payload = await response.json();
+    const parsed = reportResponseSchema.parse(payload);
+
+    expect(parsed.report.reporterId).toBe(alice.userId);
+    expect(parsed.report.reportedUserId).toBe(bob.userId);
+    expect(parsed.report.roomId).toBe(DEV_ROOM_ID);
+    expect(parsed.report.reason).toBe('integration-test-report');
   });
 });

@@ -1,8 +1,10 @@
 import { Redis } from 'ioredis';
 import type { FastifyBaseLogger } from 'fastify';
 import type { ServerConfig } from '../config.js';
+import type { TileFlagRecord } from '../db/rooms.js';
+import type { DevAffordanceState } from '../db/admin.js';
 
-const ROOM_CHAT_CHANNEL = (roomId: string): string => `room.${roomId}.chat`;
+const ROOM_EVENT_CHANNEL = (roomId: string): string => `room.${roomId}.events`;
 
 export type RoomChatEvent =
   | {
@@ -29,15 +31,34 @@ export type RoomChatEvent =
       };
     };
 
+export type RoomAdminEvent =
+  | {
+      type: 'admin:tile_flag:update';
+      roomId: string;
+      payload: { tile: TileFlagRecord; roomSeq: number; updatedBy: string };
+    }
+  | {
+      type: 'admin:affordance:update';
+      roomId: string;
+      payload: { state: DevAffordanceState; updatedBy: string };
+    }
+  | {
+      type: 'admin:latency:trace';
+      roomId: string;
+      payload: { traceId: string; requestedBy: string; requestedAt: string };
+    };
+
+export type RoomEvent = RoomChatEvent | RoomAdminEvent;
+
 export interface RoomPubSub {
-  publishChat(event: RoomChatEvent): Promise<void>;
-  subscribeToChat(roomId: string, handler: (event: RoomChatEvent) => void): Promise<void>;
+  publish(event: RoomEvent): Promise<void>;
+  subscribe(roomId: string, handler: (event: RoomEvent) => void): Promise<void>;
   close(): Promise<void>;
 }
 
 interface PubSubMessage {
   origin: string;
-  event: RoomChatEvent;
+  event: RoomEvent;
 }
 
 export const createRoomPubSub = async ({
@@ -52,7 +73,7 @@ export const createRoomPubSub = async ({
   const publisher = new Redis(config.REDIS_URL, { lazyConnect: true });
   const subscriber = new Redis(config.REDIS_URL, { lazyConnect: true });
   const messageListeners = new Map<string, (channel: string, payload: string) => void>();
-  const channelHandlers = new Map<string, Set<(event: RoomChatEvent) => void>>();
+  const channelHandlers = new Map<string, Set<(event: RoomEvent) => void>>();
 
   publisher.on('error', (error: unknown) => {
     logger.error({ err: error }, 'Redis publisher error');
@@ -64,16 +85,16 @@ export const createRoomPubSub = async ({
   await publisher.connect();
   await subscriber.connect();
 
-  const publishChat = async (event: RoomChatEvent): Promise<void> => {
+  const publish = async (event: RoomEvent): Promise<void> => {
     const payload: PubSubMessage = { origin: instanceId, event };
-    await publisher.publish(ROOM_CHAT_CHANNEL(event.roomId), JSON.stringify(payload));
+    await publisher.publish(ROOM_EVENT_CHANNEL(event.roomId), JSON.stringify(payload));
   };
 
-  const subscribeToChat = async (
+  const subscribe = async (
     roomId: string,
-    handler: (event: RoomChatEvent) => void,
+    handler: (event: RoomEvent) => void,
   ): Promise<void> => {
-    const channel = ROOM_CHAT_CHANNEL(roomId);
+    const channel = ROOM_EVENT_CHANNEL(roomId);
     let handlers = channelHandlers.get(channel);
     if (!handlers) {
       handlers = new Set();
@@ -125,8 +146,8 @@ export const createRoomPubSub = async ({
   };
 
   return {
-    publishChat,
-    subscribeToChat,
+    publish,
+    subscribe,
     close,
   };
 };

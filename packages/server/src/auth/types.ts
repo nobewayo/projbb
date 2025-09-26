@@ -43,4 +43,16 @@ export interface RoomSnapshot {
     tileY: number;
     textureKey: string;
   }>;
+  adminState: {
+    affordances: {
+      gridVisible: boolean;
+      showHoverWhenGridHidden: boolean;
+      moveAnimationsEnabled: boolean;
+    };
+    lastLatencyTrace: {
+      traceId: string;
+      requestedAt: string;
+      requestedBy: string;
+    } | null;
+  };
 }

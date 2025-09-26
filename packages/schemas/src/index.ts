@@ -4,4 +4,6 @@ export * from './ws/room.js';
 export * from './ws/auth.js';
 export * from './ws/chat.js';
 export * from './ws/items.js';
+export * from './ws/admin.js';
 export * from './openapi/auth.js';
+export * from './rest/occupants.js';
