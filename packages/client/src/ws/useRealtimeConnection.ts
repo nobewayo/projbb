@@ -1,3 +1,6 @@
+// @module: client-realtime
+// @tags: websocket, state, hooks
+
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { io, type Socket } from 'socket.io-client';
 import {

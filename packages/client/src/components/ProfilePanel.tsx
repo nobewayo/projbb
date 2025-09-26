@@ -1,3 +1,6 @@
+// @module: ui-profile
+// @tags: profile, panel, realtime
+
 import type { OccupantProfileSummary } from '../ws/useRealtimeConnection';
 
 export type ProfilePanelState =

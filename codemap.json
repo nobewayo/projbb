@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2025-09-26T22:12:55.847Z",
+  "generatedAt": "2025-09-26T22:44:55.516Z",
   "options": {
     "fast": false
   },
@@ -246,9 +246,14 @@
     },
     {
       "path": "packages/client/src/canvas/GridCanvas.tsx",
-      "size": 36693,
-      "checksum": "1f045a9d8e8be2cbb83cc75b6b915af566b4f2f1452feb2dcee49b4b561c311e",
-      "tags": [],
+      "size": 36746,
+      "checksum": "007608f08576b5e846709073b07db015828e2e1b01b33d491497e2560e5a7e04",
+      "module": "canvas",
+      "tags": [
+        "grid",
+        "rendering",
+        "input"
+      ],
       "imports": [
         "../assets/avatars/avatar1.png",
         "../assets/avatars/avatar2.png",
@@ -265,163 +270,163 @@
         "functions": [
           {
             "name": "loadImage",
-            "line": 165,
+            "line": 168,
             "exported": false,
             "signature": "async const loadImage = (source: string): Promise<HTMLImageElement> =>"
           },
           {
             "name": "easeOutCubic",
-            "line": 173,
+            "line": 176,
             "exported": false,
             "signature": "const easeOutCubic = (t: number): number =>"
           },
           {
             "name": "prepareContext",
-            "line": 175,
+            "line": 178,
             "exported": false,
             "signature": "const prepareContext = (canvas: HTMLCanvasElement): CanvasRenderingContext2D | null =>"
           },
           {
             "name": "drawBackground",
-            "line": 198,
+            "line": 201,
             "exported": false,
             "signature": "const drawBackground = (context: CanvasRenderingContext2D, assets: SpriteAssets | null): void =>"
           },
           {
             "name": "traceDiamond",
-            "line": 209,
+            "line": 212,
             "exported": false,
             "signature": "const traceDiamond = (context: CanvasRenderingContext2D, tile: GridTile): void =>"
           },
           {
             "name": "drawTile",
-            "line": 218,
+            "line": 221,
             "exported": false,
             "signature": "const drawTile = (context: CanvasRenderingContext2D, tile: GridTile, options: { hovered: boolean; locked: boolean; pending: boolean; noPickup: boolean }): void =>"
           },
           {
             "name": "drawHiddenHoverTile",
-            "line": 257,
+            "line": 260,
             "exported": false,
             "signature": "const drawHiddenHoverTile = (context: CanvasRenderingContext2D, tile: GridTile): void =>"
           },
           {
             "name": "drawUsername",
-            "line": 272,
+            "line": 275,
             "exported": false,
             "signature": "const drawUsername = (context: CanvasRenderingContext2D, sprite: OccupantRenderState): void =>"
           },
           {
             "name": "splitLongWord",
-            "line": 287,
+            "line": 290,
             "exported": false,
             "signature": "const splitLongWord = (context: CanvasRenderingContext2D, word: string, maxWidth: number): string[] =>"
           },
           {
             "name": "wrapBubbleLines",
-            "line": 311,
+            "line": 314,
             "exported": false,
             "signature": "const wrapBubbleLines = (context: CanvasRenderingContext2D, text: string, maxWidth: number): string[] =>"
           },
           {
             "name": "pushLine",
-            "line": 328,
+            "line": 331,
             "exported": false,
             "signature": "const pushLine = (line: string) =>"
           },
           {
             "name": "drawSpeechBubble",
-            "line": 374,
+            "line": 377,
             "exported": false,
             "signature": "const drawSpeechBubble = (context: CanvasRenderingContext2D, sprite: OccupantRenderState, options: {\n    text: string;\n    fill: string;\n    textColor: string;\n    offset: number;\n  }): void =>"
           },
           {
             "name": "drawTypingBubble",
-            "line": 450,
+            "line": 453,
             "exported": false,
             "signature": "const drawTypingBubble = (context: CanvasRenderingContext2D, sprite: OccupantRenderState, indicator: CanvasTypingIndicator): void =>"
           },
           {
             "name": "drawChatBubbleForSprite",
-            "line": 464,
+            "line": 467,
             "exported": false,
             "signature": "const drawChatBubbleForSprite = (context: CanvasRenderingContext2D, sprite: OccupantRenderState, bubble: CanvasChatBubble): void =>"
           },
           {
             "name": "drawOccupant",
-            "line": 477,
+            "line": 480,
             "exported": false,
             "signature": "const drawOccupant = (context: CanvasRenderingContext2D, sprite: OccupantRenderState, assets: SpriteAssets | null): void =>"
           },
           {
             "name": "updateSpritePositions",
-            "line": 508,
+            "line": 511,
             "exported": false,
             "signature": "const updateSpritePositions = (sprites: Map<string, OccupantRenderState>, now: number, animationsEnabled: boolean): void =>"
           },
           {
             "name": "getAvatarVariantIndex",
-            "line": 536,
+            "line": 539,
             "exported": false,
             "signature": "const getAvatarVariantIndex = (occupant: CanvasOccupant): number =>"
           },
           {
             "name": "formatCoordinate",
-            "line": 553,
+            "line": 556,
             "exported": false,
             "signature": "const formatCoordinate = (value: number): string =>"
           },
           {
             "name": "GridCanvas",
-            "line": 555,
+            "line": 558,
             "exported": false,
             "signature": "const GridCanvas = ({\n  occupants,\n  tileFlags,\n  pendingMoveTarget,\n  onTileClick,\n  items,\n  onTileContextMenu,\n  onItemContextMenu,\n  onOccupantContextMenu,\n  localOccupantId = null,\n  showGrid,\n  showHoverWhenGridHidden,\n  moveAnimationsEnabled,\n  typingIndicators,\n  chatBubbles,\n}: GridCanvasProps): JSX.Element =>"
           },
           {
             "name": "loadAssets",
-            "line": 628,
+            "line": 631,
             "exported": false,
             "signature": "async const loadAssets = (): Promise<void> =>"
           },
           {
             "name": "loadItemAssets",
-            "line": 666,
+            "line": 669,
             "exported": false,
             "signature": "async const loadItemAssets = (): Promise<void> =>"
           },
           {
             "name": "renderFrame",
-            "line": 855,
+            "line": 858,
             "exported": false,
             "signature": "const renderFrame = (timestamp: number): void =>"
           },
           {
             "name": "handlePointerMove",
-            "line": 1015,
+            "line": 1018,
             "exported": false,
             "signature": "const handlePointerMove = (event: PointerEvent): void =>"
           },
           {
             "name": "handlePointerLeave",
-            "line": 1034,
+            "line": 1037,
             "exported": false,
             "signature": "const handlePointerLeave = (): void =>"
           },
           {
             "name": "handlePointerDown",
-            "line": 1040,
+            "line": 1043,
             "exported": false,
             "signature": "const handlePointerDown = (event: PointerEvent): void =>"
           },
           {
             "name": "handleContextMenu",
-            "line": 1057,
+            "line": 1060,
             "exported": false,
             "signature": "const handleContextMenu = (event: MouseEvent): void =>"
           },
           {
             "name": "getTileItems",
-            "line": 1066,
+            "line": 1069,
             "exported": false,
             "signature": "const getTileItems = (tile: GridTile | null): CanvasItem[] =>"
           }
@@ -445,9 +450,14 @@
     },
     {
       "path": "packages/client/src/components/InventoryCard.tsx",
-      "size": 1281,
-      "checksum": "6a67c20752b8a451bcc1263d99b83923bb39b09fd4b87dd6be9dd422c960aa01",
-      "tags": [],
+      "size": 1338,
+      "checksum": "f0f3ff7447a05e97a09175f2021afa546b0bb70652ad598865a877c633501e80",
+      "module": "ui-inventory",
+      "tags": [
+        "inventory",
+        "panel",
+        "ui"
+      ],
       "imports": [],
       "namedExports": [
         "default"
@@ -456,7 +466,7 @@
         "functions": [
           {
             "name": "InventoryCard",
-            "line": 13,
+            "line": 16,
             "exported": false,
             "signature": "const InventoryCard = ({ items }: InventoryCardProps): JSX.Element =>"
           }
@@ -467,9 +477,14 @@
     },
     {
       "path": "packages/client/src/components/ProfilePanel.tsx",
-      "size": 3130,
-      "checksum": "a5a8035995c5daf83f544d5cb99e6df960d107f1e6faf9bf699f93e3ce0051c7",
-      "tags": [],
+      "size": 3189,
+      "checksum": "ad877ca644eb50798f24a9b4124119700f160276158e405dc1b9a940ee76b700",
+      "module": "ui-profile",
+      "tags": [
+        "profile",
+        "panel",
+        "realtime"
+      ],
       "imports": [
         "../ws/useRealtimeConnection"
       ],
@@ -480,7 +495,7 @@
         "functions": [
           {
             "name": "ProfilePanel",
-            "line": 15,
+            "line": 18,
             "exported": false,
             "signature": "const ProfilePanel = ({ state, onRetry, onClose }: ProfilePanelProps): JSX.Element | null =>"
           }
@@ -491,9 +506,14 @@
     },
     {
       "path": "packages/client/src/hooks/useActionToast.ts",
-      "size": 1217,
-      "checksum": "b8d2a4fe065fd9438372661b17233e08c240daccc0e6cf750adae8704340be91",
-      "tags": [],
+      "size": 1269,
+      "checksum": "0242e5d3c08979ce5add72a7fe410b2b2e39db3597e9fca8ee70021b4ae448a8",
+      "module": "ui-feedback",
+      "tags": [
+        "toast",
+        "hooks",
+        "ui"
+      ],
       "imports": [
         "react"
       ],
@@ -504,7 +524,7 @@
         "functions": [
           {
             "name": "useActionToast",
-            "line": 15,
+            "line": 18,
             "exported": true,
             "signature": "const useActionToast = (timeoutMs = 4000): UseActionToastResult =>"
           }
@@ -532,9 +552,14 @@
     },
     {
       "path": "packages/client/src/ws/useRealtimeConnection.ts",
-      "size": 74569,
-      "checksum": "24ac5d275d561e80ae1928c7f969ee4787f0b5bf34076f8ebccbb1b22e9a8196",
-      "tags": [],
+      "size": 74632,
+      "checksum": "9fa0d99da1d320bd76fc80945712659b9c28cda9ff568025bdb378fd17de6351",
+      "module": "client-realtime",
+      "tags": [
+        "websocket",
+        "state",
+        "hooks"
+      ],
       "imports": [
         "@bitby/schemas",
         "react",
@@ -547,253 +572,253 @@
         "functions": [
           {
             "name": "sortRoomItems",
-            "line": 70,
+            "line": 73,
             "exported": false,
             "signature": "const sortRoomItems = (items: Iterable<RoomItem>): RoomItem[] =>"
           },
           {
             "name": "sortInventoryItems",
-            "line": 78,
+            "line": 81,
             "exported": false,
             "signature": "const sortInventoryItems = (items: Iterable<InventoryItem>): InventoryItem[] =>"
           },
           {
             "name": "isSessionUser",
-            "line": 108,
+            "line": 111,
             "exported": false,
             "signature": "const isSessionUser = (value: unknown): value is SessionUser =>"
           },
           {
             "name": "isSessionRoom",
-            "line": 123,
+            "line": 126,
             "exported": false,
             "signature": "const isSessionRoom = (value: unknown): value is SessionRoom =>"
           },
           {
             "name": "cloneOccupant",
-            "line": 250,
+            "line": 253,
             "exported": false,
             "signature": "const cloneOccupant = (occupant: RoomOccupant): RoomOccupant =>"
           },
           {
             "name": "sortOccupants",
-            "line": 256,
+            "line": 259,
             "exported": false,
             "signature": "const sortOccupants = (map: Map<string, RoomOccupant>): RoomOccupant[] =>"
           },
           {
             "name": "buildEnvelope",
-            "line": 267,
+            "line": 270,
             "exported": false,
             "signature": "const buildEnvelope = (seq: number, op: string, data: Record<string, unknown> = {}): MessageEnvelope =>"
           },
           {
             "name": "normaliseSocketProtocol",
-            "line": 283,
+            "line": 286,
             "exported": false,
             "signature": "const normaliseSocketProtocol = (protocol: string): string =>"
           },
           {
             "name": "resolveSocketEndpoint",
-            "line": 294,
+            "line": 297,
             "exported": false,
             "signature": "const resolveSocketEndpoint = (): SocketEndpoint =>"
           },
           {
             "name": "resolveHttpBaseUrl",
-            "line": 320,
+            "line": 323,
             "exported": false,
             "signature": "const resolveHttpBaseUrl = (): string =>"
           },
           {
             "name": "getExplicitToken",
-            "line": 335,
+            "line": 338,
             "exported": false,
             "signature": "const getExplicitToken = (): string | null =>"
           },
           {
             "name": "getDevCredentials",
-            "line": 340,
+            "line": 343,
             "exported": false,
             "signature": "const getDevCredentials = (): { username: string; password: string } =>"
           },
           {
             "name": "getLatestPendingTarget",
-            "line": 345,
+            "line": 348,
             "exported": false,
             "signature": "const getLatestPendingTarget = (pendingMoves: Map<number, { to: { x: number; y: number } }>): { x: number; y: number } | null =>"
           },
           {
             "name": "normaliseTypingPreview",
-            "line": 355,
+            "line": 358,
             "exported": false,
             "signature": "const normaliseTypingPreview = (input: string | null | undefined): string | null =>"
           },
           {
             "name": "snapshotTypingIndicators",
-            "line": 366,
+            "line": 369,
             "exported": false,
             "signature": "const snapshotTypingIndicators = (source: Map<string, TypingIndicatorInternal>): TypingIndicatorView[] =>"
           },
           {
             "name": "snapshotChatBubbles",
-            "line": 375,
+            "line": 378,
             "exported": false,
             "signature": "const snapshotChatBubbles = (source: Map<string, ChatBubbleInternal>): ChatBubbleView[] =>"
           },
           {
             "name": "useRealtimeConnection",
-            "line": 385,
+            "line": 388,
             "exported": true,
             "signature": "const useRealtimeConnection = (): RealtimeConnectionState =>"
           },
           {
             "name": "clearPingTimer",
-            "line": 445,
+            "line": 448,
             "exported": false,
             "signature": "const clearPingTimer = () =>"
           },
           {
             "name": "clearCountdownTimer",
-            "line": 452,
+            "line": 455,
             "exported": false,
             "signature": "const clearCountdownTimer = () =>"
           },
           {
             "name": "clearTypingCleanupTimer",
-            "line": 459,
+            "line": 462,
             "exported": false,
             "signature": "const clearTypingCleanupTimer = () =>"
           },
           {
             "name": "clearBubbleCleanupTimer",
-            "line": 466,
+            "line": 469,
             "exported": false,
             "signature": "const clearBubbleCleanupTimer = () =>"
           },
           {
             "name": "abortLogin",
-            "line": 473,
+            "line": 476,
             "exported": false,
             "signature": "const abortLogin = () =>"
           },
           {
             "name": "clearActiveSocket",
-            "line": 481,
+            "line": 484,
             "exported": false,
             "signature": "const clearActiveSocket = () =>"
           },
           {
             "name": "startPingTimer",
-            "line": 504,
+            "line": 507,
             "exported": false,
             "signature": "const startPingTimer = (intervalMs: number) =>"
           },
           {
             "name": "updateState",
-            "line": 520,
+            "line": 523,
             "exported": false,
             "signature": "const updateState = (partial: Partial<InternalConnectionState>) =>"
           },
           {
             "name": "requestAuthToken",
-            "line": 543,
+            "line": 546,
             "exported": false,
             "signature": "async const requestAuthToken = (): Promise<string> =>"
           },
           {
             "name": "scheduleReconnect",
-            "line": 638,
+            "line": 641,
             "exported": false,
             "signature": "const scheduleReconnect = () =>"
           },
           {
             "name": "filterChatLogByMuted",
-            "line": 698,
+            "line": 701,
             "exported": false,
             "signature": "const filterChatLogByMuted = (log: ChatMessageBroadcast[], mutedIds: Set<string>): ChatMessageBroadcast[] =>"
           },
           {
             "name": "appendChatMessage",
-            "line": 706,
+            "line": 709,
             "exported": false,
             "signature": "const appendChatMessage = (message: ChatMessageBroadcast) =>"
           },
           {
             "name": "publishTypingIndicators",
-            "line": 725,
+            "line": 728,
             "exported": false,
             "signature": "const publishTypingIndicators = () =>"
           },
           {
             "name": "pruneTypingIndicators",
-            "line": 729,
+            "line": 732,
             "exported": false,
             "signature": "const pruneTypingIndicators = (now: number = Date.now()): void =>"
           },
           {
             "name": "scheduleTypingCleanup",
-            "line": 742,
+            "line": 745,
             "exported": false,
             "signature": "const scheduleTypingCleanup = () =>"
           },
           {
             "name": "upsertTypingIndicator",
-            "line": 753,
+            "line": 756,
             "exported": false,
             "signature": "const upsertTypingIndicator = (userId: string, preview: string | null, expiresAt?: number): void =>"
           },
           {
             "name": "removeTypingIndicator",
-            "line": 770,
+            "line": 773,
             "exported": false,
             "signature": "const removeTypingIndicator = (userId: string): void =>"
           },
           {
             "name": "publishChatBubbles",
-            "line": 779,
+            "line": 782,
             "exported": false,
             "signature": "const publishChatBubbles = () =>"
           },
           {
             "name": "pruneChatBubbles",
-            "line": 783,
+            "line": 786,
             "exported": false,
             "signature": "const pruneChatBubbles = (now: number = Date.now()): void =>"
           },
           {
             "name": "scheduleBubbleCleanup",
-            "line": 796,
+            "line": 799,
             "exported": false,
             "signature": "const scheduleBubbleCleanup = () =>"
           },
           {
             "name": "upsertChatBubble",
-            "line": 807,
+            "line": 810,
             "exported": false,
             "signature": "const upsertChatBubble = (userId: string, messageId: string, body: string): void =>"
           },
           {
             "name": "removeChatBubble",
-            "line": 817,
+            "line": 820,
             "exported": false,
             "signature": "const removeChatBubble = (userId: string): void =>"
           },
           {
             "name": "handleEnvelope",
-            "line": 826,
+            "line": 829,
             "exported": false,
             "signature": "const handleEnvelope = (envelope: MessageEnvelope) =>"
           },
           {
             "name": "connect",
-            "line": 1476,
+            "line": 1479,
             "exported": false,
             "signature": "async const connect = () =>"
           },
           {
             "name": "detachListeners",
-            "line": 1533,
+            "line": 1536,
             "exported": false,
             "signature": "const detachListeners = () =>"
           }
