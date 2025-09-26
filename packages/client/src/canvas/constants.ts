@@ -1,3 +1,6 @@
+// @module: canvas
+// @tags: grid, constants
+
 export const TILE_WIDTH = 75;
 export const TILE_HEIGHT = 90;
 export const ROW_STEP = TILE_HEIGHT / 2;

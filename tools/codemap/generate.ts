@@ -543,11 +543,31 @@ async function main() {
 
   if (!previous) {
     finalFiles = files.sort((a, b) => a.path.localeCompare(b.path));
+    previous = await loadExistingCodemap();
+  }
+
+  const options: CodemapDocument['options'] = { fast };
+  if (only) {
+    options.only = only;
+  }
+
+  let generatedAt = new Date().toISOString();
+
+  if (previous) {
+    const previousOptions = {
+      fast: Boolean(previous.options.fast),
+      ...(previous.options.only ? { only: previous.options.only } : {}),
+    };
+    const previousSnapshot = JSON.stringify({ options: previousOptions, files: previous.files });
+    const nextSnapshot = JSON.stringify({ options, files: finalFiles });
+    if (previousSnapshot === nextSnapshot) {
+      generatedAt = previous.generatedAt;
+    }
   }
 
   const codemap: CodemapDocument = {
-    generatedAt: new Date().toISOString(),
-    options: { only, fast },
+    generatedAt,
+    options,
     files: finalFiles,
   };
 

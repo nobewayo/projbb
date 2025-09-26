@@ -1,14 +1,19 @@
 {
-  "generatedAt": "2025-09-26T21:29:09.402Z",
+  "generatedAt": "2025-09-26T22:12:55.847Z",
   "options": {
     "fast": false
   },
   "files": [
     {
       "path": "packages/client/src/App.tsx",
-      "size": 77093,
-      "checksum": "a30d01aca0a6462e222ffcbdf3a96b5fdeae2687eee5bb0eee421d5560dede24",
-      "tags": [],
+      "size": 78442,
+      "checksum": "d8e3212fb77c1d210ed272fd647649cb094f9c3bac061ab1511e45a91e762de2",
+      "module": "client-app",
+      "tags": [
+        "ui",
+        "realtime",
+        "smoke-check"
+      ],
       "imports": [
         "./assets/items/couch.png",
         "./assets/items/plant.png",
@@ -29,103 +34,103 @@
         "functions": [
           {
             "name": "adjustPosition",
-            "line": 164,
+            "line": 167,
             "exported": false,
             "signature": "const adjustPosition = (): void =>"
           },
           {
             "name": "renderTileSection",
-            "line": 248,
+            "line": 251,
             "exported": false,
             "signature": "const renderTileSection = (tile: GridTile, items: CanvasItem[], focusedItemId: string | null): JSX.Element =>"
           },
           {
             "name": "renderTileMenu",
-            "line": 311,
+            "line": 314,
             "exported": false,
             "signature": "const renderTileMenu = (payload: TileContextMenuState): JSX.Element =>"
           },
           {
             "name": "renderOccupantMenu",
-            "line": 314,
+            "line": 317,
             "exported": false,
             "signature": "const renderOccupantMenu = (payload: OccupantContextMenuState): JSX.Element =>"
           },
           {
             "name": "App",
-            "line": 485,
+            "line": 488,
             "exported": false,
             "signature": "const App = (): JSX.Element =>"
           },
           {
             "name": "isEditableElement",
-            "line": 689,
+            "line": 735,
             "exported": false,
             "signature": "const isEditableElement = (element: Element | null): boolean =>"
           },
           {
             "name": "commitDraft",
-            "line": 702,
+            "line": 748,
             "exported": false,
             "signature": "const commitDraft = (next: string) =>"
           },
           {
             "name": "handleGlobalKeyDown",
-            "line": 712,
+            "line": 758,
             "exported": false,
             "signature": "const handleGlobalKeyDown = (event: KeyboardEvent): void =>"
           },
           {
             "name": "buildSlots",
-            "line": 926,
+            "line": 972,
             "exported": false,
             "signature": "const buildSlots = (userId: string | null) =>"
           },
           {
             "name": "handleSlotChange",
-            "line": 943,
+            "line": 989,
             "exported": false,
             "signature": "const handleSlotChange = (slotIndex: number, value: string) =>"
           },
           {
             "name": "handleSlotClear",
-            "line": 967,
+            "line": 1013,
             "exported": false,
             "signature": "const handleSlotClear = (slotIndex: number) =>"
           },
           {
             "name": "handleReadinessToggle",
-            "line": 990,
+            "line": 1036,
             "exported": false,
             "signature": "const handleReadinessToggle = (next: boolean) =>"
           },
           {
             "name": "parseTimestamp",
-            "line": 1190,
+            "line": 1236,
             "exported": false,
             "signature": "const parseTimestamp = (value?: string | null): number =>"
           },
           {
             "name": "handlePointerDown",
-            "line": 1341,
+            "line": 1387,
             "exported": false,
             "signature": "const handlePointerDown = (event: PointerEvent): void =>"
           },
           {
             "name": "handleKeyDown",
-            "line": 1360,
+            "line": 1406,
             "exported": false,
             "signature": "const handleKeyDown = (event: KeyboardEvent): void =>"
           },
           {
             "name": "handleScroll",
-            "line": 1383,
+            "line": 1429,
             "exported": false,
             "signature": "const handleScroll = (): void =>"
           },
           {
             "name": "handleMenuButtonClick",
-            "line": 1998,
+            "line": 2044,
             "exported": false,
             "signature": "const handleMenuButtonClick = (label: string): void =>"
           }
@@ -136,9 +141,13 @@
     },
     {
       "path": "packages/client/src/canvas/constants.ts",
-      "size": 1005,
-      "checksum": "888f4b251415118fee0663dc0d08c7af868ec589c71bb2b81c97524f3820c50d",
-      "tags": [],
+      "size": 1051,
+      "checksum": "977f2e079107d2e5b16cad545a5c48b7a1808b808165a44cbb3036e637ef8011",
+      "module": "canvas",
+      "tags": [
+        "grid",
+        "constants"
+      ],
       "imports": [],
       "namedExports": [],
       "symbols": {
@@ -149,9 +158,13 @@
     },
     {
       "path": "packages/client/src/canvas/geometry.ts",
-      "size": 4468,
-      "checksum": "4984dccc2fe101a788debb89714d06eaacc5ccaf5bd4e2ea7586b2275428e0f3",
-      "tags": [],
+      "size": 4513,
+      "checksum": "a6ae98dee0606911c0b0ca3048ba2d2783429daf1d73c71a5663d1f053b63c54",
+      "module": "canvas",
+      "tags": [
+        "grid",
+        "geometry"
+      ],
       "imports": [
         "./constants",
         "./types"
@@ -168,61 +181,61 @@
         "functions": [
           {
             "name": "createTileKey",
-            "line": 17,
+            "line": 20,
             "exported": false,
             "signature": "const createTileKey = (gridX: number, gridY: number): string =>"
           },
           {
             "name": "getColumnsForRow",
-            "line": 19,
+            "line": 22,
             "exported": true,
             "signature": "const getColumnsForRow = (row: number): number =>"
           },
           {
             "name": "getMaxColumns",
-            "line": 22,
+            "line": 25,
             "exported": false,
             "signature": "const getMaxColumns = (): number =>"
           },
           {
             "name": "getRowOffset",
-            "line": 24,
+            "line": 27,
             "exported": false,
             "signature": "const getRowOffset = (row: number): number =>"
           },
           {
             "name": "getRowRightSpan",
-            "line": 29,
+            "line": 32,
             "exported": false,
             "signature": "const getRowRightSpan = (row: number): number =>"
           },
           {
             "name": "computeMaxRowSpan",
-            "line": 35,
+            "line": 38,
             "exported": false,
             "signature": "const computeMaxRowSpan = (rowCount: number): number =>"
           },
           {
             "name": "buildGridDefinition",
-            "line": 48,
+            "line": 51,
             "exported": true,
             "signature": "const buildGridDefinition = (canvasWidth: number = CANVAS_WIDTH, canvasHeight: number = CANVAS_HEIGHT): GridDefinition =>"
           },
           {
             "name": "isPointInsideTile",
-            "line": 113,
+            "line": 116,
             "exported": true,
             "signature": "const isPointInsideTile = (tile: GridTile, px: number, py: number): boolean =>"
           },
           {
             "name": "findTileAtPoint",
-            "line": 120,
+            "line": 123,
             "exported": true,
             "signature": "const findTileAtPoint = (grid: GridDefinition, px: number, py: number): GridTile | null =>"
           },
           {
             "name": "toScreenPosition",
-            "line": 167,
+            "line": 170,
             "exported": true,
             "signature": "const toScreenPosition = (grid: GridDefinition, gridX: number, gridY: number): { x: number; y: number } =>"
           }
