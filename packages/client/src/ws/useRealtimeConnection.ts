@@ -49,6 +49,7 @@ import {
   type SocialState,
   type SocialMuteBroadcast,
   type SocialReportBroadcast,
+  type SocialReportRecord,
 } from '@bitby/schemas';
 
 const DEFAULT_HEARTBEAT_MS = 15_000;
@@ -303,19 +304,18 @@ const resolveSocketEndpoint = (): SocketEndpoint => {
 };
 
 const resolveHttpBaseUrl = (): string => {
-  if (import.meta.env.VITE_BITBY_HTTP_URL) {
-    return import.meta.env.VITE_BITBY_HTTP_URL.replace(/\/$/, '');
+  const explicit = import.meta.env.VITE_BITBY_HTTP_URL;
+  if (explicit) {
+    return explicit.replace(/\/$/, '');
+  }
+
+  const socketEndpoint = resolveSocketEndpoint();
+  if (socketEndpoint.origin) {
+    return socketEndpoint.origin.replace(/\/$/, '');
   }
 
   const protocol = window.location.protocol === 'https:' ? 'https' : 'http';
-  const port = window.location.port;
-  let host = window.location.host;
-
-  if (port === '5173' || port === '4173' || port === '4174') {
-    host = `${window.location.hostname}:3001`;
-  }
-
-  return `${protocol}://${host}`;
+  return `${protocol}://${window.location.host}`;
 };
 
 const getExplicitToken = (): string | null => {
@@ -931,9 +931,11 @@ export const useRealtimeConnection = (): RealtimeConnectionState => {
             ? socialResult.data
             : { mutes: [], reports: [] };
           mutedOccupantIdSetRef.current = new Set(
-            social.mutes.map((mute) => mute.mutedUserId),
+            social.mutes.map((mute): string => mute.mutedUserId),
           );
-          reportHistoryRef.current = social.reports.map((report) => ({ ...report }));
+          reportHistoryRef.current = social.reports.map(
+            (report: SocialReportRecord) => ({ ...report }),
+          );
 
           let initialTradeEvent: TradeLifecycleEvent | null = null;
           if (payload.tradeLifecycle !== undefined && payload.tradeLifecycle !== null) {
