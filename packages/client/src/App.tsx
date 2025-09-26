@@ -1,10 +1,34 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import type { CSSProperties } from 'react';
+import GridCanvas, { type CanvasItem, type CanvasOccupant } from './canvas/GridCanvas';
 import './styles.css';
+import {
+  useRealtimeConnection,
+  type OccupantProfileSummary,
+  type TradeSessionBootstrap,
+  type TradeLifecycleAcknowledgement,
+} from './ws/useRealtimeConnection';
+import type { GridTile } from './canvas/types';
+import { createTileKey } from './canvas/geometry';
+import plantTexture from './assets/items/plant.png';
+import couchTexture from './assets/items/couch.png';
+import ProfilePanel, { type ProfilePanelState } from './components/ProfilePanel';
+import InventoryCard, { type InventoryEntry } from './components/InventoryCard';
+import { useActionToast } from './hooks/useActionToast';
 
 const dockButtons = [
   'Rooms',
   'Shop',
+  'Backpack',
   'Log',
   'Search',
   'Quests',
@@ -12,91 +36,436 @@ const dockButtons = [
   'Admin',
 ];
 
-const adminShortcuts = [
-  'Reload room',
-  'Toggle grid',
-  'Latency trace',
-];
+const ITEM_TEXTURES: Record<string, string> = {
+  plant: plantTexture,
+  couch: couchTexture,
+};
+
+const DEFAULT_ITEM_TEXTURE = plantTexture;
 
 type ChatMessage = {
   id: string;
+  userId: string | null;
   actor: string;
   body: string;
   time: string;
+  isSystem?: boolean;
 };
+
+type ContextMenuPosition = {
+  x: number;
+  y: number;
+};
+
+type TileContextMenuState = {
+  type: 'tile';
+  tile: GridTile;
+  items: CanvasItem[];
+  focusedItemId: string | null;
+  position: ContextMenuPosition;
+};
+
+type OccupantContextMenuState = {
+  type: 'occupant';
+  occupant: CanvasOccupant;
+  tile: GridTile;
+  position: ContextMenuPosition;
+};
+
+type ContextMenuState = TileContextMenuState | OccupantContextMenuState;
+
+type PickupAvailability = {
+  canPickup: boolean;
+  message: string;
+};
+
+type OccupantMenuAction = 'profile' | 'trade' | 'mute' | 'report';
+
+type TradeLifecycleState =
+  | { status: 'idle' }
+  | {
+      status: 'pending';
+      trade: TradeLifecycleAcknowledgement['trade'];
+      participant: TradeLifecycleAcknowledgement['participant'];
+      initiatedAt: number;
+    }
+  | {
+      status: 'in-progress';
+      trade: TradeLifecycleAcknowledgement['trade'];
+      participant: TradeLifecycleAcknowledgement['participant'];
+      startedAt: number;
+    }
+  | {
+      status: 'cancelled';
+      trade: TradeLifecycleAcknowledgement['trade'];
+      participant: TradeLifecycleAcknowledgement['participant'];
+      cancelledAt: number;
+      reason: 'cancelled' | 'declined';
+      cancelledBy: 'self' | 'participant';
+    }
+  | {
+      status: 'completed';
+      trade: TradeLifecycleAcknowledgement['trade'];
+      participant: TradeLifecycleAcknowledgement['participant'];
+      completedAt: number;
+    };
+
+interface ActiveContextMenuProps {
+  state: ContextMenuState;
+  onClose: () => void;
+  onSelectItemInfo: (item: CanvasItem) => void;
+  onSelectItemPickup: (item: CanvasItem) => void;
+  getPickupAvailability: (item: CanvasItem) => PickupAvailability;
+  onSelectOccupantAction: (action: OccupantMenuAction, occupant: CanvasOccupant) => void;
+  localOccupantId: string | null;
+  mutedOccupantIds: Set<string>;
+}
+
+const FOCUSABLE_SELECTOR = 'button:not([disabled])';
+const MENU_MARGIN = 12;
+
+const ActiveContextMenu = forwardRef<HTMLDivElement | null, ActiveContextMenuProps>(
+  (
+    {
+      state,
+      onClose,
+      onSelectItemInfo,
+      onSelectItemPickup,
+      getPickupAvailability,
+      onSelectOccupantAction,
+      localOccupantId,
+      mutedOccupantIds,
+    },
+    ref,
+  ) => {
+    const menuRef = useRef<HTMLDivElement | null>(null);
+
+    useImperativeHandle<HTMLDivElement | null, HTMLDivElement | null>(
+      ref,
+      () => menuRef.current,
+    );
+
+    useLayoutEffect(() => {
+      const menu = menuRef.current;
+      if (!menu) {
+        return;
+      }
+
+      menu.style.opacity = '0';
+      menu.style.left = `${state.position.x}px`;
+      menu.style.top = `${state.position.y}px`;
+
+      const adjustPosition = (): void => {
+        const rect = menu.getBoundingClientRect();
+        let left = state.position.x;
+        let top = state.position.y;
+
+        if (left + rect.width + MENU_MARGIN > window.innerWidth) {
+          left = Math.max(MENU_MARGIN, window.innerWidth - rect.width - MENU_MARGIN);
+        } else {
+          left = Math.max(MENU_MARGIN, left);
+        }
+
+        if (top + rect.height + MENU_MARGIN > window.innerHeight) {
+          top = Math.max(MENU_MARGIN, window.innerHeight - rect.height - MENU_MARGIN);
+        } else {
+          top = Math.max(MENU_MARGIN, top);
+        }
+
+        menu.style.left = `${left}px`;
+        menu.style.top = `${top}px`;
+        menu.style.opacity = '1';
+      };
+
+      const frame = requestAnimationFrame(adjustPosition);
+      return () => {
+        cancelAnimationFrame(frame);
+      };
+    }, [state]);
+
+    useEffect(() => {
+      const menu = menuRef.current;
+      if (!menu) {
+        return;
+      }
+
+      const firstButton = menu.querySelector<HTMLButtonElement>(FOCUSABLE_SELECTOR);
+      if (firstButton) {
+        firstButton.focus();
+      } else {
+        menu.focus();
+      }
+    }, [state]);
+
+    const focusByOffset = useCallback((offset: number) => {
+      const menu = menuRef.current;
+      if (!menu) {
+        return;
+      }
+      const elements = Array.from(
+        menu.querySelectorAll<HTMLButtonElement>(FOCUSABLE_SELECTOR),
+      );
+      if (elements.length === 0) {
+        return;
+      }
+      const activeElement = document.activeElement;
+      const currentIndex = Math.max(
+        0,
+        elements.findIndex((element) => element === activeElement),
+      );
+      const nextIndex = (currentIndex + offset + elements.length) % elements.length;
+      elements[nextIndex].focus();
+    }, []);
+
+    const handleKeyDown = useCallback(
+      (event: React.KeyboardEvent<HTMLDivElement>) => {
+        if (event.key === 'Escape') {
+          event.preventDefault();
+          onClose();
+          return;
+        }
+
+        if (event.key === 'ArrowDown') {
+          event.preventDefault();
+          focusByOffset(1);
+          return;
+        }
+
+        if (event.key === 'ArrowUp') {
+          event.preventDefault();
+          focusByOffset(-1);
+        }
+      },
+      [focusByOffset, onClose],
+    );
+
+    const renderTileMenu = (payload: TileContextMenuState): JSX.Element => {
+      const { tile, items, focusedItemId } = payload;
+      return (
+        <>
+          <header className="context-menu__header">
+            <div>
+              <span className="context-menu__title">Felt ({tile.gridX}, {tile.gridY})</span>
+            </div>
+            <p className="context-menu__subtitle">
+              {items.length === 1
+                ? '1 genstand på feltet'
+                : `${items.length} genstande på feltet`}
+            </p>
+          </header>
+          {items.length === 0 ? (
+            <p className="context-menu__empty">Ingen genstande på dette felt.</p>
+          ) : (
+            <ul className="context-menu__list">
+              {items.map((item) => {
+                const availability = getPickupAvailability(item);
+                const isFocused = focusedItemId === item.id;
+                return (
+                  <li
+                    key={item.id}
+                    className={
+                      isFocused
+                        ? 'context-menu__list-item context-menu__list-item--focused'
+                        : 'context-menu__list-item'
+                    }
+                    data-can-pickup={availability.canPickup || undefined}
+                  >
+                    <div className="context-menu__item-row">
+                      <span className="context-menu__item-name">{item.name}</span>
+                      <span className="context-menu__item-meta">
+                        ({item.tileX}, {item.tileY})
+                      </span>
+                    </div>
+                    <div className="context-menu__actions" role="group" aria-label={`Handlinger for ${item.name}`}>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        onClick={() => onSelectItemInfo(item)}
+                      >
+                        Info
+                      </button>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        onClick={() => onSelectItemPickup(item)}
+                        disabled={!availability.canPickup}
+                      >
+                        Saml Op
+                      </button>
+                    </div>
+                    <p className="context-menu__status" role="status">
+                      {availability.message}
+                    </p>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </>
+      );
+    };
+
+    const renderOccupantMenu = (payload: OccupantContextMenuState): JSX.Element => {
+      const { occupant, tile } = payload;
+      const isSelf = localOccupantId !== null && localOccupantId === occupant.id;
+
+      const actions: Array<{
+        action: OccupantMenuAction;
+        label: string;
+        description?: string;
+        disabled?: boolean;
+      }> = [
+        {
+          action: 'profile',
+          label: 'View profile',
+          description: 'Åbn spillerkortet i højre panel',
+        },
+        {
+          action: 'trade',
+          label: 'Trade',
+          description: 'Start en byttehandel',
+          disabled: isSelf || occupant.roles.includes('npc'),
+        },
+        {
+          action: 'mute',
+          label: 'Mute',
+          description: 'Skjul spillerens chat',
+          disabled:
+            isSelf || occupant.roles.includes('npc') || mutedOccupantIds.has(occupant.id),
+        },
+        {
+          action: 'report',
+          label: 'Report',
+          description: 'Indsend en rapport til moderatorerne',
+          disabled: isSelf,
+        },
+      ];
+
+      return (
+        <>
+          <header className="context-menu__header">
+            <div>
+              <span className="context-menu__title">{occupant.username}</span>
+              <span className="context-menu__roles">
+                {occupant.roles.map((role) => role.toUpperCase()).join(' · ') || 'PLAYER'}
+              </span>
+            </div>
+            <p className="context-menu__subtitle">
+              Står på felt ({tile.gridX}, {tile.gridY})
+            </p>
+          </header>
+          <ul className="context-menu__list context-menu__list--actions">
+            {actions.map((item) => (
+              <li key={item.action} className="context-menu__list-item">
+                <button
+                  type="button"
+                  role="menuitem"
+                  disabled={item.disabled}
+                  onClick={() => onSelectOccupantAction(item.action, occupant)}
+                >
+                  <span className="context-menu__item-name">{item.label}</span>
+                  {item.description ? (
+                    <span className="context-menu__item-meta">{item.description}</span>
+                  ) : null}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </>
+      );
+    };
+
+    return (
+      <div
+        ref={menuRef}
+        className={
+          state.type === 'tile'
+            ? 'context-menu context-menu--tile'
+            : 'context-menu context-menu--occupant'
+        }
+        role="menu"
+        tabIndex={-1}
+        onKeyDown={handleKeyDown}
+        data-menu-type={state.type}
+      >
+        {state.type === 'tile' ? renderTileMenu(state) : renderOccupantMenu(state)}
+      </div>
+    );
+  },
+);
+
+ActiveContextMenu.displayName = 'ActiveContextMenu';
+
 
 const placeholderChatHistory: ChatMessage[] = [
   {
     id: 'system-1',
+    userId: null,
     actor: 'System',
     body: 'Welcome to Bitby. Realtime chat will populate this log.',
     time: '17:58',
+    isSystem: true,
   },
   {
     id: 'system-2',
+    userId: null,
     actor: 'System',
     body: 'Daily quests rotate at midnight UTC. Claim rewards before the reset!',
     time: '17:59',
+    isSystem: true,
   },
   {
     id: 'player-0',
+    userId: null,
     actor: 'Player',
     body: 'Movement loop placeholder: walking toward tile (5, 8).',
     time: '18:00',
   },
   {
     id: 'system-3',
+    userId: null,
     actor: 'System',
     body: 'Admin: Spawned a practice bot near the fountain for collision testing.',
     time: '18:01',
+    isSystem: true,
   },
   {
     id: 'player-1',
+    userId: null,
     actor: 'Player',
     body: 'Quest tracker placeholder: Completed “Arrange the lounge chairs.”',
     time: '18:02',
   },
   {
     id: 'system-4',
+    userId: null,
     actor: 'System',
     body: 'Economy update placeholder: Daily coin stipend delivered.',
     time: '18:03',
+    isSystem: true,
   },
   {
     id: 'system-5',
+    userId: null,
     actor: 'System',
     body: 'Room presence placeholder: 8 visitors online in the plaza.',
     time: '18:04',
+    isSystem: true,
   },
   {
     id: 'player-2',
+    userId: null,
     actor: 'Player',
     body: 'Hey folks, checking the plaza lighting real quick.',
     time: '18:05',
   },
   {
     id: 'system-6',
+    userId: null,
     actor: 'System',
     body: 'Reminder: Chat history shows the latest 100 entries. Older logs archive to the server.',
     time: '18:06',
-  },
-];
-
-const panelSections = [
-  {
-    title: 'Room overview',
-    body:
-      'Live occupants, furniture states, and queued moderation events surface here once the realtime feeds are connected. Expect inline moderation cards, visitor summaries, and streaming alerts to pack this column so admins never lose context while monitoring rooms.',
-  },
-  {
-    title: 'Quest tracker',
-    body:
-      'Track daily quests, event timers, and party tasks. Progress updates from the authoritative server stream directly into this stack, keeping collaborators aligned on milestones without needing to leave the canvas or pop additional dialogs.',
-  },
-  {
-    title: 'Pinned threads',
-    body:
-      'Moderators can pin essential announcements or support replies for quick reference without leaving the canvas. Long-form guidance, policy notes, and escalation timelines can all live here as fully formatted text blocks.',
+    isSystem: true,
   },
 ];
 
@@ -107,15 +476,622 @@ const App = (): JSX.Element => {
   );
   const [showSystemMessages, setShowSystemMessages] = useState(true);
   const [showBackToTop, setShowBackToTop] = useState(false);
+  const [chatDraft, setChatDraft] = useState('');
+  const chatDraftRef = useRef(chatDraft);
+  const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
+  const [contextMenuState, setContextMenuState] = useState<ContextMenuState | null>(null);
   const chatMessagesRef = useRef<HTMLOListElement | null>(null);
+  const contextMenuRef = useRef<HTMLDivElement | null>(null);
+  const [profilePanelState, setProfilePanelState] = useState<ProfilePanelState>({ status: 'idle' });
+  const [activeDockView, setActiveDockView] = useState<'default' | 'backpack'>('default');
+  const [tradeState, setTradeState] = useState<TradeLifecycleState>({ status: 'idle' });
+  const { toast: actionToast, showToast } = useActionToast();
+  const profileRequestRef = useRef(0);
+  const lastTradeEventRevisionRef = useRef(0);
+  const connection = useRealtimeConnection();
+  const {
+    sendChat,
+    updateTypingPreview,
+    clearTypingPreview,
+    updateAdminAffordances,
+    updateTileLock,
+    updateTileNoPickup,
+    requestLatencyTrace,
+    spawnPlantAtTile,
+    fetchOccupantProfile,
+    initiateTradeWithOccupant,
+    acceptTradeSession,
+    cancelTradeSession,
+    completeTradeSession,
+    muteOccupant,
+    reportOccupant,
+  } = connection;
+  const requestProfile = useCallback(
+    (occupantId: string, occupantName: string) => {
+      profileRequestRef.current += 1;
+      const requestId = profileRequestRef.current;
+      setActiveDockView('default');
+      setSelectedItemId(null);
+      setProfilePanelState({
+        status: 'loading',
+        occupantId,
+        occupantName,
+      });
+      void fetchOccupantProfile(occupantId).then((result) => {
+        if (profileRequestRef.current !== requestId) {
+          return;
+        }
+        if (!result.ok) {
+          setProfilePanelState({
+            status: 'error',
+            occupantId,
+            occupantName,
+            message: result.message,
+          });
+          return;
+        }
+        setProfilePanelState({ status: 'loaded', profile: result.data });
+      });
+    },
+    [fetchOccupantProfile],
+  );
+  const handleTradeInviteAccepted = useCallback(() => {
+    if (tradeState.status !== 'pending') {
+      return;
+    }
+
+    void acceptTradeSession(tradeState.trade.id).then((result) => {
+      if (!result.ok) {
+        showToast(result.message, 'error');
+        return;
+      }
+
+      const acceptedTimestamp = result.data.trade.acceptedAt
+        ? Date.parse(result.data.trade.acceptedAt)
+        : Date.now();
+      const startedAt = Number.isFinite(acceptedTimestamp) ? acceptedTimestamp : Date.now();
+
+      setTradeState({
+        status: 'in-progress',
+        trade: result.data.trade,
+        participant: result.data.participant,
+        startedAt,
+      });
+      showToast(`Trading with ${result.data.participant.username}`, 'success');
+    });
+  }, [acceptTradeSession, showToast, tradeState]);
+
+  const requestTradeCancellation = useCallback(
+    (reason: 'cancelled' | 'declined') => {
+      if (
+        tradeState.status === 'idle' ||
+        tradeState.status === 'completed' ||
+        tradeState.status === 'cancelled'
+      ) {
+        return;
+      }
+
+      void cancelTradeSession(tradeState.trade.id, reason).then((result) => {
+        if (!result.ok) {
+          showToast(result.message, 'error');
+          return;
+        }
+
+        const cancelledTimestamp = result.data.trade.cancelledAt
+          ? Date.parse(result.data.trade.cancelledAt)
+          : Date.now();
+        const cancelledAt = Number.isFinite(cancelledTimestamp)
+          ? cancelledTimestamp
+          : Date.now();
+        const resolvedReason = result.data.trade.cancelledReason ?? reason;
+        const cancelledBy =
+          result.data.trade.cancelledBy && result.data.trade.cancelledBy === connection.user?.id
+            ? 'self'
+            : 'participant';
+
+        setTradeState({
+          status: 'cancelled',
+          trade: result.data.trade,
+          participant: result.data.participant,
+          cancelledAt,
+          reason: resolvedReason,
+          cancelledBy,
+        });
+
+        const participantName = result.data.participant.username;
+        if (resolvedReason === 'declined') {
+          showToast(
+            cancelledBy === 'self'
+              ? `You declined the trade with ${participantName}`
+              : `${participantName} declined the trade`,
+            'error',
+          );
+        } else {
+          showToast(
+            cancelledBy === 'self'
+              ? `Trade with ${participantName} cancelled`
+              : `${participantName} cancelled the trade`,
+            'error',
+          );
+        }
+      });
+    },
+    [cancelTradeSession, connection.user?.id, showToast, tradeState],
+  );
+
+  const handleTradeCancel = useCallback(() => {
+    requestTradeCancellation('cancelled');
+  }, [requestTradeCancellation]);
+
+  const handleTradeDecline = useCallback(() => {
+    requestTradeCancellation('declined');
+  }, [requestTradeCancellation]);
+
+  const handleTradeComplete = useCallback(() => {
+    if (tradeState.status !== 'in-progress') {
+      return;
+    }
+
+    void completeTradeSession(tradeState.trade.id).then((result) => {
+      if (!result.ok) {
+        showToast(result.message, 'error');
+        return;
+      }
+
+      const completedTimestamp = result.data.trade.completedAt
+        ? Date.parse(result.data.trade.completedAt)
+        : Date.now();
+      const completedAt = Number.isFinite(completedTimestamp) ? completedTimestamp : Date.now();
+
+      setTradeState({
+        status: 'completed',
+        trade: result.data.trade,
+        participant: result.data.participant,
+        completedAt,
+      });
+      showToast(`Trade with ${result.data.participant.username} completed`, 'success');
+    });
+  }, [completeTradeSession, showToast, tradeState]);
+
+  const handleTradeDismiss = useCallback(() => {
+    setTradeState({ status: 'idle' });
+  }, []);
+  const adminAffordances = connection.adminState.affordances;
+  const isGridVisible = adminAffordances.gridVisible;
+  const showHoverWhenGridHidden = adminAffordances.showHoverWhenGridHidden;
+  const areMoveAnimationsEnabled = adminAffordances.moveAnimationsEnabled;
+
+  useEffect(() => {
+    chatDraftRef.current = chatDraft;
+  }, [chatDraft]);
+
+  useEffect(() => {
+    const isEditableElement = (element: Element | null): boolean => {
+      if (!element) {
+        return false;
+      }
+
+      if (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement) {
+        return true;
+      }
+
+      const htmlElement = element as HTMLElement;
+      return htmlElement.isContentEditable;
+    };
+
+    const commitDraft = (next: string) => {
+      chatDraftRef.current = next;
+      setChatDraft(next);
+      if (next.length === 0) {
+        clearTypingPreview();
+      } else {
+        updateTypingPreview(next);
+      }
+    };
+
+    const handleGlobalKeyDown = (event: KeyboardEvent): void => {
+      if (event.defaultPrevented) {
+        return;
+      }
+
+      if (event.metaKey || event.ctrlKey || event.altKey) {
+        return;
+      }
+
+      const active = document.activeElement;
+      if (isEditableElement(active)) {
+        return;
+      }
+
+      if (event.key === 'Enter') {
+        if (chatDraftRef.current.trim().length === 0) {
+          return;
+        }
+
+        event.preventDefault();
+        const sent = sendChat(chatDraftRef.current);
+        if (sent) {
+          commitDraft('');
+        }
+        return;
+      }
+
+      if (event.key === 'Escape') {
+        if (chatDraftRef.current.length === 0) {
+          return;
+        }
+
+        event.preventDefault();
+        commitDraft('');
+        return;
+      }
+
+      if (event.key === 'Backspace') {
+        if (chatDraftRef.current.length === 0) {
+          return;
+        }
+
+        event.preventDefault();
+        commitDraft(chatDraftRef.current.slice(0, -1));
+        return;
+      }
+
+      if (event.key === ' ') {
+        event.preventDefault();
+        commitDraft(`${chatDraftRef.current} `);
+        return;
+      }
+
+      if (event.key.length !== 1) {
+        return;
+      }
+
+      if (/^\s$/.test(event.key)) {
+        event.preventDefault();
+        commitDraft(`${chatDraftRef.current} `);
+        return;
+      }
+
+      event.preventDefault();
+      commitDraft(`${chatDraftRef.current}${event.key}`);
+    };
+
+    window.addEventListener('keydown', handleGlobalKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleGlobalKeyDown);
+    };
+  }, [clearTypingPreview, sendChat, updateTypingPreview]);
+  useEffect(() => {
+    const preferences = connection.chatPreferences;
+    if (
+      preferences &&
+      typeof preferences.showSystemMessages === 'boolean' &&
+      preferences.showSystemMessages !== showSystemMessages
+    ) {
+      setShowSystemMessages(preferences.showSystemMessages);
+    }
+  }, [connection.chatPreferences, showSystemMessages]);
+  const handleSystemToggle = useCallback(() => {
+    setShowSystemMessages((previous) => {
+      const next = !previous;
+      connection.updateShowSystemMessages(next);
+      return next;
+    });
+  }, [connection]);
+  const closeContextMenu = useCallback(() => {
+    setContextMenuState(null);
+  }, []);
+  const { pendingPickupItemIds, lastPickupResult, clearPickupResult, sendPickup } = connection;
+  const itemCacheRef = useRef(new Map<string, CanvasItem>());
+  const canvasItems = useMemo<CanvasItem[]>(() => {
+    const items = connection.items.map((item) => {
+      const texture = ITEM_TEXTURES[item.textureKey] ?? DEFAULT_ITEM_TEXTURE;
+      const canvasItem: CanvasItem = {
+        id: item.id,
+        name: item.name,
+        description: item.description,
+        tileX: item.tileX,
+        tileY: item.tileY,
+        texture,
+      };
+      itemCacheRef.current.set(item.id, canvasItem);
+      return canvasItem;
+    });
+    return items;
+  }, [connection.items]);
+
+  const inventoryEntries = useMemo<InventoryEntry[]>(
+    () =>
+      connection.inventory.map((item) => {
+        const acquiredAt = new Date(item.acquiredAt);
+        const acquiredLabel = Number.isNaN(acquiredAt.getTime())
+          ? ''
+          : acquiredAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        return {
+          id: item.id,
+          name: item.name,
+          description: item.description,
+          acquiredLabel,
+          texture: ITEM_TEXTURES[item.textureKey] ?? DEFAULT_ITEM_TEXTURE,
+        } satisfies InventoryEntry;
+      }),
+    [connection.inventory],
+  );
+
+  const mutedOccupantSet = useMemo(
+    () => new Set(connection.mutedOccupantIds),
+    [connection.mutedOccupantIds],
+  );
+
+  const handleProfileRetry = useCallback(() => {
+    if (profilePanelState.status === 'error') {
+      requestProfile(profilePanelState.occupantId, profilePanelState.occupantName);
+    }
+  }, [profilePanelState, requestProfile]);
+
+  const handleProfileClose = useCallback(() => {
+    setProfilePanelState({ status: 'idle' });
+    setActiveDockView('default');
+  }, []);
+
+  const profilePanelContent = useMemo(
+    () => (
+      <ProfilePanel
+        state={profilePanelState}
+        onRetry={handleProfileRetry}
+        onClose={handleProfileClose}
+      />
+    ),
+    [handleProfileClose, handleProfileRetry, profilePanelState],
+  );
+
+  const tradeBanner = useMemo(() => {
+    if (tradeState.status === 'idle') {
+      return null;
+    }
+
+    const participantName = tradeState.participant.username;
+
+    if (tradeState.status === 'pending') {
+      return (
+        <aside className="trade-banner trade-banner--pending" role="status" aria-live="polite">
+          <div className="trade-banner__header">
+            <h2 className="trade-banner__title">Awaiting response</h2>
+            <p className="trade-banner__subtitle">Invite sent to {participantName}</p>
+          </div>
+          <p className="trade-banner__body">
+            Track the demo trade lifecycle below. Mark it as accepted to enter the trading flow or
+            cancel if you need to withdraw the invite.
+          </p>
+          <div className="trade-banner__actions">
+            <button
+              type="button"
+              className="trade-banner__button trade-banner__button--primary"
+              onClick={handleTradeInviteAccepted}
+            >
+              Mark as accepted
+            </button>
+            <button
+              type="button"
+              className="trade-banner__button"
+              onClick={handleTradeCancel}
+            >
+              Cancel invite
+            </button>
+            <button
+              type="button"
+              className="trade-banner__button trade-banner__button--danger"
+              onClick={handleTradeDecline}
+            >
+              Mark as declined
+            </button>
+          </div>
+        </aside>
+      );
+    }
+
+    if (tradeState.status === 'in-progress') {
+      return (
+        <aside className="trade-banner trade-banner--in-progress" role="status" aria-live="polite">
+          <div className="trade-banner__header">
+            <h2 className="trade-banner__title">Trading with {participantName}</h2>
+            <p className="trade-banner__subtitle">Session active</p>
+          </div>
+          <p className="trade-banner__body">
+            Coordinate the exchange in voice or chat and click complete once both sides are ready.
+            Cancel if you need to restart the negotiation.
+          </p>
+          <div className="trade-banner__actions">
+            <button
+              type="button"
+              className="trade-banner__button trade-banner__button--primary"
+              onClick={handleTradeComplete}
+            >
+              Complete trade
+            </button>
+            <button
+              type="button"
+              className="trade-banner__button trade-banner__button--danger"
+              onClick={handleTradeCancel}
+            >
+              Cancel trade
+            </button>
+          </div>
+        </aside>
+      );
+    }
+
+    if (tradeState.status === 'cancelled') {
+      const cancelledCopy = (() => {
+        if (tradeState.reason === 'declined') {
+          return tradeState.cancelledBy === 'self'
+            ? `You declined the trade with ${participantName}.`
+            : `${participantName} declined the trade invite.`;
+        }
+        return tradeState.cancelledBy === 'self'
+          ? `You cancelled the trade with ${participantName}.`
+          : `${participantName} cancelled the trade.`;
+      })();
+      return (
+        <aside className="trade-banner trade-banner--declined" role="status" aria-live="polite">
+          <div className="trade-banner__header">
+            <h2 className="trade-banner__title">Trade ended</h2>
+            <p className="trade-banner__subtitle">No exchange in progress</p>
+          </div>
+          <p className="trade-banner__body">{cancelledCopy}</p>
+          <div className="trade-banner__actions">
+            <button type="button" className="trade-banner__button" onClick={handleTradeDismiss}>
+              Dismiss
+            </button>
+          </div>
+        </aside>
+      );
+    }
+
+    return (
+      <aside className="trade-banner trade-banner--completed" role="status" aria-live="polite">
+        <div className="trade-banner__header">
+          <h2 className="trade-banner__title">Trade complete</h2>
+          <p className="trade-banner__subtitle">Exchange with {participantName}</p>
+        </div>
+        <p className="trade-banner__body">
+          The trade was marked as complete. Capture any follow-up notes and you can dismiss this
+          summary when you are ready.
+        </p>
+        <div className="trade-banner__actions">
+          <button type="button" className="trade-banner__button" onClick={handleTradeDismiss}>
+            Dismiss
+          </button>
+        </div>
+      </aside>
+    );
+  }, [
+    handleTradeCancel,
+    handleTradeDecline,
+    handleTradeDismiss,
+    handleTradeComplete,
+    handleTradeInviteAccepted,
+    tradeState,
+  ]);
+
+  useEffect(() => {
+    const event = connection.tradeLifecycleEvent;
+    if (!event) {
+      return;
+    }
+
+    if (event.revision === lastTradeEventRevisionRef.current) {
+      return;
+    }
+    lastTradeEventRevisionRef.current = event.revision;
+
+    const parseTimestamp = (value?: string | null): number => {
+      if (!value) {
+        return Date.now();
+      }
+      const parsed = Date.parse(value);
+      return Number.isFinite(parsed) ? parsed : Date.now();
+    };
+
+    switch (event.trade.status) {
+      case 'accepted': {
+        const startedAt = parseTimestamp(event.trade.acceptedAt ?? event.trade.createdAt);
+        setTradeState({
+          status: 'in-progress',
+          trade: event.trade,
+          participant: event.participant,
+          startedAt,
+        });
+        break;
+      }
+      case 'cancelled': {
+        const cancelledAt = parseTimestamp(event.trade.cancelledAt);
+        const cancelActorId = event.trade.cancelledBy ?? event.actorId ?? null;
+        const cancelledBy: 'self' | 'participant' =
+          cancelActorId && connection.user?.id && cancelActorId === connection.user.id
+            ? 'self'
+            : 'participant';
+        const reason = event.trade.cancelledReason ?? 'cancelled';
+        setTradeState({
+          status: 'cancelled',
+          trade: event.trade,
+          participant: event.participant,
+          cancelledAt,
+          reason,
+          cancelledBy,
+        });
+        break;
+      }
+      case 'completed': {
+        const completedAt = parseTimestamp(event.trade.completedAt);
+        setTradeState({
+          status: 'completed',
+          trade: event.trade,
+          participant: event.participant,
+          completedAt,
+        });
+        break;
+      }
+      case 'pending': {
+        const initiatedAt = parseTimestamp(event.trade.createdAt);
+        setTradeState({
+          status: 'pending',
+          trade: event.trade,
+          participant: event.participant,
+          initiatedAt,
+        });
+        break;
+      }
+      default:
+        break;
+    }
+
+    if (connection.user?.id && event.actorId && event.actorId !== connection.user.id) {
+      const participantName = event.participant.username;
+      if (event.trade.status === 'accepted') {
+        showToast(`${participantName} accepted the trade.`, 'success');
+      } else if (event.trade.status === 'completed') {
+        showToast(`${participantName} marked the trade complete.`, 'success');
+      } else if (event.trade.status === 'cancelled') {
+        const reason = event.trade.cancelledReason ?? 'cancelled';
+        const copy =
+          reason === 'declined'
+            ? `${participantName} declined the trade.`
+            : `${participantName} cancelled the trade.`;
+        showToast(copy, 'error');
+      }
+    }
+  }, [connection.tradeLifecycleEvent, connection.user?.id, showToast]);
 
   const chatLogEntries = useMemo(() => {
-    const baseLog = showSystemMessages
-      ? placeholderChatHistory
-      : placeholderChatHistory.filter((message) => message.actor !== 'System');
+    const formattedHistory: ChatMessage[] = connection.chatLog.map((message) => {
+      const timestamp = new Date(message.createdAt);
+      const time = Number.isNaN(timestamp.getTime())
+        ? ''
+        : timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      const isSystem = message.roles.some(
+        (role: string) => role.toLowerCase() === 'system',
+      );
+      return {
+        id: message.id,
+        userId: message.userId ?? null,
+        actor: message.username,
+        body: message.body,
+        time,
+        isSystem,
+      };
+    });
 
-    return baseLog.slice(-100);
-  }, [showSystemMessages]);
+    const mutedFiltered = formattedHistory.filter(
+      (message) => !message.userId || !mutedOccupantSet.has(message.userId),
+    );
+    const source = mutedFiltered.length > 0 ? mutedFiltered : placeholderChatHistory;
+    const filtered = showSystemMessages
+      ? source
+      : source.filter((message) => !message.isSystem && message.actor !== 'System');
+
+    return filtered.slice(-100);
+  }, [connection.chatLog, mutedOccupantSet, showSystemMessages]);
 
   const primaryMenuStyle = useMemo(
     () => ({ '--menu-count': dockButtons.length } as CSSProperties),
@@ -134,6 +1110,43 @@ const App = (): JSX.Element => {
       setShowBackToTop(false);
     }
   }, [isChatVisible, chatLogEntries]);
+
+  useEffect(() => {
+    if (!contextMenuState) {
+      return;
+    }
+
+    const handlePointerDown = (event: PointerEvent): void => {
+      const menu = contextMenuRef.current;
+      if (menu && menu.contains(event.target as Node)) {
+        return;
+      }
+      setContextMenuState(null);
+    };
+
+    window.addEventListener('pointerdown', handlePointerDown);
+    return () => {
+      window.removeEventListener('pointerdown', handlePointerDown);
+    };
+  }, [contextMenuState]);
+
+  useEffect(() => {
+    if (!contextMenuState) {
+      return;
+    }
+
+    const handleKeyDown = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        setContextMenuState(null);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [contextMenuState]);
 
   useEffect(() => {
     if (!isChatVisible) {
@@ -160,7 +1173,7 @@ const App = (): JSX.Element => {
     };
   }, [isChatVisible]);
 
-  const username = 'TestUser';
+  const username = connection.user?.username ?? 'TestUser';
   const coinBalance = 1280;
   const level = 12;
   const newsTicker = useMemo(
@@ -180,14 +1193,713 @@ const App = (): JSX.Element => {
     : 'Show system messages';
   const systemToggleTooltip = showSystemMessages ? 'Hide System Logs' : 'Show System Logs';
 
+  const lockedTileKeys = useMemo(() => {
+    const keys = new Set<string>();
+    for (const flag of connection.tileFlags) {
+      if (flag.locked) {
+        keys.add(createTileKey(flag.x, flag.y));
+      }
+    }
+    return keys;
+  }, [connection.tileFlags]);
+
+  const occupiedTileKeys = useMemo(() => {
+    const keys = new Set<string>();
+    for (const occupant of connection.occupants) {
+      keys.add(createTileKey(occupant.position.x, occupant.position.y));
+    }
+    return keys;
+  }, [connection.occupants]);
+
+  const noPickupTileKeys = useMemo(() => {
+    const keys = new Set<string>();
+    for (const flag of connection.tileFlags) {
+      if (flag.noPickup) {
+        keys.add(createTileKey(flag.x, flag.y));
+      }
+    }
+    return keys;
+  }, [connection.tileFlags]);
+
+  const selectedItem = useMemo(
+    () => (selectedItemId ? itemCacheRef.current.get(selectedItemId) ?? null : null),
+    [canvasItems, selectedItemId],
+  );
+
+  const isBackpackOpen = activeDockView === 'backpack';
+
+  const panelHeading = useMemo(() => {
+    if (selectedItem) {
+      return { title: 'Item Info', subtitle: selectedItem.name } as const;
+    }
+    if (profilePanelState.status === 'loaded') {
+      return {
+        title: 'Player Profile',
+        subtitle: profilePanelState.profile.username,
+      } as const;
+    }
+    if (profilePanelState.status === 'loading' || profilePanelState.status === 'error') {
+      return {
+        title: 'Player Profile',
+        subtitle: profilePanelState.occupantName,
+      } as const;
+    }
+    if (isBackpackOpen) {
+      return { title: 'Backpack', subtitle: null } as const;
+    }
+    return { title: 'Right Panel', subtitle: null } as const;
+  }, [isBackpackOpen, profilePanelState, selectedItem]);
+
+  const rightPanelAriaLabel = useMemo(() => {
+    if (selectedItem) {
+      return 'Item information panel';
+    }
+    if (profilePanelState.status !== 'idle') {
+      return 'Player profile panel';
+    }
+    if (isBackpackOpen) {
+      return 'Backpack panel';
+    }
+    return 'Right panel';
+  }, [isBackpackOpen, profilePanelState.status, selectedItem]);
+
+  const selectedItemTileKey = useMemo(() => {
+    if (!selectedItem) {
+      return null;
+    }
+    return createTileKey(selectedItem.tileX, selectedItem.tileY);
+  }, [selectedItem]);
+
+  const pickupResultForSelectedItem = useMemo(() => {
+    if (!selectedItemId || !lastPickupResult) {
+      return null;
+    }
+    return lastPickupResult.itemId === selectedItemId ? lastPickupResult : null;
+  }, [lastPickupResult, selectedItemId]);
+
+  const isPickupPending = useMemo(
+    () => (selectedItemId ? pendingPickupItemIds.includes(selectedItemId) : false),
+    [pendingPickupItemIds, selectedItemId],
+  );
+
+  const isSelectedItemPresent = useMemo(
+    () => (selectedItemId ? connection.items.some((item) => item.id === selectedItemId) : false),
+    [connection.items, selectedItemId],
+  );
+
+  const localOccupant = useMemo(() => {
+    if (!connection.user) {
+      return null;
+    }
+    return (
+      connection.occupants.find((occupant) => occupant.id === connection.user?.id) ?? null
+    );
+  }, [connection.occupants, connection.user]);
+  const localTile = localOccupant
+    ? { x: localOccupant.position.x, y: localOccupant.position.y }
+    : null;
+  const localTileFlag = useMemo(() => {
+    if (!localTile) {
+      return null;
+    }
+
+    return (
+      connection.tileFlags.find(
+        (flag) => flag.x === localTile.x && flag.y === localTile.y,
+      ) ?? null
+    );
+  }, [connection.tileFlags, localTile?.x, localTile?.y]);
+  const localTileLocked = localTileFlag?.locked ?? false;
+  const localTileNoPickup = localTileFlag?.noPickup ?? false;
+
+  const pickupStatusMessage = useMemo(() => {
+    if (!selectedItem) {
+      return '';
+    }
+    if (pickupResultForSelectedItem) {
+      return pickupResultForSelectedItem.message;
+    }
+    if (isPickupPending) {
+      return 'Afventer serverbekræftelse…';
+    }
+    if (!isSelectedItemPresent) {
+      return 'Genstanden er ikke længere i rummet.';
+    }
+    if (!localOccupant) {
+      return 'Forbind til rummet for at samle op.';
+    }
+    if (selectedItemTileKey && noPickupTileKeys.has(selectedItemTileKey)) {
+      return 'Kan ikke samle op her';
+    }
+    if (
+      localOccupant.position.x !== selectedItem.tileX ||
+      localOccupant.position.y !== selectedItem.tileY
+    ) {
+      return 'Stil dig på feltet for at samle op';
+    }
+    return 'Klar til at samle op';
+  }, [
+    isPickupPending,
+    isSelectedItemPresent,
+    localOccupant,
+    noPickupTileKeys,
+    pickupResultForSelectedItem,
+    selectedItem,
+    selectedItemTileKey,
+  ]);
+
+  const pickupStatusTone = useMemo(() => {
+    if (!selectedItem || !pickupStatusMessage) {
+      return 'pending';
+    }
+    if (pickupResultForSelectedItem?.status === 'ok') {
+      return 'ready';
+    }
+    if (pickupResultForSelectedItem?.status === 'error') {
+      return 'blocked';
+    }
+    if (isPickupPending) {
+      return 'pending';
+    }
+    if (!isSelectedItemPresent || pickupStatusMessage === 'Kan ikke samle op her') {
+      return 'blocked';
+    }
+    if (pickupStatusMessage === 'Klar til at samle op') {
+      return 'ready';
+    }
+    return 'pending';
+  }, [
+    isPickupPending,
+    isSelectedItemPresent,
+    pickupResultForSelectedItem,
+    pickupStatusMessage,
+    selectedItem,
+  ]);
+
+  const canPickupSelectedItem = Boolean(
+    selectedItem &&
+      isSelectedItemPresent &&
+      !isPickupPending &&
+      (!pickupResultForSelectedItem || pickupResultForSelectedItem.status === 'error') &&
+      localOccupant &&
+      localOccupant.position.x === selectedItem.tileX &&
+      localOccupant.position.y === selectedItem.tileY &&
+      !(selectedItemTileKey && noPickupTileKeys.has(selectedItemTileKey)),
+  );
+
+  const shouldShowPickupHint =
+    pickupStatusMessage.length > 0 &&
+    (pickupResultForSelectedItem !== null ||
+      isPickupPending ||
+      pickupStatusMessage !== 'Klar til at samle op');
+
+  const getPickupAvailability = useCallback(
+    (item: CanvasItem): PickupAvailability => {
+      const tileKey = createTileKey(item.tileX, item.tileY);
+      const isPending = pendingPickupItemIds.includes(item.id);
+      const result =
+        lastPickupResult && lastPickupResult.itemId === item.id
+          ? lastPickupResult
+          : null;
+      const isPresent = connection.items.some((candidate) => candidate.id === item.id);
+
+      if (isPending) {
+        return { canPickup: false, message: 'Pickup behandles…' };
+      }
+
+      if (!localOccupant) {
+        return { canPickup: false, message: 'Afventer forbindelse' };
+      }
+
+      if (
+        localOccupant.position.x !== item.tileX ||
+        localOccupant.position.y !== item.tileY
+      ) {
+        return { canPickup: false, message: 'Stå på feltet for at samle op' };
+      }
+
+      if (noPickupTileKeys.has(tileKey)) {
+        return { canPickup: false, message: 'Pickup blokeret på dette felt' };
+      }
+
+      if (!isPresent && (!result || result.status !== 'ok')) {
+        return { canPickup: false, message: 'Genstanden er allerede væk' };
+      }
+
+      if (result?.status === 'ok') {
+        return { canPickup: false, message: 'Allerede samlet op' };
+      }
+
+      if (result?.status === 'error') {
+        return { canPickup: true, message: 'Prøv igen' };
+      }
+
+      return { canPickup: true, message: 'Klar til at samle op' };
+    },
+    [
+      connection.items,
+      lastPickupResult,
+      localOccupant,
+      noPickupTileKeys,
+      pendingPickupItemIds,
+    ],
+  );
+
+  const handleItemClick = useCallback(
+    (item: CanvasItem): void => {
+      setActiveDockView('default');
+      itemCacheRef.current.set(item.id, item);
+      if (lastPickupResult && lastPickupResult.itemId !== item.id) {
+        clearPickupResult(lastPickupResult.itemId);
+      }
+      setProfilePanelState({ status: 'idle' });
+      setSelectedItemId(item.id);
+    },
+    [clearPickupResult, lastPickupResult],
+  );
+
+  const handlePickupSelectedItem = useCallback(() => {
+    if (!selectedItem || !canPickupSelectedItem) {
+      return;
+    }
+    const sent = sendPickup(selectedItem.id);
+    if (sent && import.meta.env.DEV) {
+      console.debug('[items] Pickup requested', {
+        itemId: selectedItem.id,
+        name: selectedItem.name,
+      });
+    }
+  }, [canPickupSelectedItem, selectedItem, sendPickup]);
+
+  const handleClearSelectedItem = useCallback(() => {
+    if (selectedItemId) {
+      clearPickupResult(selectedItemId);
+    }
+    setActiveDockView('default');
+    setSelectedItemId(null);
+  }, [clearPickupResult, selectedItemId]);
+
+  const handleContextMenuItemInfo = useCallback(
+    (item: CanvasItem) => {
+      handleItemClick(item);
+      closeContextMenu();
+    },
+    [closeContextMenu, handleItemClick],
+  );
+
+  const handleContextMenuItemPickup = useCallback(
+    (item: CanvasItem) => {
+      const availability = getPickupAvailability(item);
+      if (!availability.canPickup) {
+        return;
+      }
+      const sent = sendPickup(item.id);
+      if (sent && import.meta.env.DEV) {
+        console.debug('[items] Pickup requested from context menu', {
+          itemId: item.id,
+          name: item.name,
+        });
+      }
+      closeContextMenu();
+    },
+    [closeContextMenu, getPickupAvailability, sendPickup],
+  );
+
+  const handleOccupantMenuAction = useCallback(
+    (action: OccupantMenuAction, occupant: CanvasOccupant) => {
+      closeContextMenu();
+      if (import.meta.env.DEV) {
+        console.debug('[avatars] Context menu action', { action, occupant });
+      }
+
+      if (action === 'profile') {
+        requestProfile(occupant.id, occupant.username);
+        return;
+      }
+
+      if (action === 'trade') {
+        void initiateTradeWithOccupant(occupant.id).then((result) => {
+          if (result.ok) {
+            const initiatedTimestamp = Date.parse(result.data.trade.createdAt);
+            setTradeState({
+              status: 'pending',
+              trade: result.data.trade,
+              participant: result.data.participant,
+              initiatedAt: Number.isFinite(initiatedTimestamp)
+                ? initiatedTimestamp
+                : Date.now(),
+            });
+            showToast(`Trade invite sent to ${result.data.participant.username}`, 'success');
+          } else {
+            showToast(result.message, 'error');
+          }
+        });
+        return;
+      }
+
+      if (action === 'mute') {
+        void muteOccupant(occupant.id).then((result) => {
+          if (result.ok) {
+            showToast(`${occupant.username} muted`, 'success');
+          } else {
+            showToast(result.message, 'error');
+          }
+        });
+        return;
+      }
+
+      if (action === 'report') {
+        void reportOccupant(occupant.id).then((result) => {
+          if (result.ok) {
+            showToast(`Report submitted for ${occupant.username}`, 'success');
+          } else {
+            showToast(result.message, 'error');
+          }
+        });
+      }
+    },
+    [
+      closeContextMenu,
+      initiateTradeWithOccupant,
+      muteOccupant,
+      reportOccupant,
+      requestProfile,
+      showToast,
+    ],
+  );
+
+  const handleTileContextMenu = useCallback(
+    ({ tile, items, clientX, clientY }: {
+      tile: GridTile;
+      items: CanvasItem[];
+      clientX: number;
+      clientY: number;
+    }) => {
+      items.forEach((entry) => {
+        itemCacheRef.current.set(entry.id, entry);
+      });
+      setContextMenuState({
+        type: 'tile',
+        tile,
+        items,
+        focusedItemId: null,
+        position: { x: clientX, y: clientY },
+      });
+    },
+    [],
+  );
+
+  const handleItemContextMenu = useCallback(
+    ({
+      tile,
+      item,
+      items,
+      clientX,
+      clientY,
+    }: {
+      tile: GridTile;
+      item: CanvasItem;
+      items: CanvasItem[];
+      clientX: number;
+      clientY: number;
+    }) => {
+      items.forEach((entry) => {
+        itemCacheRef.current.set(entry.id, entry);
+      });
+      setContextMenuState({
+        type: 'tile',
+        tile,
+        items,
+        focusedItemId: item.id,
+        position: { x: clientX, y: clientY },
+      });
+    },
+    [],
+  );
+
+  const handleOccupantContextMenu = useCallback(
+    ({
+      occupant,
+      tile,
+      clientX,
+      clientY,
+    }: {
+      occupant: CanvasOccupant;
+      tile: GridTile;
+      clientX: number;
+      clientY: number;
+    }) => {
+      setContextMenuState({
+        type: 'occupant',
+        occupant,
+        tile,
+        position: { x: clientX, y: clientY },
+      });
+    },
+    [],
+  );
+
+  useEffect(() => {
+    if (!contextMenuState) {
+      return;
+    }
+
+    setContextMenuState((previous) => {
+      if (!previous) {
+        return previous;
+      }
+
+      if (previous.type === 'tile') {
+        const latestItems = canvasItems.filter(
+          (item) =>
+            item.tileX === previous.tile.gridX && item.tileY === previous.tile.gridY,
+        );
+        const focusedExists =
+          previous.focusedItemId !== null &&
+          latestItems.some((item) => item.id === previous.focusedItemId);
+        const sameLength = latestItems.length === previous.items.length;
+        const sameIds =
+          sameLength &&
+          latestItems.every((item, index) => item.id === previous.items[index]?.id);
+        if (sameIds && (focusedExists || previous.focusedItemId === null)) {
+          return previous;
+        }
+        return {
+          ...previous,
+          items: latestItems,
+          focusedItemId: focusedExists ? previous.focusedItemId : null,
+        };
+      }
+
+      const latestOccupant = connection.occupants.find(
+        (candidate) => candidate.id === previous.occupant.id,
+      );
+      if (!latestOccupant) {
+        return null;
+      }
+
+      if (
+        latestOccupant.position.x !== previous.tile.gridX ||
+        latestOccupant.position.y !== previous.tile.gridY
+      ) {
+        return null;
+      }
+
+      return previous;
+    });
+  }, [canvasItems, connection.occupants, contextMenuState]);
+
+  const handleTileClick = useCallback(
+    (tile: GridTile): void => {
+      if (connection.status !== 'connected') {
+        return;
+      }
+
+      if (lockedTileKeys.has(tile.key)) {
+        return;
+      }
+
+      if (occupiedTileKeys.has(tile.key)) {
+        return;
+      }
+
+      connection.sendMove(tile.gridX, tile.gridY);
+    },
+    [connection.sendMove, connection.status, lockedTileKeys, occupiedTileKeys],
+  );
+
+  const overlayCopy = useMemo(() => {
+    switch (connection.status) {
+      case 'connecting':
+        return {
+          title: 'Connecting to Bitby…',
+          message: 'Establishing a secure realtime channel to the authority server.',
+        } as const;
+      case 'authenticating':
+        return {
+          title: 'Authenticating…',
+          message:
+            'Validating the development session token before streaming the room snapshot.',
+        } as const;
+      case 'reconnecting': {
+        const retryFragment =
+          connection.retryInSeconds !== null
+            ? `Retrying in ${connection.retryInSeconds}s…`
+            : 'Attempting to restore the realtime session…';
+        const errorFragment = connection.lastError ?? null;
+
+        const segments = [errorFragment, retryFragment].filter(
+          (segment): segment is string => Boolean(segment),
+        );
+
+        return {
+          title: 'Connection lost',
+          message: segments.join(' · '),
+        } as const;
+      }
+      case 'connected':
+      default:
+        return { title: '', message: '' } as const;
+    }
+  }, [connection.lastError, connection.retryInSeconds, connection.status]);
+
   const handleMenuButtonClick = (label: string): void => {
     if (label === 'Admin') {
       setIsAdminPanelVisible((prev) => !prev);
+      return;
+    }
+
+    if (label === 'Backpack') {
+      setActiveDockView((previous) => {
+        const next = previous === 'backpack' ? 'default' : 'backpack';
+        if (next === 'backpack') {
+          setSelectedItemId(null);
+          setProfilePanelState({ status: 'idle' });
+        }
+        return next;
+      });
+      return;
     }
   };
 
+  const adminShortcuts = useMemo(
+    () => [
+      {
+        label: 'Reload room',
+        onClick: () => {
+          if (import.meta.env.DEV) {
+            console.debug('[admin] Reload room requested');
+          }
+        },
+      },
+      {
+        label: localTileLocked ? 'Unlock tile' : 'Lock tile',
+        onClick: () => {
+          if (!localTile) {
+            return;
+          }
+
+          void updateTileLock(localTile, !localTileLocked);
+        },
+        pressed: localTileLocked,
+        disabled: !localTile,
+      },
+      {
+        label: localTileNoPickup ? 'Allow pickups' : 'Block pickups',
+        onClick: () => {
+          if (!localTile) {
+            return;
+          }
+
+          void updateTileNoPickup(localTile, !localTileNoPickup);
+        },
+        pressed: localTileNoPickup,
+        disabled: !localTile,
+      },
+      {
+        label: isGridVisible ? 'Hide grid' : 'Show grid',
+        onClick: () => {
+          void updateAdminAffordances({ gridVisible: !isGridVisible });
+        },
+        pressed: !isGridVisible,
+      },
+      {
+        label: showHoverWhenGridHidden
+          ? 'Disable hidden hover highlight'
+          : 'Enable hidden hover highlight',
+        onClick: () => {
+          void updateAdminAffordances({
+            showHoverWhenGridHidden: !showHoverWhenGridHidden,
+          });
+        },
+        pressed: showHoverWhenGridHidden,
+      },
+      {
+        label: areMoveAnimationsEnabled
+          ? 'Disable move animations'
+          : 'Enable move animations',
+        onClick: () => {
+          void updateAdminAffordances({
+            moveAnimationsEnabled: !areMoveAnimationsEnabled,
+          });
+        },
+        pressed: !areMoveAnimationsEnabled,
+      },
+      {
+        label: 'Latency trace',
+        onClick: () => {
+          void requestLatencyTrace();
+        },
+      },
+      {
+        label: 'Plant',
+        onClick: () => {
+          if (!localTile) {
+            showToast('Stå på et felt for at plante.', 'error');
+            return;
+          }
+
+          void spawnPlantAtTile(localTile)
+            .then((ok) => {
+              if (ok) {
+                showToast('Plant placeret på feltet.', 'success');
+              } else {
+                showToast('Kunne ikke plante her.', 'error');
+              }
+            })
+            .catch(() => {
+              showToast('Kunne ikke plante her.', 'error');
+            });
+        },
+        disabled: !localTile,
+      },
+    ],
+    [
+      areMoveAnimationsEnabled,
+      isGridVisible,
+      localTile,
+      localTileLocked,
+      localTileNoPickup,
+      requestLatencyTrace,
+      showToast,
+      spawnPlantAtTile,
+      showHoverWhenGridHidden,
+      updateAdminAffordances,
+      updateTileLock,
+      updateTileNoPickup,
+    ],
+  );
+
   return (
     <div className="stage-shell">
+      {connection.status !== 'connected' ? (
+        <div
+          className="reconnect-overlay"
+          role="alertdialog"
+          aria-live="assertive"
+          aria-modal="true"
+        >
+          <div className="reconnect-overlay__panel">
+            <span className="reconnect-overlay__spinner" aria-hidden="true" />
+            <div className="reconnect-overlay__copy">
+              <h2 className="reconnect-overlay__title">{overlayCopy.title}</h2>
+              {overlayCopy.message ? (
+                <p className="reconnect-overlay__message">{overlayCopy.message}</p>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      ) : null}
+      {actionToast ? (
+        <div
+          className={`action-toast action-toast--${actionToast.tone}`}
+          role="status"
+          aria-live="polite"
+        >
+          {actionToast.message}
+        </div>
+      ) : null}
+      {tradeBanner}
       <div className="stage">
         <header className="stage__top-bar" aria-label="Player overview and news">
           <div className="top-bar__profile" aria-label="Player overview">
@@ -242,47 +1954,128 @@ const App = (): JSX.Element => {
           </div>
         </header>
         <div className="stage__content">
-        <main className="canvas-area" aria-label="Bitby room canvas placeholder">
-          <div className="canvas-placeholder" role="presentation">
-            <p className="canvas-placeholder__title">Bitby Grid Canvas</p>
-            <p className="canvas-placeholder__body">
-              Deterministic diamond grid rendering, avatars, and realtime movement will appear here as the
-              Master Spec milestones are implemented.
-            </p>
-          </div>
-        </main>
-          <aside className="right-panel" aria-label="Right panel placeholder">
+          <main className="canvas-area" aria-label="Bitby room canvas">
+            <GridCanvas
+              occupants={connection.occupants}
+              tileFlags={connection.tileFlags}
+              pendingMoveTarget={connection.pendingMoveTarget}
+              onTileClick={handleTileClick}
+              items={canvasItems}
+              onTileContextMenu={handleTileContextMenu}
+              onItemContextMenu={handleItemContextMenu}
+              onOccupantContextMenu={handleOccupantContextMenu}
+              localOccupantId={connection.user?.id ?? null}
+              showGrid={isGridVisible}
+              showHoverWhenGridHidden={showHoverWhenGridHidden}
+              moveAnimationsEnabled={areMoveAnimationsEnabled}
+              typingIndicators={connection.typingIndicators}
+              chatBubbles={connection.chatBubbles}
+            />
+          </main>
+          <nav
+            className="primary-menu"
+            aria-label="Primary actions"
+            style={primaryMenuStyle}
+          >
+            {dockButtons.map((label) => {
+              const isPressed =
+                label === 'Admin'
+                  ? isAdminPanelVisible
+                  : label === 'Backpack'
+                  ? isBackpackOpen
+                  : undefined;
+              const pressedProp = typeof isPressed === 'boolean' ? isPressed : undefined;
+              return (
+                <button
+                  key={label}
+                  type="button"
+                  onClick={() => handleMenuButtonClick(label)}
+                  aria-pressed={pressedProp}
+                  data-active={pressedProp}
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </nav>
+          <aside className="right-panel" aria-label={rightPanelAriaLabel}>
             <header className="right-panel__header">
-              <h1>Right Panel</h1>
+              <div className="right-panel__heading">
+                <h1>{panelHeading.title}</h1>
+                {panelHeading.subtitle ? (
+                  <p className="right-panel__subtitle">{panelHeading.subtitle}</p>
+                ) : null}
+              </div>
               <span className="right-panel__header-divider" aria-hidden="true" />
             </header>
-            <section className="right-panel__sections" aria-label="Upcoming panel modules">
-              {panelSections.map((section) => (
-                <article key={section.title} className="right-panel__section">
-                  <h2>{section.title}</h2>
-                  <p>{section.body}</p>
+            <section
+              className={
+                selectedItem
+                  ? 'right-panel__sections right-panel__sections--item'
+                  : isBackpackOpen
+                  ? 'right-panel__sections right-panel__sections--backpack'
+                  : 'right-panel__sections'
+              }
+              aria-label={
+                selectedItem
+                  ? 'Selected item details'
+                  : profilePanelContent
+                  ? 'Player profile content'
+                  : isBackpackOpen
+                  ? 'Backpack inventory'
+                  : 'Right panel content'
+              }
+            >
+              {selectedItem ? (
+                <article key={selectedItem.id} className="item-info">
+                  <header className="item-info__header">
+                    <h2>{selectedItem.name}</h2>
+                    <p>{selectedItem.description}</p>
+                  </header>
+                  <dl className="item-info__meta">
+                    <div>
+                      <dt>Placering</dt>
+                      <dd>
+                        <span className="item-info__coordinate">
+                          ({selectedItem.tileX}, {selectedItem.tileY})
+                        </span>
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>Pickup status</dt>
+                      <dd className={`item-info__status item-info__status--${pickupStatusTone}`}>
+                        {pickupStatusMessage}
+                      </dd>
+                    </div>
+                  </dl>
+                  <div className="item-info__actions">
+                    <button
+                      type="button"
+                      onClick={handlePickupSelectedItem}
+                      disabled={!canPickupSelectedItem}
+                    >
+                      Saml Op
+                    </button>
+                    <button
+                      type="button"
+                      className="item-info__secondary"
+                      onClick={handleClearSelectedItem}
+                    >
+                      Tilbage til panel
+                    </button>
+                  </div>
+                  {shouldShowPickupHint ? (
+                    <p className="item-info__hint">{pickupStatusMessage}</p>
+                  ) : null}
                 </article>
-              ))}
+              ) : null}
+              {!selectedItem && profilePanelContent}
+              {isBackpackOpen && !selectedItem ? (
+                <InventoryCard items={inventoryEntries} />
+              ) : null}
             </section>
           </aside>
         </div>
-        <nav
-          className="primary-menu"
-          aria-label="Primary actions"
-          style={primaryMenuStyle}
-        >
-          {dockButtons.map((label) => (
-            <button
-              key={label}
-              type="button"
-              onClick={() => handleMenuButtonClick(label)}
-              aria-pressed={label === 'Admin' ? isAdminPanelVisible : undefined}
-              data-active={label === 'Admin' ? isAdminPanelVisible : undefined}
-            >
-              {label}
-            </button>
-          ))}
-        </nav>
         <aside
           className={isChatVisible ? 'chat-drawer chat-drawer--open' : 'chat-drawer chat-drawer--collapsed'}
           aria-label="Chat history"
@@ -298,7 +2091,7 @@ const App = (): JSX.Element => {
                       ? 'chat-drawer__system-toggle has-tooltip'
                       : 'chat-drawer__system-toggle chat-drawer__system-toggle--muted has-tooltip'
                   }
-                  onClick={() => setShowSystemMessages((prev) => !prev)}
+                  onClick={handleSystemToggle}
                   aria-pressed={showSystemMessages}
                   aria-label={systemToggleLabel}
                   data-tooltip={systemToggleTooltip}
@@ -359,11 +2152,32 @@ const App = (): JSX.Element => {
         role="group"
       >
         {adminShortcuts.map((item) => (
-          <button key={item} type="button" className="admin-quick-menu__button">
-            {item}
+          <button
+            key={item.label}
+            type="button"
+            className="admin-quick-menu__button"
+            onClick={item.onClick}
+            aria-pressed={item.pressed}
+            data-active={item.pressed}
+            disabled={item.disabled}
+          >
+            {item.label}
           </button>
         ))}
       </nav>
+      {contextMenuState ? (
+        <ActiveContextMenu
+          ref={contextMenuRef}
+          state={contextMenuState}
+          onClose={closeContextMenu}
+          onSelectItemInfo={handleContextMenuItemInfo}
+          onSelectItemPickup={handleContextMenuItemPickup}
+          getPickupAvailability={getPickupAvailability}
+          onSelectOccupantAction={handleOccupantMenuAction}
+          localOccupantId={connection.user?.id ?? null}
+          mutedOccupantIds={mutedOccupantSet}
+        />
+      ) : null}
     </div>
   );
 };

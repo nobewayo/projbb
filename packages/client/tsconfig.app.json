@@ -4,7 +4,13 @@
     "module": "ESNext",
     "moduleResolution": "Bundler",
     "jsx": "react-jsx",
-    "baseUrl": "./src",
+    "baseUrl": ".",
+    "paths": {
+      "@bitby/schemas": [
+        "../schemas/dist/index.d.ts",
+        "../schemas/dist/index.js"
+      ]
+    },
     "types": ["vite/client"]
   },
   "include": ["src/**/*.ts", "src/**/*.tsx"],

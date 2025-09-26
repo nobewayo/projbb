@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "pnpm --filter @bitby/schemas build && vite",
     "build": "tsc -p tsconfig.node.json --noEmit && vite build",
     "preview": "vite preview",
     "lint": "eslint \"src/**/*.{ts,tsx}\"",
@@ -12,10 +12,13 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
+    "@bitby/schemas": "workspace:*",
     "react": "^18.2.0",
-    "react-dom": "^18.2.0"
+    "react-dom": "^18.2.0",
+    "socket.io-client": "^4.8.1"
   },
   "devDependencies": {
+    "@testing-library/jest-dom": "^6.8.0",
     "@testing-library/react": "^14.2.1",
     "@types/react": "^18.2.66",
     "@types/react-dom": "^18.2.22",

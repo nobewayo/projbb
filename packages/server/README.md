@@ -1,9 +1,11 @@
 # Server Package (Planned)
 
-This package hosts the Node.js (TypeScript) API/WebSocket authority for Bitby. The current skeleton wires up Fastify with:
+This package hosts the Node.js (TypeScript) API/WebSocket authority for Bitby. The current build wires up Fastify with:
 
 - `/healthz` and `/readyz` endpoints aligned with the Master Spec observability guardrails (§17)
-- a WebSocket endpoint at `/ws` that enforces the `bitby.v1` subprotocol, caps payloads at 64 KB, and gracefully closes with `1012` until realtime handlers land (§1)
+- `POST /auth/login` which verifies the Argon2id hash for the seeded development users (`test`, `test2`, `test3`, `test4` all share `password123`), then issues an HS256 JWT containing the profile metadata and expiry window
+- CORS configuration that, when `CLIENT_ORIGIN` targets localhost, automatically whitelists both `http://localhost:5173` and `http://127.0.0.1:5173` so developers don't get blocked by host alias differences
+- a WebSocket endpoint at `/ws` that enforces the `bitby.v1` subprotocol, caps payloads at 64 KB, validates the provided JWT, responds with `auth:ok` including the development room snapshot + heartbeat interval, echoes `ping`/`pong`, and closes sessions that miss the 30 s heartbeat window
 - readiness tracking so orchestrators can mark the instance unavailable before shutdown
 
 ## Scripts
@@ -17,7 +19,7 @@ pnpm --filter @bitby/server typecheck
 ```
 
 ## Upcoming Tasks
-- Implement REST `/auth/login` with JWT issuance and secure password hashing (§1).
+- Persist issued JWTs + session metadata and extend `/auth/login` with rate limiting + telemetry.
 - Stand up Redis + Postgres integrations for room state, catalog, and persistence (§12–13).
-- Add realtime handlers for `auth`, `move`, `chat`, and catalog ops with full schema validation (§8).
+- Add realtime handlers for `move`, `chat`, and catalog ops with full schema validation (§8) and authoritative broadcast loops.
 - Expose Prometheus metrics and graceful restart workflows, including blocking reconnect overlays (§17–18).

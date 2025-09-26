@@ -1,0 +1,165 @@
+version: '3.9'
+
+services:
+  prep:
+    image: node:20-bookworm
+    restart: 'no'
+    environment:
+      BITBY_REPO_URL: ${BITBY_REPO_URL:-https://github.com/bitbyhq/bitby.git}
+      BITBY_REPO_REF: ${BITBY_REPO_REF:-main}
+    entrypoint: ['/bin/bash', '-lc']
+    command: |
+      set -euo pipefail
+      apt-get update
+      apt-get install -y --no-install-recommends git ca-certificates python3 build-essential
+      rm -rf /var/lib/apt/lists/*
+      rm -rf /workspace/repo
+      git clone --depth=1 --branch "${BITBY_REPO_REF}" "${BITBY_REPO_URL}" /workspace/repo
+      cd /workspace/repo
+      corepack enable
+      pnpm install --frozen-lockfile
+      pnpm --filter @bitby/schemas build
+      pnpm --filter @bitby/server build
+      pnpm --filter @bitby/client build
+    volumes:
+      - bitby-source:/workspace
+
+  postgres:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: bitby
+      POSTGRES_USER: bitby
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-bitby}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -d ${POSTGRES_DB:-bitby} -U ${POSTGRES_USER:-bitby}']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ['redis-server', '--appendonly', 'no', '--save', '', '--maxmemory-policy', 'volatile-lru']
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  server:
+    image: node:20-bookworm
+    restart: unless-stopped
+    depends_on:
+      prep:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: 3001
+      LOG_LEVEL: info
+      JWT_SECRET: ${JWT_SECRET:-change-me}
+      CLIENT_ORIGIN: ${CLIENT_ORIGIN:-http://localhost}
+      PGHOST: postgres
+      PGPORT: 5432
+      PGDATABASE: bitby
+      PGUSER: bitby
+      PGPASSWORD: ${POSTGRES_PASSWORD:-bitby}
+      REDIS_URL: redis://redis:6379
+    volumes:
+      - bitby-source:/workspace
+    working_dir: /workspace/repo
+    entrypoint: ['/bin/bash', '-lc']
+    command: |
+      set -euo pipefail
+      corepack enable
+      pnpm --filter @bitby/server start
+    expose:
+      - '3001'
+
+  client:
+    image: nginx:1.25-alpine
+    restart: unless-stopped
+    depends_on:
+      prep:
+        condition: service_completed_successfully
+      server:
+        condition: service_started
+    volumes:
+      - bitby-source:/workspace:ro
+    entrypoint: ['/bin/sh', '-c']
+    command: |
+      set -e
+      cat <<'EONGINX' >/etc/nginx/conf.d/default.conf
+      server {
+        listen 80;
+        server_name _;
+
+        root /usr/share/nginx/html;
+        index index.html;
+
+        gzip on;
+        gzip_types text/plain text/css application/json application/javascript application/octet-stream image/svg+xml;
+
+        location /ws {
+          proxy_pass http://server:3001/ws;
+          proxy_http_version 1.1;
+          proxy_set_header Upgrade $http_upgrade;
+          proxy_set_header Connection "Upgrade";
+          proxy_set_header Host $host;
+          proxy_read_timeout 65;
+        }
+
+        location /auth/ {
+          proxy_pass http://server:3001/auth/;
+          proxy_set_header Host $host;
+          proxy_set_header X-Real-IP $remote_addr;
+          proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+          proxy_set_header X-Forwarded-Proto $scheme;
+        }
+
+        location /admin/ {
+          proxy_pass http://server:3001/admin/;
+          proxy_set_header Host $host;
+          proxy_set_header X-Real-IP $remote_addr;
+          proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+          proxy_set_header X-Forwarded-Proto $scheme;
+        }
+
+        location /metrics {
+          proxy_pass http://server:3001/metrics;
+          proxy_set_header Host $host;
+          proxy_set_header X-Forwarded-Proto $scheme;
+        }
+
+        location /readyz {
+          proxy_pass http://server:3001/readyz;
+        }
+
+        location /healthz {
+          proxy_pass http://server:3001/healthz;
+        }
+
+        location / {
+          try_files $uri $uri/ /index.html;
+        }
+      }
+      EONGINX
+      rm -rf /usr/share/nginx/html/*
+      cp -r /workspace/repo/packages/client/dist/* /usr/share/nginx/html/
+      exec nginx -g 'daemon off;'
+    expose:
+      - '80'
+
+volumes:
+  bitby-source:
+  postgres-data:
+  redis-data:

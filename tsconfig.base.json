@@ -11,6 +11,10 @@
     "skipLibCheck": true,
     "sourceMap": true,
     "resolveJsonModule": true,
-    "verbatimModuleSyntax": true
+    "verbatimModuleSyntax": true,
+    "baseUrl": ".",
+    "paths": {
+      "@bitby/schemas": ["packages/schemas/src/index.ts"]
+    }
   }
 }
