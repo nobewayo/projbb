@@ -13,6 +13,10 @@ import {
   adminTileFlagUpdateDataSchema,
   adminLatencyTraceEventDataSchema,
   roomItemAddedDataSchema,
+  socialMuteBroadcastSchema,
+  socialReportBroadcastSchema,
+  tradeLifecycleBroadcastSchema,
+  tradeSessionSchema,
   type ChatMessageBroadcast,
   type ChatPreferences,
   type ChatTypingBroadcast,
@@ -20,6 +24,9 @@ import {
   type MoveErrorCode,
   type AdminDevAffordanceState,
   type AdminLatencyTrace,
+  type SocialMuteRecord,
+  type SocialReportRecord,
+  type TradeLifecycleBroadcast,
 } from '@bitby/schemas';
 import { z } from 'zod';
 import type { ServerConfig } from '../config.js';
@@ -36,11 +43,13 @@ import type {
 } from '../db/items.js';
 import type { PreferenceStore } from '../db/preferences.js';
 import type { AdminStateStore, RoomAdminStateRecord } from '../db/admin.js';
+import type { SocialStore, MuteRecord, ReportRecord, TradeSessionRecord } from '../db/social.js';
 
 const HEARTBEAT_INTERVAL_MS = 15_000;
 const HEARTBEAT_GRACE_MS = HEARTBEAT_INTERVAL_MS * 2;
 const DEVELOPMENT_ROOM_SLUG = 'dev-room';
 const TYPING_INDICATOR_TTL_MS = 6_000;
+const CHAT_HISTORY_LIMIT = 200;
 
 const GRID_ROW_COUNT = 10;
 const EVEN_ROW_COLUMNS = 10;
@@ -64,6 +73,22 @@ interface RegisteredConnection {
   userId: string;
 }
 
+type SocialMutePayload = SocialMuteRecord;
+
+type SocialReportPayload = SocialReportRecord;
+
+type TradeLifecyclePayload = TradeLifecycleBroadcast['trade'];
+
+interface UserSocialState {
+  mutes: Map<string, SocialMutePayload>;
+  reports: Map<string, SocialReportPayload>;
+}
+
+interface TradeParticipantSummary {
+  id: string;
+  username: string;
+}
+
 interface DevelopmentRoomState {
   id: string;
   name: string;
@@ -75,6 +100,7 @@ interface DevelopmentRoomState {
   items: Map<string, RoomItem>;
   typingIndicators: Map<string, TypingIndicatorState>;
   adminState: RoomAdminStateRecord;
+  socialState: Map<string, UserSocialState>;
 }
 
 interface RoomItem {
@@ -114,6 +140,7 @@ interface RealtimeDependencies {
   metrics: MetricsBundle;
   preferenceStore: PreferenceStore;
   adminStateStore: AdminStateStore;
+  socialStore: SocialStore;
 }
 
 export interface RealtimeServer {
@@ -132,6 +159,12 @@ export interface RealtimeServer {
     item: RoomItemRecord;
     roomSeq: number;
     createdBy: string;
+  }): Promise<void>;
+  applyMuteRecord(event: { record: MuteRecord }): Promise<void>;
+  applyReportRecord(event: { record: ReportRecord }): Promise<void>;
+  applyTradeLifecycleUpdate(event: {
+    trade: TradeSessionRecord;
+    actorId: string;
   }): Promise<void>;
   shutdown(): Promise<void>;
 }
@@ -152,6 +185,11 @@ type AuthOkPayload = EnvelopeData & {
   inventory: InventoryItemPayload[];
   typingIndicators: ChatTypingBroadcast[];
   chatPreferences: ChatPreferences;
+  social: {
+    mutes: SocialMutePayload[];
+    reports: SocialReportPayload[];
+  };
+  tradeLifecycle: TradeLifecycleBroadcast | null;
 };
 
 interface InventoryItemPayload {
@@ -199,6 +237,37 @@ const toInventoryPayload = (record: InventoryItemRecord): InventoryItemPayload =
   description: record.description,
   textureKey: record.textureKey,
   acquiredAt: record.acquiredAt.toISOString(),
+});
+
+const toMutePayload = (record: MuteRecord): SocialMutePayload => ({
+  id: record.id,
+  userId: record.userId,
+  mutedUserId: record.mutedUserId,
+  roomId: record.roomId,
+  createdAt: record.createdAt.toISOString(),
+});
+
+const toReportPayload = (record: ReportRecord): SocialReportPayload => ({
+  id: record.id,
+  reporterId: record.reporterId,
+  reportedUserId: record.reportedUserId,
+  roomId: record.roomId,
+  reason: record.reason,
+  createdAt: record.createdAt.toISOString(),
+});
+
+const toTradePayload = (record: TradeSessionRecord): TradeLifecyclePayload => ({
+  id: record.id,
+  initiatorId: record.initiatorId,
+  recipientId: record.recipientId,
+  roomId: record.roomId,
+  status: record.status,
+  createdAt: record.createdAt.toISOString(),
+  acceptedAt: record.acceptedAt?.toISOString(),
+  completedAt: record.completedAt?.toISOString(),
+  cancelledAt: record.cancelledAt?.toISOString(),
+  cancelledBy: record.cancelledBy ?? undefined,
+  cancelledReason: record.cancelledReason ?? undefined,
 });
 
 const cloneOccupant = (occupant: RoomOccupant): RoomOccupant => ({
@@ -279,6 +348,7 @@ export const createRealtimeServer = async ({
   metrics,
   preferenceStore,
   adminStateStore,
+  socialStore,
 }: RealtimeDependencies): Promise<RealtimeServer> => {
   const roomRecord = await roomStore.getRoomBySlug(DEVELOPMENT_ROOM_SLUG);
   if (!roomRecord) {
@@ -302,6 +372,7 @@ export const createRealtimeServer = async ({
     items: new Map(roomItems.map((record) => [record.id, toRoomItem(record)])),
     typingIndicators: new Map(),
     adminState: adminStateRecord,
+    socialState: new Map(),
   };
 
   for (const occupant of occupantList) {
@@ -312,6 +383,91 @@ export const createRealtimeServer = async ({
     if (roomSeq > developmentRoomState.roomSeq) {
       developmentRoomState.roomSeq = roomSeq;
     }
+  };
+
+  const getOrCreateSocialState = (userId: string): UserSocialState => {
+    let state = developmentRoomState.socialState.get(userId);
+    if (!state) {
+      state = { mutes: new Map(), reports: new Map() } satisfies UserSocialState;
+      developmentRoomState.socialState.set(userId, state);
+    }
+    return state;
+  };
+
+  const serialiseSocialState = (userId: string): {
+    mutes: SocialMutePayload[];
+    reports: SocialReportPayload[];
+  } => {
+    const state = getOrCreateSocialState(userId);
+    return {
+      mutes: Array.from(state.mutes.values()),
+      reports: Array.from(state.reports.values()),
+    };
+  };
+
+  const refreshSocialStateForUser = async (userId: string) => {
+    const [mutes, reports] = await Promise.all([
+      socialStore.listMutesForUser(userId),
+      socialStore.listReportsByUser(userId),
+    ]);
+    const state = getOrCreateSocialState(userId);
+    state.mutes.clear();
+    state.reports.clear();
+    for (const record of mutes) {
+      const payload = toMutePayload(record);
+      state.mutes.set(payload.mutedUserId, payload);
+    }
+    for (const record of reports) {
+      const payload = toReportPayload(record);
+      state.reports.set(payload.id, payload);
+    }
+    return serialiseSocialState(userId);
+  };
+
+  const resolveTradeParticipantForUser = async (params: {
+    trade: TradeLifecyclePayload;
+    requesterId: string;
+  }): Promise<TradeParticipantSummary> => {
+    const { trade, requesterId } = params;
+    const otherUserId =
+      trade.initiatorId === requesterId ? trade.recipientId : trade.initiatorId;
+
+    const connected = developmentRoomState.occupants.get(otherUserId);
+    if (connected) {
+      return { id: connected.id, username: connected.username };
+    }
+
+    const occupantRecord = await roomStore.getOccupant(otherUserId);
+    if (occupantRecord && occupantRecord.username.length > 0) {
+      return { id: occupantRecord.id, username: occupantRecord.username };
+    }
+
+    const profile = await socialStore.getUserProfile(otherUserId);
+    if (profile) {
+      return { id: profile.id, username: profile.username };
+    }
+
+    return { id: otherUserId, username: 'Unknown occupant' };
+  };
+
+  const hydrateTradeLifecycleForUser = async (
+    userId: string,
+  ): Promise<TradeLifecycleBroadcast | null> => {
+    const record = await socialStore.getLatestTradeSessionForUser(userId);
+    if (!record) {
+      return null;
+    }
+
+    const tradePayload = toTradePayload(record);
+    const participant = await resolveTradeParticipantForUser({
+      trade: tradePayload,
+      requesterId: userId,
+    });
+
+    return tradeLifecycleBroadcastSchema.parse({
+      trade: tradePayload,
+      participant,
+    });
   };
 
   const serialiseAdminState = (): {
@@ -430,17 +586,88 @@ export const createRealtimeServer = async ({
     snapshot: RoomSnapshot;
     occupant: RoomOccupant;
     inventory: InventoryItemRecord[];
+    social: { mutes: SocialMutePayload[]; reports: SocialReportPayload[] };
+    tradeLifecycle: TradeLifecycleBroadcast | null;
   }> => {
     const { occupant } = await ensureOccupant(user);
     developmentRoomState.connections.set(socket.id, { socket, logger, userId: user.id });
 
     const inventory = await itemStore.listInventoryForUser(user.id);
+    const social = await refreshSocialStateForUser(user.id);
+    const tradeLifecycle = await hydrateTradeLifecycleForUser(user.id);
 
     return {
       snapshot: buildSnapshot(),
       occupant,
       inventory,
+      social,
+      tradeLifecycle,
     };
+  };
+
+  const emitSocialMuteUpdate = (payload: SocialMutePayload): void => {
+    for (const connection of developmentRoomState.connections.values()) {
+      if (connection.userId !== payload.userId) {
+        continue;
+      }
+
+      safeSend(
+        connection.logger,
+        connection.socket,
+        createEnvelope('social:mute:recorded', 0, { mute: payload }),
+      );
+    }
+  };
+
+  const emitSocialReportUpdate = (payload: SocialReportPayload): void => {
+    for (const connection of developmentRoomState.connections.values()) {
+      if (connection.userId !== payload.reporterId) {
+        continue;
+      }
+
+      safeSend(
+        connection.logger,
+        connection.socket,
+        createEnvelope('social:report:recorded', 0, { report: payload }),
+      );
+    }
+  };
+
+  const emitTradeLifecycleUpdate = async (
+    trade: TradeLifecyclePayload,
+    actorId?: string,
+  ): Promise<void> => {
+    const recipients = new Map<string, TradeParticipantSummary>();
+    const targetUserIds = [trade.initiatorId, trade.recipientId];
+
+    for (const userId of targetUserIds) {
+      if (recipients.has(userId)) {
+        continue;
+      }
+      const participant = await resolveTradeParticipantForUser({
+        trade,
+        requesterId: userId,
+      });
+      recipients.set(userId, participant);
+    }
+
+    for (const connection of developmentRoomState.connections.values()) {
+      const participant = recipients.get(connection.userId);
+      if (!participant) {
+        continue;
+      }
+
+      const payload = tradeLifecycleBroadcastSchema.parse({
+        trade,
+        participant,
+        actorId: actorId ?? undefined,
+      });
+      safeSend(
+        connection.logger,
+        connection.socket,
+        createEnvelope('trade:lifecycle:update', 0, payload),
+      );
+    }
   };
 
   const unregisterConnection = async (socket: Socket): Promise<void> => {
@@ -784,6 +1011,55 @@ export const createRealtimeServer = async ({
     }
   };
 
+  const applyMuteRecordInternal = async (
+    event: { mute: SocialMutePayload },
+    shouldPublish: boolean,
+  ): Promise<void> => {
+    const state = getOrCreateSocialState(event.mute.userId);
+    state.mutes.set(event.mute.mutedUserId, event.mute);
+    emitSocialMuteUpdate(event.mute);
+
+    if (shouldPublish) {
+      await pubsub.publish({
+        type: 'social:mute:recorded',
+        roomId: developmentRoomState.id,
+        payload: { mute: event.mute },
+      });
+    }
+  };
+
+  const applyReportRecordInternal = async (
+    event: { report: SocialReportPayload },
+    shouldPublish: boolean,
+  ): Promise<void> => {
+    const state = getOrCreateSocialState(event.report.reporterId);
+    state.reports.set(event.report.id, event.report);
+    emitSocialReportUpdate(event.report);
+
+    if (shouldPublish) {
+      await pubsub.publish({
+        type: 'social:report:recorded',
+        roomId: developmentRoomState.id,
+        payload: { report: event.report },
+      });
+    }
+  };
+
+  const applyTradeLifecycleInternal = async (
+    event: { trade: TradeLifecyclePayload; actorId?: string },
+    shouldPublish: boolean,
+  ): Promise<void> => {
+    await emitTradeLifecycleUpdate(event.trade, event.actorId);
+
+    if (shouldPublish) {
+      await pubsub.publish({
+        type: 'trade:lifecycle:update',
+        roomId: developmentRoomState.id,
+        payload: { trade: event.trade, actorId: event.actorId },
+      });
+    }
+  };
+
   await pubsub.subscribe(developmentRoomState.id, (event) => {
     if (event.type === 'chat:new' || event.type === 'chat:typing') {
       if (event.type === 'chat:new') {
@@ -821,6 +1097,51 @@ export const createRealtimeServer = async ({
       void applyItemSpawnInternal(event.payload, false).catch((error) => {
         // eslint-disable-next-line no-console
         console.error('Failed to apply remote item spawn', error);
+      });
+      return;
+    }
+
+    if (event.type === 'social:mute:recorded') {
+      const parsed = socialMuteBroadcastSchema.safeParse(event.payload);
+      if (!parsed.success) {
+        // eslint-disable-next-line no-console
+        console.error('Received malformed social mute event payload');
+        return;
+      }
+      void applyMuteRecordInternal({ mute: parsed.data.mute }, false).catch((error) => {
+        // eslint-disable-next-line no-console
+        console.error('Failed to apply remote social mute', error);
+      });
+      return;
+    }
+
+    if (event.type === 'social:report:recorded') {
+      const parsed = socialReportBroadcastSchema.safeParse(event.payload);
+      if (!parsed.success) {
+        // eslint-disable-next-line no-console
+        console.error('Received malformed social report event payload');
+        return;
+      }
+      void applyReportRecordInternal({ report: parsed.data.report }, false).catch((error) => {
+        // eslint-disable-next-line no-console
+        console.error('Failed to apply remote social report', error);
+      });
+      return;
+    }
+
+    if (event.type === 'trade:lifecycle:update') {
+      const tradeResult = tradeSessionSchema.safeParse(event.payload.trade);
+      if (!tradeResult.success) {
+        // eslint-disable-next-line no-console
+        console.error('Received malformed trade lifecycle payload');
+        return;
+      }
+      void applyTradeLifecycleInternal(
+        { trade: tradeResult.data, actorId: event.payload.actorId },
+        false,
+      ).catch((error) => {
+        // eslint-disable-next-line no-console
+        console.error('Failed to apply remote trade lifecycle event', error);
       });
     }
   });
@@ -932,14 +1253,14 @@ export const createRealtimeServer = async ({
       return null;
     }
 
-    const { snapshot, inventory } = await registerConnection(
+    const { snapshot, inventory, social, tradeLifecycle } = await registerConnection(
       logger,
       socket,
       authenticatedUser,
     );
     const chatHistoryRecords = await chatStore.listRecentMessages(
       developmentRoomState.id,
-      50,
+      CHAT_HISTORY_LIMIT,
     );
     const preferenceRecord = await preferenceStore.getChatPreferences(
       authenticatedUser.id,
@@ -968,6 +1289,8 @@ export const createRealtimeServer = async ({
       inventory: inventory.map((item) => toInventoryPayload(item)),
       typingIndicators: serialiseTypingIndicators(),
       chatPreferences,
+      social,
+      tradeLifecycle,
     };
 
     acknowledge(logger, socket, envelope, 'auth:ok', payload);
@@ -1037,6 +1360,15 @@ export const createRealtimeServer = async ({
     metrics.chatEvents.inc();
     broadcastChatEvent(event);
     await pubsub.publish(event);
+
+    try {
+      await chatStore.pruneMessagesForRoom({
+        roomId: developmentRoomState.id,
+        retain: CHAT_HISTORY_LIMIT,
+      });
+    } catch (error) {
+      logger.error({ err: error }, 'Failed to prune chat history for room');
+    }
 
     acknowledge(logger, socket, envelope, 'chat:ok', {
       messageId: record.id,
@@ -1497,6 +1829,24 @@ export const createRealtimeServer = async ({
     await applyItemSpawnInternal(event, true);
   };
 
+  const applyMuteRecord = async (event: { record: MuteRecord }): Promise<void> => {
+    const payload = toMutePayload(event.record);
+    await applyMuteRecordInternal({ mute: payload }, true);
+  };
+
+  const applyReportRecord = async (event: { record: ReportRecord }): Promise<void> => {
+    const payload = toReportPayload(event.record);
+    await applyReportRecordInternal({ report: payload }, true);
+  };
+
+  const applyTradeLifecycleUpdate = async (event: {
+    trade: TradeSessionRecord;
+    actorId: string;
+  }): Promise<void> => {
+    const payload = toTradePayload(event.trade);
+    await applyTradeLifecycleInternal({ trade: payload, actorId: event.actorId }, true);
+  };
+
   const shutdown = async (): Promise<void> => {
     for (const connection of developmentRoomState.connections.values()) {
       try {
@@ -1514,6 +1864,9 @@ export const createRealtimeServer = async ({
     applyAffordanceUpdate,
     applyLatencyTrace,
     applyItemSpawn,
+    applyMuteRecord,
+    applyReportRecord,
+    applyTradeLifecycleUpdate,
     shutdown,
   };
 };

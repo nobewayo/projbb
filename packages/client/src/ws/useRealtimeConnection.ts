@@ -24,8 +24,13 @@ import {
   adminLatencyTraceEventDataSchema,
   occupantProfileResponseSchema,
   tradeBootstrapResponseSchema,
+  tradeLifecycleResponseSchema,
+  tradeLifecycleBroadcastSchema,
   muteResponseSchema,
   reportResponseSchema,
+  socialStateSchema,
+  socialMuteBroadcastSchema,
+  socialReportBroadcastSchema,
   type ChatMessageBroadcast,
   type ChatPreferences,
   type InventoryItem,
@@ -37,8 +42,13 @@ import {
   type AdminDevAffordanceState,
   type OccupantProfile,
   type TradeBootstrapResponse,
+  type TradeLifecycleResponse,
+  type TradeLifecycleBroadcast,
   type MuteResponse,
   type ReportResponse,
+  type SocialState,
+  type SocialMuteBroadcast,
+  type SocialReportBroadcast,
 } from '@bitby/schemas';
 
 const DEFAULT_HEARTBEAT_MS = 15_000;
@@ -139,6 +149,16 @@ export interface RealtimeConnectionState extends InternalConnectionState {
   initiateTradeWithOccupant: (
     occupantId: string,
   ) => Promise<ActionResult<TradeSessionBootstrap>>;
+  acceptTradeSession: (
+    tradeId: string,
+  ) => Promise<ActionResult<TradeLifecycleResponse>>;
+  cancelTradeSession: (
+    tradeId: string,
+    reason: 'cancelled' | 'declined',
+  ) => Promise<ActionResult<TradeLifecycleResponse>>;
+  completeTradeSession: (
+    tradeId: string,
+  ) => Promise<ActionResult<TradeLifecycleResponse>>;
   muteOccupant: (occupantId: string) => Promise<ActionResult<MuteRecordSummary>>;
   reportOccupant: (
     occupantId: string,
@@ -168,12 +188,21 @@ interface ChatBubbleView {
 type TypingIndicatorInternal = { preview: string | null; expiresAt: number };
 type ChatBubbleInternal = { body: string; messageId: string; expiresAt: number };
 
+export interface TradeLifecycleEvent {
+  trade: TradeLifecycleBroadcast['trade'];
+  participant: TradeLifecycleBroadcast['participant'];
+  actorId: string | null;
+  revision: number;
+  receivedAt: number;
+}
+
 export type ActionResult<T> =
   | { ok: true; data: T }
   | { ok: false; message: string; status: number };
 
 export type OccupantProfileSummary = OccupantProfile;
 export type TradeSessionBootstrap = TradeBootstrapResponse;
+export type TradeLifecycleAcknowledgement = TradeLifecycleResponse;
 export type MuteRecordSummary = MuteResponse['mute'];
 export type ReportRecordSummary = ReportResponse['report'];
 
@@ -198,6 +227,9 @@ interface InternalConnectionState {
   chatBubbles: ChatBubbleView[];
   chatPreferences: ChatPreferences | null;
   adminState: AdminState;
+  mutedOccupantIds: string[];
+  reportHistory: ReportRecordSummary[];
+  tradeLifecycleEvent: TradeLifecycleEvent | null;
 }
 
 const cloneOccupant = (occupant: RoomOccupant): RoomOccupant => ({
@@ -260,7 +292,13 @@ const resolveSocketEndpoint = (): SocketEndpoint => {
 
   const isSecure = window.location.protocol === 'https:';
   const originProtocol = isSecure ? 'https:' : 'http:';
-  const originHost = `${window.location.hostname}:3001`;
+  const port = window.location.port;
+  let originHost = window.location.host;
+
+  if (port === '5173' || port === '4173' || port === '4174') {
+    originHost = `${window.location.hostname}:3001`;
+  }
+
   return { origin: `${originProtocol}//${originHost}`, path: '/ws' };
 };
 
@@ -270,7 +308,14 @@ const resolveHttpBaseUrl = (): string => {
   }
 
   const protocol = window.location.protocol === 'https:' ? 'https' : 'http';
-  return `${protocol}://${window.location.hostname}:3001`;
+  const port = window.location.port;
+  let host = window.location.host;
+
+  if (port === '5173' || port === '4173' || port === '4174') {
+    host = `${window.location.hostname}:3001`;
+  }
+
+  return `${protocol}://${host}`;
 };
 
 const getExplicitToken = (): string | null => {
@@ -345,6 +390,9 @@ export const useRealtimeConnection = (): RealtimeConnectionState => {
     chatBubbles: [],
     chatPreferences: null,
     adminState: { ...DEFAULT_ADMIN_STATE },
+    mutedOccupantIds: [],
+    reportHistory: [],
+    tradeLifecycleEvent: null,
   });
 
   const socketRef = useRef<Socket | null>(null);
@@ -368,6 +416,8 @@ export const useRealtimeConnection = (): RealtimeConnectionState => {
   const pendingPickupItemIdRef = useRef(new Map<string, number>());
   const typingIndicatorsRef = useRef(new Map<string, TypingIndicatorInternal>());
   const chatBubblesRef = useRef(new Map<string, ChatBubbleInternal>());
+  const mutedOccupantIdSetRef = useRef(new Set<string>());
+  const reportHistoryRef = useRef<ReportRecordSummary[]>([]);
   const typingStopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const typingCleanupIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const bubbleCleanupIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -588,6 +638,8 @@ export const useRealtimeConnection = (): RealtimeConnectionState => {
         typingStopTimerRef.current = null;
       }
       lastTypingPreviewRef.current = '';
+      mutedOccupantIdSetRef.current.clear();
+      reportHistoryRef.current = [];
 
       reconnectAttemptsRef.current += 1;
       const attempt = reconnectAttemptsRef.current;
@@ -604,6 +656,9 @@ export const useRealtimeConnection = (): RealtimeConnectionState => {
         chatLog: [],
         typingIndicators: [],
         chatBubbles: [],
+        mutedOccupantIds: [],
+        reportHistory: [],
+        tradeLifecycleEvent: null,
       });
 
       countdownTimerRef.current = setInterval(() => {
@@ -626,10 +681,22 @@ export const useRealtimeConnection = (): RealtimeConnectionState => {
       }, delay);
     };
 
+    const filterChatLogByMuted = (
+      log: ChatMessageBroadcast[],
+      mutedIds: Set<string>,
+    ): ChatMessageBroadcast[] =>
+      log
+        .filter((entry) => !entry.userId || !mutedIds.has(entry.userId))
+        .slice(-200);
+
     const appendChatMessage = (message: ChatMessageBroadcast) => {
+      const isMuted =
+        typeof message.userId === 'string' && mutedOccupantIdSetRef.current.has(message.userId);
       setState((previous) => {
         const nextSeq = message.roomSeq ?? previous.lastRoomSeq ?? null;
-        const nextLog = [...previous.chatLog, message].slice(-200);
+        const nextLog = isMuted
+          ? previous.chatLog
+          : [...previous.chatLog, message].slice(-200);
         return {
           ...previous,
           chatLog: nextLog,
@@ -859,6 +926,36 @@ export const useRealtimeConnection = (): RealtimeConnectionState => {
             ? preferencesResult.data
             : { showSystemMessages: true };
 
+          const socialResult = socialStateSchema.safeParse(payload.social);
+          const social: SocialState = socialResult.success
+            ? socialResult.data
+            : { mutes: [], reports: [] };
+          mutedOccupantIdSetRef.current = new Set(
+            social.mutes.map((mute) => mute.mutedUserId),
+          );
+          reportHistoryRef.current = social.reports.map((report) => ({ ...report }));
+
+          let initialTradeEvent: TradeLifecycleEvent | null = null;
+          if (payload.tradeLifecycle !== undefined && payload.tradeLifecycle !== null) {
+            const tradeResult = tradeLifecycleBroadcastSchema.safeParse(payload.tradeLifecycle);
+            if (tradeResult.success) {
+              initialTradeEvent = {
+                trade: tradeResult.data.trade,
+                participant: tradeResult.data.participant,
+                actorId: tradeResult.data.actorId ?? null,
+                revision: 1,
+                receivedAt: Date.now(),
+              };
+            } else {
+              updateState({ lastError: 'Server handshake contained invalid trade lifecycle state' });
+            }
+          }
+
+          const filteredChatHistory = filterChatLogByMuted(
+            chatHistory,
+            mutedOccupantIdSetRef.current,
+          );
+
           const maxSeqCandidates: number[] = [snapshotResult.data.roomSeq];
           for (const entry of chatHistory) {
             if (typeof entry.roomSeq === 'number') {
@@ -880,7 +977,7 @@ export const useRealtimeConnection = (): RealtimeConnectionState => {
             lastRoomSeq: maxSeq,
             pendingMoveTarget: null,
             isMoveInFlight: false,
-            chatLog: chatHistory,
+            chatLog: filteredChatHistory,
             items: sortRoomItems(roomItemsRef.current.values()),
             inventory: sortInventoryItems(inventoryRef.current.values()),
             pendingPickupItemIds: [],
@@ -889,6 +986,9 @@ export const useRealtimeConnection = (): RealtimeConnectionState => {
             chatBubbles: [],
             chatPreferences,
             adminState: snapshotResult.data.adminState,
+            mutedOccupantIds: Array.from(mutedOccupantIdSetRef.current),
+            reportHistory: reportHistoryRef.current.map((entry) => ({ ...entry })),
+            tradeLifecycleEvent: initialTradeEvent,
           }));
 
           startPingTimer(intervalFromServer);
@@ -1080,6 +1180,75 @@ export const useRealtimeConnection = (): RealtimeConnectionState => {
               ? envelope.data.message
               : 'Failed to update chat preferences';
           updateState({ lastError: message });
+          return;
+        }
+        case 'social:mute:recorded': {
+          const parsed = socialMuteBroadcastSchema.safeParse(envelope.data);
+          if (!parsed.success) {
+            updateState({ lastError: 'Received malformed social mute payload' });
+            return;
+          }
+
+          const sessionUser = sessionUserRef.current;
+          if (!sessionUser || parsed.data.mute.userId !== sessionUser.id) {
+            return;
+          }
+
+          mutedOccupantIdSetRef.current.add(parsed.data.mute.mutedUserId);
+          setState((previous) => ({
+            ...previous,
+            mutedOccupantIds: Array.from(mutedOccupantIdSetRef.current),
+            chatLog: filterChatLogByMuted(previous.chatLog, mutedOccupantIdSetRef.current),
+          }));
+          return;
+        }
+        case 'social:report:recorded': {
+          const parsed = socialReportBroadcastSchema.safeParse(envelope.data);
+          if (!parsed.success) {
+            updateState({ lastError: 'Received malformed social report payload' });
+            return;
+          }
+
+          const sessionUser = sessionUserRef.current;
+          if (!sessionUser || parsed.data.report.reporterId !== sessionUser.id) {
+            return;
+          }
+
+          const existingIndex = reportHistoryRef.current.findIndex(
+            (entry) => entry.id === parsed.data.report.id,
+          );
+          if (existingIndex >= 0) {
+            reportHistoryRef.current[existingIndex] = parsed.data.report;
+          } else {
+            reportHistoryRef.current = [
+              parsed.data.report,
+              ...reportHistoryRef.current,
+            ].slice(0, 50);
+          }
+
+          setState((previous) => ({
+            ...previous,
+            reportHistory: reportHistoryRef.current.map((entry) => ({ ...entry })),
+          }));
+          return;
+        }
+        case 'trade:lifecycle:update': {
+          const parsed = tradeLifecycleBroadcastSchema.safeParse(envelope.data);
+          if (!parsed.success) {
+            updateState({ lastError: 'Received malformed trade lifecycle payload' });
+            return;
+          }
+
+          setState((previous) => ({
+            ...previous,
+            tradeLifecycleEvent: {
+              trade: parsed.data.trade,
+              participant: parsed.data.participant,
+              actorId: parsed.data.actorId ?? null,
+              revision: (previous.tradeLifecycleEvent?.revision ?? 0) + 1,
+              receivedAt: Date.now(),
+            },
+          }));
           return;
         }
         case 'item:pickup:ok': {
@@ -1757,11 +1926,19 @@ export const useRealtimeConnection = (): RealtimeConnectionState => {
         return false;
       }
 
+      const token = tokenRef.current;
+      if (!token) {
+        return false;
+      }
+
       const baseUrl = resolveHttpBaseUrl();
       try {
         const response = await fetch(`${baseUrl}${path}`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
           credentials: 'include',
           body: JSON.stringify(body),
         });
@@ -1956,6 +2133,61 @@ export const useRealtimeConnection = (): RealtimeConnectionState => {
     [sendAuthorizedRequest, state.room?.id],
   );
 
+  const acceptTradeSession = useCallback(
+    async (tradeId: string): Promise<ActionResult<TradeLifecycleResponse>> => {
+      const roomId = state.room?.id;
+      if (!roomId) {
+        return { ok: false, message: 'Room context unavailable', status: 400 };
+      }
+
+      return sendAuthorizedRequest(
+        `/rooms/${roomId}/trades/${tradeId}/accept`,
+        { method: 'POST' },
+        (payload) => tradeLifecycleResponseSchema.parse(payload),
+      );
+    },
+    [sendAuthorizedRequest, state.room?.id],
+  );
+
+  const cancelTradeSession = useCallback(
+    async (
+      tradeId: string,
+      reason: 'cancelled' | 'declined',
+    ): Promise<ActionResult<TradeLifecycleResponse>> => {
+      const roomId = state.room?.id;
+      if (!roomId) {
+        return { ok: false, message: 'Room context unavailable', status: 400 };
+      }
+
+      return sendAuthorizedRequest(
+        `/rooms/${roomId}/trades/${tradeId}/cancel`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ reason }),
+        },
+        (payload) => tradeLifecycleResponseSchema.parse(payload),
+      );
+    },
+    [sendAuthorizedRequest, state.room?.id],
+  );
+
+  const completeTradeSession = useCallback(
+    async (tradeId: string): Promise<ActionResult<TradeLifecycleResponse>> => {
+      const roomId = state.room?.id;
+      if (!roomId) {
+        return { ok: false, message: 'Room context unavailable', status: 400 };
+      }
+
+      return sendAuthorizedRequest(
+        `/rooms/${roomId}/trades/${tradeId}/complete`,
+        { method: 'POST' },
+        (payload) => tradeLifecycleResponseSchema.parse(payload),
+      );
+    },
+    [sendAuthorizedRequest, state.room?.id],
+  );
+
   const muteOccupant = useCallback(
     async (occupantId: string): Promise<ActionResult<MuteRecordSummary>> => {
       const roomId = state.room?.id;
@@ -2016,6 +2248,9 @@ export const useRealtimeConnection = (): RealtimeConnectionState => {
       spawnPlantAtTile,
       fetchOccupantProfile,
       initiateTradeWithOccupant,
+      acceptTradeSession,
+      cancelTradeSession,
+      completeTradeSession,
       muteOccupant,
       reportOccupant,
     }),

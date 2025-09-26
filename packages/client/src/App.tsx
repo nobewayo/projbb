@@ -14,11 +14,16 @@ import './styles.css';
 import {
   useRealtimeConnection,
   type OccupantProfileSummary,
+  type TradeSessionBootstrap,
+  type TradeLifecycleAcknowledgement,
 } from './ws/useRealtimeConnection';
 import type { GridTile } from './canvas/types';
 import { createTileKey } from './canvas/geometry';
 import plantTexture from './assets/items/plant.png';
 import couchTexture from './assets/items/couch.png';
+import ProfilePanel, { type ProfilePanelState } from './components/ProfilePanel';
+import InventoryCard, { type InventoryEntry } from './components/InventoryCard';
+import { useActionToast } from './hooks/useActionToast';
 
 const dockButtons = [
   'Rooms',
@@ -40,6 +45,7 @@ const DEFAULT_ITEM_TEXTURE = plantTexture;
 
 type ChatMessage = {
   id: string;
+  userId: string | null;
   actor: string;
   body: string;
   time: string;
@@ -75,17 +81,34 @@ type PickupAvailability = {
 
 type OccupantMenuAction = 'profile' | 'trade' | 'mute' | 'report';
 
-type ProfilePanelState =
+type TradeLifecycleState =
   | { status: 'idle' }
-  | { status: 'loading'; occupantId: string; occupantName: string }
-  | { status: 'error'; occupantId: string; occupantName: string; message: string }
-  | { status: 'loaded'; profile: OccupantProfileSummary };
-
-type ActionToast = {
-  id: number;
-  message: string;
-  tone: 'success' | 'error';
-};
+  | {
+      status: 'pending';
+      trade: TradeLifecycleAcknowledgement['trade'];
+      participant: TradeLifecycleAcknowledgement['participant'];
+      initiatedAt: number;
+    }
+  | {
+      status: 'in-progress';
+      trade: TradeLifecycleAcknowledgement['trade'];
+      participant: TradeLifecycleAcknowledgement['participant'];
+      startedAt: number;
+    }
+  | {
+      status: 'cancelled';
+      trade: TradeLifecycleAcknowledgement['trade'];
+      participant: TradeLifecycleAcknowledgement['participant'];
+      cancelledAt: number;
+      reason: 'cancelled' | 'declined';
+      cancelledBy: 'self' | 'participant';
+    }
+  | {
+      status: 'completed';
+      trade: TradeLifecycleAcknowledgement['trade'];
+      participant: TradeLifecycleAcknowledgement['participant'];
+      completedAt: number;
+    };
 
 interface ActiveContextMenuProps {
   state: ContextMenuState;
@@ -377,6 +400,7 @@ ActiveContextMenu.displayName = 'ActiveContextMenu';
 const placeholderChatHistory: ChatMessage[] = [
   {
     id: 'system-1',
+    userId: null,
     actor: 'System',
     body: 'Welcome to Bitby. Realtime chat will populate this log.',
     time: '17:58',
@@ -384,6 +408,7 @@ const placeholderChatHistory: ChatMessage[] = [
   },
   {
     id: 'system-2',
+    userId: null,
     actor: 'System',
     body: 'Daily quests rotate at midnight UTC. Claim rewards before the reset!',
     time: '17:59',
@@ -391,12 +416,14 @@ const placeholderChatHistory: ChatMessage[] = [
   },
   {
     id: 'player-0',
+    userId: null,
     actor: 'Player',
     body: 'Movement loop placeholder: walking toward tile (5, 8).',
     time: '18:00',
   },
   {
     id: 'system-3',
+    userId: null,
     actor: 'System',
     body: 'Admin: Spawned a practice bot near the fountain for collision testing.',
     time: '18:01',
@@ -404,12 +431,14 @@ const placeholderChatHistory: ChatMessage[] = [
   },
   {
     id: 'player-1',
+    userId: null,
     actor: 'Player',
     body: 'Quest tracker placeholder: Completed “Arrange the lounge chairs.”',
     time: '18:02',
   },
   {
     id: 'system-4',
+    userId: null,
     actor: 'System',
     body: 'Economy update placeholder: Daily coin stipend delivered.',
     time: '18:03',
@@ -417,6 +446,7 @@ const placeholderChatHistory: ChatMessage[] = [
   },
   {
     id: 'system-5',
+    userId: null,
     actor: 'System',
     body: 'Room presence placeholder: 8 visitors online in the plaza.',
     time: '18:04',
@@ -424,12 +454,14 @@ const placeholderChatHistory: ChatMessage[] = [
   },
   {
     id: 'player-2',
+    userId: null,
     actor: 'Player',
     body: 'Hey folks, checking the plaza lighting real quick.',
     time: '18:05',
   },
   {
     id: 'system-6',
+    userId: null,
     actor: 'System',
     body: 'Reminder: Chat history shows the latest 100 entries. Older logs archive to the server.',
     time: '18:06',
@@ -452,10 +484,10 @@ const App = (): JSX.Element => {
   const contextMenuRef = useRef<HTMLDivElement | null>(null);
   const [profilePanelState, setProfilePanelState] = useState<ProfilePanelState>({ status: 'idle' });
   const [activeDockView, setActiveDockView] = useState<'default' | 'backpack'>('default');
-  const [actionToast, setActionToast] = useState<ActionToast | null>(null);
-  const [mutedOccupantIds, setMutedOccupantIds] = useState<string[]>([]);
-  const toastTimerRef = useRef<number | null>(null);
+  const [tradeState, setTradeState] = useState<TradeLifecycleState>({ status: 'idle' });
+  const { toast: actionToast, showToast } = useActionToast();
   const profileRequestRef = useRef(0);
+  const lastTradeEventRevisionRef = useRef(0);
   const connection = useRealtimeConnection();
   const {
     sendChat,
@@ -468,12 +500,12 @@ const App = (): JSX.Element => {
     spawnPlantAtTile,
     fetchOccupantProfile,
     initiateTradeWithOccupant,
+    acceptTradeSession,
+    cancelTradeSession,
+    completeTradeSession,
     muteOccupant,
     reportOccupant,
   } = connection;
-  const showToast = useCallback((message: string, tone: 'success' | 'error') => {
-    setActionToast({ id: Date.now(), message, tone });
-  }, []);
   const requestProfile = useCallback(
     (occupantId: string, occupantName: string) => {
       profileRequestRef.current += 1;
@@ -503,6 +535,127 @@ const App = (): JSX.Element => {
     },
     [fetchOccupantProfile],
   );
+  const handleTradeInviteAccepted = useCallback(() => {
+    if (tradeState.status !== 'pending') {
+      return;
+    }
+
+    void acceptTradeSession(tradeState.trade.id).then((result) => {
+      if (!result.ok) {
+        showToast(result.message, 'error');
+        return;
+      }
+
+      const acceptedTimestamp = result.data.trade.acceptedAt
+        ? Date.parse(result.data.trade.acceptedAt)
+        : Date.now();
+      const startedAt = Number.isFinite(acceptedTimestamp) ? acceptedTimestamp : Date.now();
+
+      setTradeState({
+        status: 'in-progress',
+        trade: result.data.trade,
+        participant: result.data.participant,
+        startedAt,
+      });
+      showToast(`Trading with ${result.data.participant.username}`, 'success');
+    });
+  }, [acceptTradeSession, showToast, tradeState]);
+
+  const requestTradeCancellation = useCallback(
+    (reason: 'cancelled' | 'declined') => {
+      if (
+        tradeState.status === 'idle' ||
+        tradeState.status === 'completed' ||
+        tradeState.status === 'cancelled'
+      ) {
+        return;
+      }
+
+      void cancelTradeSession(tradeState.trade.id, reason).then((result) => {
+        if (!result.ok) {
+          showToast(result.message, 'error');
+          return;
+        }
+
+        const cancelledTimestamp = result.data.trade.cancelledAt
+          ? Date.parse(result.data.trade.cancelledAt)
+          : Date.now();
+        const cancelledAt = Number.isFinite(cancelledTimestamp)
+          ? cancelledTimestamp
+          : Date.now();
+        const resolvedReason = result.data.trade.cancelledReason ?? reason;
+        const cancelledBy =
+          result.data.trade.cancelledBy && result.data.trade.cancelledBy === connection.user?.id
+            ? 'self'
+            : 'participant';
+
+        setTradeState({
+          status: 'cancelled',
+          trade: result.data.trade,
+          participant: result.data.participant,
+          cancelledAt,
+          reason: resolvedReason,
+          cancelledBy,
+        });
+
+        const participantName = result.data.participant.username;
+        if (resolvedReason === 'declined') {
+          showToast(
+            cancelledBy === 'self'
+              ? `You declined the trade with ${participantName}`
+              : `${participantName} declined the trade`,
+            'error',
+          );
+        } else {
+          showToast(
+            cancelledBy === 'self'
+              ? `Trade with ${participantName} cancelled`
+              : `${participantName} cancelled the trade`,
+            'error',
+          );
+        }
+      });
+    },
+    [cancelTradeSession, connection.user?.id, showToast, tradeState],
+  );
+
+  const handleTradeCancel = useCallback(() => {
+    requestTradeCancellation('cancelled');
+  }, [requestTradeCancellation]);
+
+  const handleTradeDecline = useCallback(() => {
+    requestTradeCancellation('declined');
+  }, [requestTradeCancellation]);
+
+  const handleTradeComplete = useCallback(() => {
+    if (tradeState.status !== 'in-progress') {
+      return;
+    }
+
+    void completeTradeSession(tradeState.trade.id).then((result) => {
+      if (!result.ok) {
+        showToast(result.message, 'error');
+        return;
+      }
+
+      const completedTimestamp = result.data.trade.completedAt
+        ? Date.parse(result.data.trade.completedAt)
+        : Date.now();
+      const completedAt = Number.isFinite(completedTimestamp) ? completedTimestamp : Date.now();
+
+      setTradeState({
+        status: 'completed',
+        trade: result.data.trade,
+        participant: result.data.participant,
+        completedAt,
+      });
+      showToast(`Trade with ${result.data.participant.username} completed`, 'success');
+    });
+  }, [completeTradeSession, showToast, tradeState]);
+
+  const handleTradeDismiss = useCallback(() => {
+    setTradeState({ status: 'idle' });
+  }, []);
   const adminAffordances = connection.adminState.affordances;
   const isGridVisible = adminAffordances.gridVisible;
   const showHoverWhenGridHidden = adminAffordances.showHoverWhenGridHidden;
@@ -511,28 +664,6 @@ const App = (): JSX.Element => {
   useEffect(() => {
     chatDraftRef.current = chatDraft;
   }, [chatDraft]);
-
-  useEffect(() => {
-    if (!actionToast) {
-      return () => undefined;
-    }
-
-    if (toastTimerRef.current !== null) {
-      window.clearTimeout(toastTimerRef.current);
-    }
-
-    toastTimerRef.current = window.setTimeout(() => {
-      setActionToast(null);
-      toastTimerRef.current = null;
-    }, 4000);
-
-    return () => {
-      if (toastTimerRef.current !== null) {
-        window.clearTimeout(toastTimerRef.current);
-        toastTimerRef.current = null;
-      }
-    };
-  }, [actionToast]);
 
   useEffect(() => {
     const isEditableElement = (element: Element | null): boolean => {
@@ -669,7 +800,7 @@ const App = (): JSX.Element => {
     return items;
   }, [connection.items]);
 
-  const inventoryEntries = useMemo(
+  const inventoryEntries = useMemo<InventoryEntry[]>(
     () =>
       connection.inventory.map((item) => {
         const acquiredAt = new Date(item.acquiredAt);
@@ -680,15 +811,17 @@ const App = (): JSX.Element => {
           id: item.id,
           name: item.name,
           description: item.description,
-          acquiredAt,
           acquiredLabel,
           texture: ITEM_TEXTURES[item.textureKey] ?? DEFAULT_ITEM_TEXTURE,
-        };
+        } satisfies InventoryEntry;
       }),
     [connection.inventory],
   );
 
-  const mutedOccupantSet = useMemo(() => new Set(mutedOccupantIds), [mutedOccupantIds]);
+  const mutedOccupantSet = useMemo(
+    () => new Set(connection.mutedOccupantIds),
+    [connection.mutedOccupantIds],
+  );
 
   const handleProfileRetry = useCallback(() => {
     if (profilePanelState.status === 'error') {
@@ -701,84 +834,234 @@ const App = (): JSX.Element => {
     setActiveDockView('default');
   }, []);
 
-  const profilePanelContent = useMemo(() => {
-    switch (profilePanelState.status) {
-      case 'idle':
-        return null;
-      case 'loading':
-        return (
-          <article className="profile-card" aria-busy="true">
-            <header className="profile-card__header">
-              <h2>Loading profile…</h2>
-              <p>Fetching the latest data for {profilePanelState.occupantName}.</p>
-            </header>
-          </article>
-        );
-      case 'error':
-        return (
-          <article className="profile-card profile-card--error">
-            <header className="profile-card__header">
-              <h2>Profile unavailable</h2>
-            </header>
-            <p className="profile-card__body">{profilePanelState.message}</p>
-            <div className="profile-card__actions">
-              <button type="button" onClick={handleProfileRetry}>
-                Retry
-              </button>
-              <button
-                type="button"
-                className="profile-card__secondary"
-                onClick={handleProfileClose}
-              >
-                Back to panel
-              </button>
-            </div>
-          </article>
-        );
-      case 'loaded': {
-        const profile = profilePanelState.profile;
-        const joinedAt = new Date(profile.createdAt);
-        const joinedLabel = Number.isNaN(joinedAt.getTime())
-          ? 'Unknown'
-          : joinedAt.toLocaleDateString();
-        return (
-          <article className="profile-card">
-            <header className="profile-card__header">
-              <h2>{profile.username}</h2>
-              <p>{profile.roles.map((role) => role.toUpperCase()).join(' · ') || 'PLAYER'}</p>
-            </header>
-            <dl className="profile-card__meta">
-              <div>
-                <dt>Member since</dt>
-                <dd>{joinedLabel}</dd>
-              </div>
-              <div>
-                <dt>Current tile</dt>
-                <dd>
-                  ({profile.position.x}, {profile.position.y})
-                </dd>
-              </div>
-              <div>
-                <dt>Backpack items</dt>
-                <dd>{profile.inventoryCount}</dd>
-              </div>
-              <div>
-                <dt>Room</dt>
-                <dd>{profile.room.name}</dd>
-              </div>
-            </dl>
-            <div className="profile-card__actions">
-              <button type="button" onClick={handleProfileClose}>
-                Back to panel
-              </button>
-            </div>
-          </article>
-        );
+  const profilePanelContent = useMemo(
+    () => (
+      <ProfilePanel
+        state={profilePanelState}
+        onRetry={handleProfileRetry}
+        onClose={handleProfileClose}
+      />
+    ),
+    [handleProfileClose, handleProfileRetry, profilePanelState],
+  );
+
+  const tradeBanner = useMemo(() => {
+    if (tradeState.status === 'idle') {
+      return null;
+    }
+
+    const participantName = tradeState.participant.username;
+
+    if (tradeState.status === 'pending') {
+      return (
+        <aside className="trade-banner trade-banner--pending" role="status" aria-live="polite">
+          <div className="trade-banner__header">
+            <h2 className="trade-banner__title">Awaiting response</h2>
+            <p className="trade-banner__subtitle">Invite sent to {participantName}</p>
+          </div>
+          <p className="trade-banner__body">
+            Track the demo trade lifecycle below. Mark it as accepted to enter the trading flow or
+            cancel if you need to withdraw the invite.
+          </p>
+          <div className="trade-banner__actions">
+            <button
+              type="button"
+              className="trade-banner__button trade-banner__button--primary"
+              onClick={handleTradeInviteAccepted}
+            >
+              Mark as accepted
+            </button>
+            <button
+              type="button"
+              className="trade-banner__button"
+              onClick={handleTradeCancel}
+            >
+              Cancel invite
+            </button>
+            <button
+              type="button"
+              className="trade-banner__button trade-banner__button--danger"
+              onClick={handleTradeDecline}
+            >
+              Mark as declined
+            </button>
+          </div>
+        </aside>
+      );
+    }
+
+    if (tradeState.status === 'in-progress') {
+      return (
+        <aside className="trade-banner trade-banner--in-progress" role="status" aria-live="polite">
+          <div className="trade-banner__header">
+            <h2 className="trade-banner__title">Trading with {participantName}</h2>
+            <p className="trade-banner__subtitle">Session active</p>
+          </div>
+          <p className="trade-banner__body">
+            Coordinate the exchange in voice or chat and click complete once both sides are ready.
+            Cancel if you need to restart the negotiation.
+          </p>
+          <div className="trade-banner__actions">
+            <button
+              type="button"
+              className="trade-banner__button trade-banner__button--primary"
+              onClick={handleTradeComplete}
+            >
+              Complete trade
+            </button>
+            <button
+              type="button"
+              className="trade-banner__button trade-banner__button--danger"
+              onClick={handleTradeCancel}
+            >
+              Cancel trade
+            </button>
+          </div>
+        </aside>
+      );
+    }
+
+    if (tradeState.status === 'cancelled') {
+      const cancelledCopy = (() => {
+        if (tradeState.reason === 'declined') {
+          return tradeState.cancelledBy === 'self'
+            ? `You declined the trade with ${participantName}.`
+            : `${participantName} declined the trade invite.`;
+        }
+        return tradeState.cancelledBy === 'self'
+          ? `You cancelled the trade with ${participantName}.`
+          : `${participantName} cancelled the trade.`;
+      })();
+      return (
+        <aside className="trade-banner trade-banner--declined" role="status" aria-live="polite">
+          <div className="trade-banner__header">
+            <h2 className="trade-banner__title">Trade ended</h2>
+            <p className="trade-banner__subtitle">No exchange in progress</p>
+          </div>
+          <p className="trade-banner__body">{cancelledCopy}</p>
+          <div className="trade-banner__actions">
+            <button type="button" className="trade-banner__button" onClick={handleTradeDismiss}>
+              Dismiss
+            </button>
+          </div>
+        </aside>
+      );
+    }
+
+    return (
+      <aside className="trade-banner trade-banner--completed" role="status" aria-live="polite">
+        <div className="trade-banner__header">
+          <h2 className="trade-banner__title">Trade complete</h2>
+          <p className="trade-banner__subtitle">Exchange with {participantName}</p>
+        </div>
+        <p className="trade-banner__body">
+          The trade was marked as complete. Capture any follow-up notes and you can dismiss this
+          summary when you are ready.
+        </p>
+        <div className="trade-banner__actions">
+          <button type="button" className="trade-banner__button" onClick={handleTradeDismiss}>
+            Dismiss
+          </button>
+        </div>
+      </aside>
+    );
+  }, [
+    handleTradeCancel,
+    handleTradeDecline,
+    handleTradeDismiss,
+    handleTradeComplete,
+    handleTradeInviteAccepted,
+    tradeState,
+  ]);
+
+  useEffect(() => {
+    const event = connection.tradeLifecycleEvent;
+    if (!event) {
+      return;
+    }
+
+    if (event.revision === lastTradeEventRevisionRef.current) {
+      return;
+    }
+    lastTradeEventRevisionRef.current = event.revision;
+
+    const parseTimestamp = (value?: string | null): number => {
+      if (!value) {
+        return Date.now();
+      }
+      const parsed = Date.parse(value);
+      return Number.isFinite(parsed) ? parsed : Date.now();
+    };
+
+    switch (event.trade.status) {
+      case 'accepted': {
+        const startedAt = parseTimestamp(event.trade.acceptedAt ?? event.trade.createdAt);
+        setTradeState({
+          status: 'in-progress',
+          trade: event.trade,
+          participant: event.participant,
+          startedAt,
+        });
+        break;
+      }
+      case 'cancelled': {
+        const cancelledAt = parseTimestamp(event.trade.cancelledAt);
+        const cancelActorId = event.trade.cancelledBy ?? event.actorId ?? null;
+        const cancelledBy: 'self' | 'participant' =
+          cancelActorId && connection.user?.id && cancelActorId === connection.user.id
+            ? 'self'
+            : 'participant';
+        const reason = event.trade.cancelledReason ?? 'cancelled';
+        setTradeState({
+          status: 'cancelled',
+          trade: event.trade,
+          participant: event.participant,
+          cancelledAt,
+          reason,
+          cancelledBy,
+        });
+        break;
+      }
+      case 'completed': {
+        const completedAt = parseTimestamp(event.trade.completedAt);
+        setTradeState({
+          status: 'completed',
+          trade: event.trade,
+          participant: event.participant,
+          completedAt,
+        });
+        break;
+      }
+      case 'pending': {
+        const initiatedAt = parseTimestamp(event.trade.createdAt);
+        setTradeState({
+          status: 'pending',
+          trade: event.trade,
+          participant: event.participant,
+          initiatedAt,
+        });
+        break;
       }
       default:
-        return null;
+        break;
     }
-  }, [handleProfileClose, handleProfileRetry, profilePanelState]);
+
+    if (connection.user?.id && event.actorId && event.actorId !== connection.user.id) {
+      const participantName = event.participant.username;
+      if (event.trade.status === 'accepted') {
+        showToast(`${participantName} accepted the trade.`, 'success');
+      } else if (event.trade.status === 'completed') {
+        showToast(`${participantName} marked the trade complete.`, 'success');
+      } else if (event.trade.status === 'cancelled') {
+        const reason = event.trade.cancelledReason ?? 'cancelled';
+        const copy =
+          reason === 'declined'
+            ? `${participantName} declined the trade.`
+            : `${participantName} cancelled the trade.`;
+        showToast(copy, 'error');
+      }
+    }
+  }, [connection.tradeLifecycleEvent, connection.user?.id, showToast]);
 
   const chatLogEntries = useMemo(() => {
     const formattedHistory: ChatMessage[] = connection.chatLog.map((message) => {
@@ -791,6 +1074,7 @@ const App = (): JSX.Element => {
       );
       return {
         id: message.id,
+        userId: message.userId ?? null,
         actor: message.username,
         body: message.body,
         time,
@@ -798,13 +1082,16 @@ const App = (): JSX.Element => {
       };
     });
 
-    const source = formattedHistory.length > 0 ? formattedHistory : placeholderChatHistory;
+    const mutedFiltered = formattedHistory.filter(
+      (message) => !message.userId || !mutedOccupantSet.has(message.userId),
+    );
+    const source = mutedFiltered.length > 0 ? mutedFiltered : placeholderChatHistory;
     const filtered = showSystemMessages
       ? source
       : source.filter((message) => !message.isSystem && message.actor !== 'System');
 
     return filtered.slice(-100);
-  }, [connection.chatLog, showSystemMessages]);
+  }, [connection.chatLog, mutedOccupantSet, showSystemMessages]);
 
   const primaryMenuStyle = useMemo(
     () => ({ '--menu-count': dockButtons.length } as CSSProperties),
@@ -1233,7 +1520,16 @@ const App = (): JSX.Element => {
       if (action === 'trade') {
         void initiateTradeWithOccupant(occupant.id).then((result) => {
           if (result.ok) {
-            showToast(`Trade invite sent to ${occupant.username}`, 'success');
+            const initiatedTimestamp = Date.parse(result.data.trade.createdAt);
+            setTradeState({
+              status: 'pending',
+              trade: result.data.trade,
+              participant: result.data.participant,
+              initiatedAt: Number.isFinite(initiatedTimestamp)
+                ? initiatedTimestamp
+                : Date.now(),
+            });
+            showToast(`Trade invite sent to ${result.data.participant.username}`, 'success');
           } else {
             showToast(result.message, 'error');
           }
@@ -1244,12 +1540,7 @@ const App = (): JSX.Element => {
       if (action === 'mute') {
         void muteOccupant(occupant.id).then((result) => {
           if (result.ok) {
-            setMutedOccupantIds((previous) =>
-              previous.includes(occupant.id) ? previous : [...previous, occupant.id],
-            );
             showToast(`${occupant.username} muted`, 'success');
-            // TODO: Persist muted IDs across reconnects and proactively filter chat once the
-            // realtime layer surfaces mute metadata so muted occupants stay hidden after reload.
           } else {
             showToast(result.message, 'error');
           }
@@ -1608,6 +1899,7 @@ const App = (): JSX.Element => {
           {actionToast.message}
         </div>
       ) : null}
+      {tradeBanner}
       <div className="stage">
         <header className="stage__top-bar" aria-label="Player overview and news">
           <div className="top-bar__profile" aria-label="Player overview">
@@ -1779,33 +2071,7 @@ const App = (): JSX.Element => {
               ) : null}
               {!selectedItem && profilePanelContent}
               {isBackpackOpen && !selectedItem ? (
-                <article className="inventory-card">
-                  <header className="inventory-card__header">
-                    <h2>Backpack</h2>
-                    <span className="inventory-card__count">{inventoryEntries.length} items</span>
-                  </header>
-                  {inventoryEntries.length === 0 ? (
-                    <p className="inventory-card__empty">
-                      Your backpack is empty. Collect an item to populate this list instantly.
-                    </p>
-                  ) : (
-                    <ul className="inventory-card__list">
-                      {inventoryEntries.map((entry) => (
-                        <li key={entry.id} className="inventory-card__item" title={entry.description}>
-                          <span className="inventory-card__avatar" aria-hidden="true">
-                            <img src={entry.texture} alt="" />
-                          </span>
-                          <div className="inventory-card__item-body">
-                            <span className="inventory-card__item-name">{entry.name}</span>
-                            <span className="inventory-card__item-meta">
-                              {entry.acquiredLabel ? `Collected at ${entry.acquiredLabel}` : 'Collected'}
-                            </span>
-                          </div>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </article>
+                <InventoryCard items={inventoryEntries} />
               ) : null}
             </section>
           </aside>

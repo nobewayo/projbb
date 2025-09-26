@@ -677,6 +677,105 @@ body {
   border-color: rgba(255, 107, 129, 0.45);
 }
 
+.trade-banner {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(var(--menu-height) + 28px);
+  width: clamp(340px, 60%, 520px);
+  padding: 18px 22px;
+  background: rgba(17, 27, 40, 0.95);
+  color: #f5fbff;
+  border-radius: 16px;
+  box-shadow: 0 18px 32px rgba(0, 0, 0, 0.22);
+  border: 1px solid rgba(122, 209, 255, 0.38);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  z-index: 35;
+}
+
+.trade-banner__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.trade-banner__title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.trade-banner__subtitle {
+  margin: 0;
+  font-size: 13px;
+  color: rgba(234, 242, 255, 0.72);
+}
+
+.trade-banner__body {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: rgba(234, 242, 255, 0.86);
+}
+
+.trade-banner__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.trade-banner__button {
+  flex: 1 1 120px;
+  border: none;
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+  color: #f5fbff;
+  background: rgba(122, 209, 255, 0.18);
+  transition: background 0.2s ease;
+}
+
+.trade-banner__button:hover {
+  background: rgba(122, 209, 255, 0.3);
+}
+
+.trade-banner__button--primary {
+  background: rgba(111, 207, 151, 0.24);
+}
+
+.trade-banner__button--primary:hover {
+  background: rgba(111, 207, 151, 0.32);
+}
+
+.trade-banner__button--danger {
+  background: rgba(255, 107, 129, 0.26);
+}
+
+.trade-banner__button--danger:hover {
+  background: rgba(255, 107, 129, 0.34);
+}
+
+.trade-banner--declined {
+  border-color: rgba(255, 107, 129, 0.45);
+}
+
+.trade-banner--completed {
+  border-color: rgba(111, 207, 151, 0.45);
+}
+
+.trade-banner--in-progress {
+  border-color: rgba(122, 209, 255, 0.48);
+}
+
+.trade-banner--pending {
+  border-color: rgba(122, 209, 255, 0.48);
+}
+
 .primary-menu {
   grid-area: menu;
   display: grid;

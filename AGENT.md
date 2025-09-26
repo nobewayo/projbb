@@ -484,24 +484,29 @@ When implementing, **Codex should**:
 ## 23) Progress Snapshot — 2025-09-25
 
 - ✅ `useRealtimeConnection` authenticates via `/auth/login`, maintains heartbeats, hydrates the room snapshot, streams historical chat, appends live `chat:new` envelopes, and exposes a composer that emits `chat:send` while the blocking overlay clears automatically after reconnect.
+- ✅ Social moderation state is now persisted server-side: mute/report actions flow through `@bitby/server` → Postgres, rehydrate on connect, and broadcast live updates so muted occupants disappear from the chat log while report history surfaces in the profile panel.
 - ✅ The React client now renders seeded room items beneath avatars, tracks per-item hit boxes, routes selections into the right panel’s item info view, and overlays realtime typing previews plus authoritative chat bubbles on the canvas while the chat composer listens globally (type anywhere, Enter to send, Esc to cancel) and honours the chat drawer’s per-user system-message preference alongside the admin quick toggles and movement gating.
+- ✅ Profile and inventory UI chrome was extracted into dedicated `ProfilePanel` / `InventoryCard` components, the trade lifecycle banner now flows through the backend acknowledgements (accept, decline/cancel, complete), and a reusable action-toast hook powers optimistic feedback.
 - ✅ Right-click context menus now surface tile, item, and avatar actions per spec, gating “Saml Op” to same-tile, non-`noPickup` squares while avatar actions now call the authoritative profile/trade/mute/report REST flows with server persistence and gating.
 - ✅ Left-clicking items now falls through to tile movement; the item detail panel only opens from the right-click **Info** action so selection stays scoped to the authoritative context menu flow.
+- ✅ Admin REST endpoints now require owner/moderator bearer tokens, emit audit log rows with contextual metadata, update seeded roles accordingly, and the Vitest Postgres/Redis integration suite covers 401/403 flows, realtime fan-out, and persisted audit state.
 - ✅ The admin quick menu now drives authoritative REST endpoints for grid/hover/move affordances, tile lock/noPickup flags, latency trace requests, and the new plant spawner, persisting overrides in Postgres (`room_admin_state`/`room_tile_flag`) while `/admin/rooms/:roomId/items/plant` inserts an Atrium Plant on the local tile, increments `roomSeq`, and fans out `room:item_added` via Redis so every connected client renders the new sprite immediately.
 - ✅ The “Saml Op” button now emits real `item:pickup` envelopes; the server validates tile/noPickup rules, persists the transfer to Postgres, increments `roomSeq`, broadcasts `room:item_removed`, and the client performs optimistic removal with pending/success/error copy while restoring items on authoritative rejection.
 - ✅ The backpack/right-panel inventory view hydrates from authoritative inventory snapshots, reflects item pickups immediately after server acknowledgement, and now opens via the bottom dock’s **Backpack** toggle, which retitles the panel and reveals the inventory beneath the divider while leaving the idle state text-free.
 - ✅ The Fastify server boots Postgres migrations/seeds, validates `auth`/`move`/`chat` envelopes, persists chat history to Postgres, relays cross-instance chat through Redis pub/sub, persists per-user chat drawer preferences, and exposes `/healthz`, `/readyz`, and `/metrics` endpoints instrumented with Prometheus counters.
 - ✅ `@bitby/schemas` publishes JSON Schemas for `auth`, `move`, and `chat` plus an OpenAPI document for `/auth/login`, keeping both tiers on a single contract for realtime and REST payloads.
+- ✅ Shared schemas now include the social payload contract consumed by both the realtime server and client mute/report pipeline.
 - ✅ Workspace scripts rebuild shared schemas before Vite launches, and lint/typecheck/test/build workflows cover the new chat, item, and observability codepaths.
 - ✅ `@bitby/server` now ships a Vitest-backed integration/E2E suite that boots Postgres/Redis via Testcontainers (or `BITBY_TEST_STACK=external`) and drives auth, heartbeat, reconnect, typing, chat, movement, and item pickup flows to guard regressions across the realtime pipeline.
-- Latest connectivity screenshot with chat + item panel: `browser:/invocations/qnntvkjk/artifacts/artifacts/connected-room.png`.
+- ✅ React Testing Library suites cover the new profile/inventory/ toast utilities (requires `@testing-library/jest-dom` inside the client workspace).
+- Latest connectivity screenshot with chat + social/trade chrome: `browser:/invocations/frztrbea/artifacts/artifacts/connected-room.png`.
 - **Infra fallback:** When Docker is unavailable, install Postgres/Redis via `apt` (`sudo apt-get install -y postgresql redis-server`), start them with `sudo pg_ctlcluster 16 main start` and `redis-server --daemonize yes`, then create the `bitby` role/database before launching the server (see README §L6b).
+- **Cosmos deployment:** `packages/infra/docker/docker-compose.cosmos.yml` + `Cosmos-Setup.md` document the no-SSH Cosmos Cloud workflow (nginx fronts the Fastify server, Postgres, and Redis so only the client is publicly routed).
 
 ### Immediate Next Focus
 
-1. Harden the admin REST routes with role gating + audit logging and extend the Vitest/Postgres/Redis integration harness to cover the new admin toggles end-to-end.
-2. Persist mute/report state back into the realtime layer so muted occupants stay filtered across reconnects and moderation outcomes surface in the client UI.
-3. Build the trade session lifecycle UI (accept/decline/in-progress) so the bootstrap call flows into a usable experience.
-4. Add client-side tests for the inventory/profile surfaces and toast handling to guard the new authoritative flows.
+1. Implement the authoritative trade negotiation stage (per-slot proposals, accept/decline, and validation hooks) so the banner can drive the full exchange loop instead of only lifecycle acknowledgements.
+2. Persist and expose historical trade summaries (participants, timestamps, exchanged items) so reconnects and profile views can reference prior sessions without re-querying adhoc state.
+3. Extend chat retention beyond the hot 200-message ring buffer by introducing time-based archival/expiry so Postgres stays lean while compliance exports remain possible.
 
 **End of AGENT.md**
