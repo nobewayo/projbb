@@ -1,3 +1,6 @@
+// @module: ui-feedback
+// @tags: toast, hooks, ui
+
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 export type ActionToast = {
