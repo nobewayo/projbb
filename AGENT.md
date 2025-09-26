@@ -510,4 +510,12 @@ When implementing, **Codex should**:
 1. Persist and expose historical trade summaries (participants, timestamps, exchanged items) so reconnects and profile views can reference prior sessions without re-querying adhoc state.
 2. Extend chat retention beyond the hot 200-message ring buffer by introducing time-based archival/expiry so Postgres stays lean while compliance exports remain possible.
 
+---
+
+## Code Atlas Contract
+
+- Always read `codemap.json` first to locate files for a task by `@module`, `@tags`, or exports.
+- When you create or edit a file, add or update the `@module` and `@tags` header.
+- After edits, run `pnpm codemap` and commit the refreshed map together with your code.
+
 **End of AGENT.md**
