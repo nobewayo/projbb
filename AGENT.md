@@ -59,11 +59,13 @@ One source of truth for how to build, test, and review projbb. Follow every requ
 - **Branches:** Use lowercase feature prefixes such as `docs/<topic>` or `feat/<area>` that describe the change scope.
 - **Commits:** Follow Conventional Commits, for example `docs: trim README quickstart`. Keep commits focused and include refreshed codemap updates when applicable.
 - **PR body timing:** Do not wait for CI to finish before drafting the PR body. Summaries and testing notes should accompany the first push.
-- **Changed lines helper:** After your final commit, generate changed lines for inline review:
-  ```
-  chmod +x tools/ci/diff-lines.sh
-  tools/ci/diff-lines.sh origin/main > .ci/changed-lines.txt
-  ```
+- **Changed lines helper:** Follow this after-commit flow to generate `.ci/changed-lines.txt` for inline review:
+  1. Edit code.
+  2. `pnpm codemap`
+  3. `git add -A && git commit -m "<message>"`
+  4. `tools/ci/diff-lines.sh origin/main > .ci/changed-lines.txt`
+  5. `git add .ci/changed-lines.txt && git commit --amend --no-edit` (or push a follow-up commit)
+  6. Push.
 - **Template checklist:** Confirm codemap updated, tests run or justified, docs aligned with Master Spec guidance merged into this AGENT, and Smoke artifact linked. Reference relevant sections when you mark checklist items.
 
 ## 7. Security and performance rules
