@@ -1,3 +1,6 @@
+// @module: client-app
+// @tags: ui, realtime, smoke-check
+
 import {
   forwardRef,
   useCallback,
@@ -502,6 +505,49 @@ const App = (): JSX.Element => {
   const profileRequestRef = useRef(0);
   const lastTradeEventRevisionRef = useRef(0);
   const connection = useRealtimeConnection();
+
+  useEffect(() => {
+    if (typeof document === 'undefined') {
+      return;
+    }
+
+    const flag = connection.status === 'connected' ? 'true' : 'false';
+    const root = document.getElementById('root');
+    const body = document.body;
+    const html = document.documentElement;
+
+    if (root) {
+      root.setAttribute('data-connected', flag);
+      root.setAttribute('data-connection-status', connection.status);
+    }
+
+    if (body) {
+      body.setAttribute('data-connected', flag);
+      body.setAttribute('data-connection-status', connection.status);
+    }
+
+    if (html) {
+      html.setAttribute('data-connected', flag);
+      html.setAttribute('data-connection-status', connection.status);
+    }
+
+    return () => {
+      if (root) {
+        root.removeAttribute('data-connected');
+        root.removeAttribute('data-connection-status');
+      }
+
+      if (body) {
+        body.removeAttribute('data-connected');
+        body.removeAttribute('data-connection-status');
+      }
+
+      if (html) {
+        html.removeAttribute('data-connected');
+        html.removeAttribute('data-connection-status');
+      }
+    };
+  }, [connection.status]);
   const localUserId = connection.user?.id ?? null;
   const {
     sendChat,
@@ -2123,7 +2169,11 @@ const App = (): JSX.Element => {
   );
 
   return (
-    <div className="stage-shell">
+    <div
+      className="stage-shell"
+      data-connected={connection.status === 'connected' ? 'true' : 'false'}
+      data-connection-status={connection.status}
+    >
       {connection.status !== 'connected' ? (
         <div
           className="reconnect-overlay"

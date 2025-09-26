@@ -1,3 +1,6 @@
+// @module: canvas
+// @tags: grid, geometry
+
 import {
   CANVAS_HEIGHT,
   CANVAS_WIDTH,
