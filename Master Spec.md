@@ -1,3 +1,4 @@
+> Deprecated, see AGENT.md. This file is kept only for historical context.
 # Bitby — Master Spec v3.7 (Consolidated, Full)
 
 > **Implementation guardrail**
