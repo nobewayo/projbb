@@ -7,7 +7,7 @@ This repository implements the Bitby platform following the **Master Spec v3.7**
 - a Fastify-based server backed by Postgres and Redis that issues short-lived JWTs from `/auth/login`, runs migrations/seeds on boot, exposes Socket.IO handlers for `auth`, `move`, and `chat`, publishes cross-instance chat via Redis, exports `/healthz`, `/readyz`, and `/metrics` endpoints instrumented with Prometheus counters, and now persists occupant mute/report actions so the realtime layer rehydrates social state on connect, fans out Redis-published moderation updates across every instance, broadcasts trade invitations/lifecycle updates to both participants, hydrates reconnect banners from the latest Postgres trade session, and prunes each room’s chat log to the most recent 200 entries immediately after persistence.
 - a Vitest integration harness under `@bitby/server` that authenticates through `/auth/login`, drives heartbeat, typing, chat, movement, item pickup, trade lifecycle, and social moderation flows against Postgres/Redis (via Testcontainers or a locally installed stack using `BITBY_TEST_STACK`), plus focused React Testing Library suites for the new client components/hooks (remember to keep `@testing-library/jest-dom` installed in the client workspace).
 - shared schema utilities covering the canonical realtime envelope plus JSON Schemas for `auth`, `move`, `chat`, and the new social payloads alongside an OpenAPI description of the `/auth/login` REST endpoint so both tiers validate identical payloads.
-- Docker Compose definitions for Postgres/Redis, a production build pipeline for the Fastify server and Vite client, and a Cosmos-ready Compose bundle that keeps the server private behind nginx while only the React client is exposed publicly.
+- Docker Compose definitions for Postgres/Redis plus a production build pipeline for the Fastify server and Vite client, including an optional Caddy reverse proxy that serves the React client over HTTPS while the API and data stores remain private on the Compose network.
 - The admin quick menu is now wired to authoritative REST endpoints so toggling grid visibility, hidden-hover highlighting, move animations, tile `locked`/`noPickup` flags, and latency traces persists to Postgres and fans out via Redis-backed realtime events across every client, and a dedicated **Plant** action now spawns an Atrium Plant on your current tile through `/admin/rooms/:roomId/items/plant`.
 - Admin REST endpoints now require an owner or moderator bearer token, stamp every successful action into an `audit_log` table with contextual metadata, and the Vitest integration harness exercises the tile-lock flow end-to-end (401/403 handling, realtime broadcast, and audit persistence).
 - The right panel now includes an authoritative backpack summary that hydrates from the server’s inventory records and refreshes immediately on pickup acknowledgements while avatar context menus trigger the `/rooms/:roomId/occupants/:occupantId/*` REST endpoints to load profiles, bootstrap trades, and persist mute/report actions with server-side gating. The bottom dock exposes a dedicated **Backpack** toggle that swaps the panel heading and reveals the inventory immediately under the divider, keeping the idle state text-free per the updated UX requirements.
@@ -161,16 +161,16 @@ When finished, stop them with `docker compose down`. The services expose credent
 
 ---
 
-## Cosmos Cloud (no-SSH deployment)
+## Docker Compose (full stack on Debian/Ubuntu)
 
-Operate entirely from the Cosmos dashboard (no terminal access) by following [`Cosmos-Setup.md`](./Cosmos-Setup.md). The guide walks through:
+To run the production stack locally or on a self-managed VPS, follow [`Docker-Setup.md`](./Docker-Setup.md). The guide covers:
 
-- attaching this repository to a Cosmos project,
-- wiring secrets/environment variables,
-- building the production server/client images with the bundled Dockerfiles, and
-- publishing only the nginx-served client through Cosmos' HTTP proxy while the Fastify realtime server, Postgres, and Redis remain private on the internal network.
+- installing Docker Engine + Compose on Debian/Ubuntu,
+- cloning this repository and preparing the `.env` secrets file,
+- building the Fastify server and Vite client images with the bundled Dockerfiles, and
+- launching Postgres, Redis, the server, and the nginx-served client via `docker compose`.
 
-Cosmos reuses the `packages/infra/docker/docker-compose.cosmos.yml` stack, so local environments and hosted deployments share the same build artifacts.
+The walkthrough uses `packages/infra/docker/docker-compose.full.yml`, which persists Postgres/Redis data in local volumes while publishing only the nginx-served client on port 8080. The API, Postgres, and Redis stay on the private Compose network and are proxied by nginx so nothing but the static client is reachable from the Internet.
 
 #### L6b. Local Postgres & Redis without Docker (apt-based fallback)
 

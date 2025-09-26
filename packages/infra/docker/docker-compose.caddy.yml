@@ -1,0 +1,25 @@
+version: '3.9'
+
+services:
+  client:
+    ports: []
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      - client
+    environment:
+      - CADDY_DOMAIN=${CADDY_DOMAIN}
+      - CADDY_EMAIL=${CADDY_EMAIL}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-config:/config
+      - caddy-data:/data
+    ports:
+      - '80:80'
+      - '443:443'
+
+volumes:
+  caddy-config:
+  caddy-data:
