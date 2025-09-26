@@ -22,6 +22,7 @@ export interface ChatStore {
     },
   ): Promise<ChatMessageRecord>;
   listRecentMessages(roomId: string, limit: number): Promise<ChatMessageRecord[]>;
+  pruneMessagesForRoom(params: { roomId: string; retain: number }): Promise<number>;
 }
 
 const mapRow = (row: {
@@ -105,8 +106,41 @@ export const createChatStore = (pool: Pool): ChatStore => {
     return result.rows.map((row) => mapRow(row)).reverse();
   };
 
+  const pruneMessagesForRoom: ChatStore['pruneMessagesForRoom'] = async ({
+    roomId,
+    retain,
+  }) => {
+    const retainCount = Number.isFinite(retain) ? Math.max(0, Math.trunc(retain)) : 0;
+    if (retainCount === 0) {
+      const result = await pool.query<{ id: string }>(
+        `DELETE FROM chat_message
+          WHERE room_id = $1
+        RETURNING id`,
+        [roomId],
+      );
+      return result.rowCount ?? 0;
+    }
+
+    const result = await pool.query<{ id: string }>(
+      `WITH ranked AS (
+         SELECT id
+           FROM chat_message
+          WHERE room_id = $1
+          ORDER BY room_seq DESC, id DESC
+          OFFSET $2
+       )
+       DELETE FROM chat_message
+        WHERE id IN (SELECT id FROM ranked)
+      RETURNING id`,
+      [roomId, retainCount],
+    );
+
+    return result.rowCount ?? 0;
+  };
+
   return {
     createMessage,
     listRecentMessages,
+    pruneMessagesForRoom,
   };
 };

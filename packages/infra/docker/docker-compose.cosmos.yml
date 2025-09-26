@@ -1,0 +1,59 @@
+version: '3.9'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: bitby
+      POSTGRES_USER: bitby
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-bitby}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "no", "--save", "", "--maxmemory-policy", "volatile-lru"]
+    volumes:
+      - redis-data:/data
+
+  server:
+    build:
+      context: ../..
+      dockerfile: packages/infra/docker/server.Dockerfile
+    depends_on:
+      - postgres
+      - redis
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: 3001
+      CLIENT_ORIGIN: ${CLIENT_ORIGIN}
+      JWT_SECRET: ${JWT_SECRET}
+      PGHOST: postgres
+      PGPORT: 5432
+      PGDATABASE: bitby
+      PGUSER: bitby
+      PGPASSWORD: ${POSTGRES_PASSWORD:-bitby}
+      REDIS_URL: redis://redis:6379
+    expose:
+      - '3001'
+    restart: unless-stopped
+
+  client:
+    build:
+      context: ../..
+      dockerfile: packages/infra/docker/client.Dockerfile
+      args:
+        VITE_BITBY_WS_URL: ${VITE_BITBY_WS_URL:-}
+        VITE_BITBY_HTTP_URL: ${VITE_BITBY_HTTP_URL:-}
+    depends_on:
+      - server
+    expose:
+      - '80'
+    restart: unless-stopped
+
+volumes:
+  postgres-data:
+  redis-data:

@@ -4,6 +4,11 @@ import type { ServerConfig } from '../config.js';
 import type { TileFlagRecord } from '../db/rooms.js';
 import type { DevAffordanceState } from '../db/admin.js';
 import type { RoomItemRecord } from '../db/items.js';
+import type {
+  SocialMuteRecord,
+  SocialReportRecord,
+  TradeLifecycleBroadcast,
+} from '@bitby/schemas';
 
 const ROOM_EVENT_CHANNEL = (roomId: string): string => `room.${roomId}.events`;
 
@@ -55,7 +60,28 @@ export type RoomItemEvent = {
   payload: { item: RoomItemRecord; roomSeq: number; createdBy: string };
 };
 
-export type RoomEvent = RoomChatEvent | RoomAdminEvent | RoomItemEvent;
+export type RoomSocialEvent =
+  | {
+      type: 'social:mute:recorded';
+      roomId: string;
+      payload: { mute: SocialMuteRecord };
+    }
+  | {
+      type: 'social:report:recorded';
+      roomId: string;
+      payload: { report: SocialReportRecord };
+    };
+
+export type RoomTradeEvent = {
+  type: 'trade:lifecycle:update';
+  roomId: string;
+  payload: {
+    trade: TradeLifecycleBroadcast['trade'];
+    actorId?: string;
+  };
+};
+
+export type RoomEvent = RoomChatEvent | RoomAdminEvent | RoomItemEvent | RoomSocialEvent | RoomTradeEvent;
 
 export interface RoomPubSub {
   publish(event: RoomEvent): Promise<void>;

@@ -3,20 +3,27 @@
 
 This repository implements the Bitby platform following the **Master Spec v3.7**. The stack is now wired together as a pnpm monorepo with:
 
-- a Vite + React client that renders the deterministic top-right anchored grid, keeps the blocking reconnect overlay mandated by the spec, streams authoritative chat history with a freeform composer that listens globally (type anywhere on the stage, press **Enter** to send, **Esc** to cancel), paints dev room items beneath avatars with click-through hit testing so the right panel can surface spec-compliant pickup gating copy, exposes spec-compliant right-click context menus for tiles, items, and avatars, and now renders realtime typing previews plus authoritative chat bubbles on the canvas while persisting each user’s chat drawer system-message preference.
-- a Fastify-based server backed by Postgres and Redis that issues short-lived JWTs from `/auth/login`, runs migrations/seeds on boot, exposes Socket.IO handlers for `auth`, `move`, and `chat`, publishes cross-instance chat via Redis, and exports `/healthz`, `/readyz`, and `/metrics` endpoints instrumented with Prometheus counters.
-- a Vitest integration harness under `@bitby/server` that authenticates through `/auth/login`, drives heartbeat, typing, chat, movement, and item pickup flows against Postgres/Redis, and can launch via Testcontainers or a locally installed stack (`BITBY_TEST_STACK`).
-- shared schema utilities covering the canonical realtime envelope plus JSON Schemas for `auth`, `move`, and `chat` alongside an OpenAPI description of the `/auth/login` REST endpoint so both tiers validate identical payloads.
-- Docker Compose definitions for Postgres and Redis plus pnpm workflows that hydrate the entire stack for local development.
+- a Vite + React client that renders the deterministic top-right anchored grid, keeps the blocking reconnect overlay mandated by the spec, streams authoritative chat history with a freeform composer that listens globally (type anywhere on the stage, press **Enter** to send, **Esc** to cancel), paints dev room items beneath avatars with click-through hit testing so the right panel can surface spec-compliant pickup gating copy, exposes spec-compliant right-click context menus for tiles, items, and avatars, and now hydrates persisted mute/report state, prunes muted occupants from the retained chat transcript, consumes Redis-backed social broadcasts, reacts to realtime trade lifecycle updates (invite/pending/accept/decline/cancel/complete) without redundant REST polls, replays the latest trade banner after reconnect, and composes the panel UI from extracted `ProfilePanel` / `InventoryCard` components driven by a reusable toast hook while keeping the visible chat window at an authoritative 200-message ceiling.
+- a Fastify-based server backed by Postgres and Redis that issues short-lived JWTs from `/auth/login`, runs migrations/seeds on boot, exposes Socket.IO handlers for `auth`, `move`, and `chat`, publishes cross-instance chat via Redis, exports `/healthz`, `/readyz`, and `/metrics` endpoints instrumented with Prometheus counters, and now persists occupant mute/report actions so the realtime layer rehydrates social state on connect, fans out Redis-published moderation updates across every instance, broadcasts trade invitations/lifecycle updates to both participants, hydrates reconnect banners from the latest Postgres trade session, and prunes each room’s chat log to the most recent 200 entries immediately after persistence.
+- a Vitest integration harness under `@bitby/server` that authenticates through `/auth/login`, drives heartbeat, typing, chat, movement, item pickup, trade lifecycle, and social moderation flows against Postgres/Redis (via Testcontainers or a locally installed stack using `BITBY_TEST_STACK`), plus focused React Testing Library suites for the new client components/hooks (remember to keep `@testing-library/jest-dom` installed in the client workspace).
+- shared schema utilities covering the canonical realtime envelope plus JSON Schemas for `auth`, `move`, `chat`, and the new social payloads alongside an OpenAPI description of the `/auth/login` REST endpoint so both tiers validate identical payloads.
+- Docker Compose definitions for Postgres/Redis, a production build pipeline for the Fastify server and Vite client, and a Cosmos-ready Compose bundle that keeps the server private behind nginx while only the React client is exposed publicly.
 - The admin quick menu is now wired to authoritative REST endpoints so toggling grid visibility, hidden-hover highlighting, move animations, tile `locked`/`noPickup` flags, and latency traces persists to Postgres and fans out via Redis-backed realtime events across every client, and a dedicated **Plant** action now spawns an Atrium Plant on your current tile through `/admin/rooms/:roomId/items/plant`.
+- Admin REST endpoints now require an owner or moderator bearer token, stamp every successful action into an `audit_log` table with contextual metadata, and the Vitest integration harness exercises the tile-lock flow end-to-end (401/403 handling, realtime broadcast, and audit persistence).
 - The right panel now includes an authoritative backpack summary that hydrates from the server’s inventory records and refreshes immediately on pickup acknowledgements while avatar context menus trigger the `/rooms/:roomId/occupants/:occupantId/*` REST endpoints to load profiles, bootstrap trades, and persist mute/report actions with server-side gating. The bottom dock exposes a dedicated **Backpack** toggle that swaps the panel heading and reveals the inventory immediately under the divider, keeping the idle state text-free per the updated UX requirements.
-- Latest connected client screenshot (freeform canvas chat): `browser:/invocations/uozjmdbn/artifacts/artifacts/connected-room.png`.
+- Latest connected client screenshot (social state + realtime trade lifecycle banner): `browser:/invocations/frztrbea/artifacts/artifacts/connected-room.png`.
 
 This guide explains how to clone, run, and test the project on Debian- or Ubuntu-based Linux desktops. The workflow below assumes an apt-based distribution (Debian 12 “Bookworm”, Ubuntu 22.04 “Jammy”, or newer) with sudo access.
 
-> **Note:** The deterministic grid renderer still paints the full 10-row field (10 columns on even rows, 11 on odd rows) with the development background and HUD overlays, but the realtime hook now authenticates, maintains heartbeats, hydrates chat history, appends live `chat:new` envelopes alongside movement deltas, and surfaces realtime typing previews plus committed chat bubbles directly on the canvas. Item sprites render beneath avatars with alpha-aware hit tests so primary-button clicks now fall through to tile movement while the right-click context menu’s **Info** action is the only way to surface the item detail panel (which still shows “Kan ikke samle op her” vs. “Klar til at samle op” copy based on tile flags and the local avatar’s position). The server remains authoritative for `move`, `chat`, and presence snapshots sourced from Postgres/Redis, and right-clicking tiles, items, or avatars spawns the spec-mandated context menus, including “Saml Op” buttons that only enable when the local avatar stands on a pickup-eligible tile. The chat drawer’s system-message toggle persists per user via the authoritative server preference store, the chat composer still runs entirely in the canvas (type anywhere to preview, Enter to send, Esc to cancel), and the admin quick menu now drives authoritative REST routes so grid/dev toggles, tile locks/no-pickups, and latency traces persist in Postgres and broadcast across Redis while the new **Plant** action drops an Atrium Plant onto the tile you currently occupy.
+> **Note:** The deterministic grid renderer still paints the full 10-row field (10 columns on even rows, 11 on odd rows) with the development background and HUD overlays, but the realtime hook now authenticates, maintains heartbeats, hydrates chat history, appends live `chat:new` envelopes alongside movement deltas, and surfaces realtime typing previews plus committed chat bubbles directly on the canvas. Item sprites render beneath avatars with alpha-aware hit tests so primary-button clicks now fall through to tile movement while the right-click context menu’s **Info** action is the only way to surface the item detail panel (which still shows “Kan ikke samle op her” vs. “Klar til at samle op” copy based on tile flags and the local avatar’s position). Persisted mute/report decisions flow back from the server on join, populate the profile drawer, and filter muted speakers from the chat log, while the trade banner now flows through the lifecycle REST acknowledgements (accept, decline/cancel, complete) so the UI mirrors authoritative responses. The server remains authoritative for `move`, `chat`, social state, and presence snapshots sourced from Postgres/Redis, and right-clicking tiles, items, or avatars spawns the spec-mandated context menus, including “Saml Op” buttons that only enable when the local avatar stands on a pickup-eligible tile. The chat drawer’s system-message toggle persists per user via the authoritative server preference store, the chat composer still runs entirely in the canvas (type anywhere to preview, Enter to send, Esc to cancel), and the admin quick menu now drives authoritative REST routes so grid/dev toggles, tile locks/no-pickups, and latency traces persist in Postgres and broadcast across Redis while the new **Plant** action drops an Atrium Plant onto the tile you currently occupy.
 
 ---
+
+### Outstanding TODOs (hand-off)
+
+1. Build the authoritative trade negotiation flow (server schema + client UI) so participants can propose inventory line items, review counteroffers, and finalize the exchange under server validation.
+2. Persist and surface historical trade summaries (who traded, when, and what changed hands) so profiles/backpack history can expose authoritative trade logs.
+3. Layer in time-based chat retention/archival (beyond the live 200-message ring) so muted/aged transcripts can be exported, audited, or aged out without bloating the primary table.
 
 ### Canvas chat controls (current build)
 
@@ -29,6 +36,7 @@ The chat drawer no longer carries a dedicated hint card—the composer lives exc
 
 ### Admin quick menu (authoritative toggles)
 
+- **Role gating & audit trail** — Every admin endpoint now demands a bearer token from an `owner` or `moderator` account. Successful calls append a structured row to the `audit_log` table (including room, tile coordinates, and toggled values) before broadcasting the update across the realtime socket and Redis fan-out.
 - **Grid/dev affordances** — tapping the grid, hidden-hover, or move animation buttons calls `POST /admin/rooms/:roomId/dev-affordances`, persisting to the new `room_admin_state` table and rebroadcasting through Redis so every client shares the same chrome state.
 - **Tile locks/pickups** — the lock/no-pickup buttons operate on the tile your avatar currently occupies via `POST /admin/rooms/:roomId/tiles/:x/:y/(lock|no-pickup)`, keeping `room_tile_flag` in sync while the realtime socket updates all canvases immediately.
 - **Latency traces** — the trace button triggers `POST /admin/rooms/:roomId/latency-trace`, stamps a fresh UUID/timestamp in Postgres, and emits a Redis event so other operator consoles see the request instantly.
@@ -151,6 +159,19 @@ docker compose up -d
 
 When finished, stop them with `docker compose down`. The services expose credentials documented in the compose file (`bitby/bitby`).
 
+---
+
+## Cosmos Cloud (no-SSH deployment)
+
+Operate entirely from the Cosmos dashboard (no terminal access) by following [`Cosmos-Setup.md`](./Cosmos-Setup.md). The guide walks through:
+
+- attaching this repository to a Cosmos project,
+- wiring secrets/environment variables,
+- building the production server/client images with the bundled Dockerfiles, and
+- publishing only the nginx-served client through Cosmos' HTTP proxy while the Fastify realtime server, Postgres, and Redis remain private on the internal network.
+
+Cosmos reuses the `packages/infra/docker/docker-compose.cosmos.yml` stack, so local environments and hosted deployments share the same build artifacts.
+
 #### L6b. Local Postgres & Redis without Docker (apt-based fallback)
 
 If Docker is unavailable (for example, inside a constrained CI runner), you can install the database services directly on Debian/Ubuntu hosts:
@@ -222,7 +243,7 @@ The pnpm workspace drives all packages. Run the commands below from the reposito
    The server listens on `http://localhost:3001` by default and exposes:
    - `GET /healthz` → `{ status: "ok" }`
    - `GET /readyz` → `{ status: "ready" }` once the process is accepting traffic (503 otherwise)
-   - `POST /auth/login` → accepts `{ "username": "test", "password": "password123" }` style payloads, verifies the Argon2id hash for that seeded user (`test`, `test2`, `test3`, `test4` all share the development password), and returns `{ token, expiresIn, user }` where `token` is an HS256 JWT signed with the development secret
+  - `POST /auth/login` → accepts `{ "username": "test", "password": "password123" }` style payloads, verifies the Argon2id hash for that seeded user (`test`, `test2`, `test3`, `test4` all share the development password), and returns `{ token, expiresIn, user }` where `token` is an HS256 JWT signed with the development secret. Roles are now seeded per spec (`test`→`owner`, `test2`→`moderator`, `test3`→`vip`, `test4`→`user`), and the admin REST surface only honours tokens from the owner/moderator cohorts.
    - `GET /rooms/:roomId/occupants/:occupantId/profile` and the companion `POST` endpoints for `/trade`, `/mute`, and `/report` → require an `Authorization: Bearer <JWT>` header and now persist trade bootstrap state, mute/report records, and profile snapshots through the server authority layer.
    - `Socket.IO /ws` namespace → validates the provided JWT from the `auth` envelope, replies with `auth:ok` containing the seed profile, heartbeat interval, and a development room snapshot (player + NPC occupant plus flagged tiles), answers `ping` with `pong`, and terminates idle sessions once the 30 s heartbeat window elapses.
 
@@ -320,6 +341,7 @@ The Vitest file at `packages/server/src/__tests__/realtime.integration.test.ts` 
 - Typing previews and committed chat bubbles (canvas bubble previews → `chat:typing`, `chat:new`).
 - Movement acknowledgements plus occupant broadcasts (`move:ok`, `room:occupant_moved`/`room:occupant_left`).
 - Item pickup authority (`item:pickup:ok` → `room:item_removed`) to validate inventory persistence against Postgres.
+- Admin tile locks requiring owner/moderator tokens, verifying 401/403 handling, realtime `admin:tile_flag:update` broadcasts, and the resulting audit log row.
 
 Tests boot against real Postgres/Redis via one of two strategies:
 
@@ -369,11 +391,11 @@ Copy the template to `.env.local` (git-ignored) and adjust values for your machi
 ## Next Steps in the Roadmap
 
 
-1. Harden the new admin REST routes with proper role gating, audit logging, and automated coverage for Postgres/Redis fan-out (§8).
-2. Persist mute/report state back into the realtime layer so muted occupants stay filtered across reconnects and moderation outcomes surface in the UI (§3, §8).
-3. Build the trade session lifecycle UI (accept/decline/in-progress) so the bootstrap call flows into a usable experience (§3, §A.6).
-4. Add client-side tests for the inventory/profile surfaces, toast handling, and context menu flows to guard the new authoritative pathways (§5, §A.5–A.6).
-5. Polish the chat surfaces with bubble fade-out/animation work, 500 ms timestamp tooltips, and multi-instance QA to ensure typing previews and canvas bubbles stay consistent across clusters (§3–4, §A.7).
+1. Implement the full trade negotiation UX (proposal slots, confirmation flows, authoritative validation) so the current lifecycle banner escalates into an interactive exchange per spec §A.6.
+2. Persist and surface post-trade summaries (participants, timestamps, exchanged items/coins) so moderation and profile views can reference authoritative trade history.
+3. Expand chat polish: finish the timestamp hover delay, bubble animation polish, and cluster QA while layering in time-based transcript archival beyond the live 200-message window.
+4. Continue rounding out client-side coverage for the profile/inventory/trade UI slices alongside toast/context-menu affordances.
+5. Extend admin tooling toward the catalog/editor roadmap once trade + chat improvements land.
 
 
 Progress will be tracked in future commits; this document will evolve with concrete commands as they become available.
@@ -386,11 +408,11 @@ Progress will be tracked in future commits; this document will evolve with concr
 - The canvas draws seeded development items beneath avatars, maintains per-item hit boxes, and funnels item selections into the right panel where Danish pickup copy (“Kan ikke samle op her” / “Klar til at samle op”) reflects tile flags and the local avatar’s position while movement gating remains authoritative.
 - The “Saml Op” action now issues real `item:pickup` envelopes. The server validates tile parity/noPickup flags, persists the transfer into `room_item`/`user_inventory_item`, increments `roomSeq`, and broadcasts `room:item_removed` while the client performs optimistic removal, shows pending/success/error copy, and restores the item on rejection. Tile, item, and avatar context menus mirror these gating rules so Info/Saml Op stay scoped to the active tile while avatar actions (profile, trade, mute, report) now call the authoritative `/rooms/:roomId/occupants/:occupantId/*` REST endpoints and surface server acknowledgements (including toast feedback and profile panel hydration).
 - The Fastify server boots Postgres migrations/seeds, validates `auth`/`move`/`chat` envelopes, persists chat to Postgres, relays room chat via Redis pub/sub, and exposes `/healthz`, `/readyz`, and `/metrics` Prometheus counters alongside the `/auth/login` REST endpoint.
-- Latest connectivity screenshot with chat + item panel: `browser:/invocations/qnntvkjk/artifacts/artifacts/connected-room.png`.
+- Latest connectivity screenshot with chat + item panel: `browser:/invocations/bgilqaqf/artifacts/artifacts/connected-room.png`.
 - Immediate follow-ups:
-  - Harden the admin REST surfaces with role gating, audit logs, and test coverage.
-  - Persist mute/report data through the realtime layer so muted occupants stay hidden across reconnects.
-  - Build the trade lifecycle UI so bootstrapped sessions surface in the client and can be accepted/declined.
+  - Promote the trade banner into the full negotiation flow (per-slot offers, confirmation, completion) with server validation and reconnect hydration.
+  - Capture and expose authoritative trade history so moderation and profile views can inspect prior exchanges.
+  - Finish chat polish (timestamp hover delay, bubble animation, retention instrumentation) now that the 200-message pruning baseline is in place.
 
 ---
 
@@ -404,4 +426,4 @@ Progress will be tracked in future commits; this document will evolve with concr
 
 ---
 
-*Last updated: 2025-09-26 UTC*
+*Last updated: 2025-09-27 UTC*

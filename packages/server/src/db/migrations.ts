@@ -14,17 +14,17 @@ const USERS = [
   {
     id: '11111111-1111-1111-1111-111111111201',
     username: 'test',
-    rolesSql: "ARRAY['user']",
+    rolesSql: "ARRAY['owner','user']",
   },
   {
     id: '11111111-1111-1111-1111-111111111202',
     username: 'test2',
-    rolesSql: "ARRAY['user']",
+    rolesSql: "ARRAY['moderator','user']",
   },
   {
     id: '11111111-1111-1111-1111-111111111203',
     username: 'test3',
-    rolesSql: "ARRAY['user']",
+    rolesSql: "ARRAY['vip','user']",
   },
   {
     id: '11111111-1111-1111-1111-111111111204',
@@ -212,10 +212,25 @@ const MIGRATIONS: Migration[] = [
         recipient_id uuid NOT NULL REFERENCES app_user(id) ON DELETE CASCADE,
         room_id uuid NOT NULL REFERENCES room(id) ON DELETE CASCADE,
         status text NOT NULL DEFAULT 'pending',
-        created_at timestamptz NOT NULL DEFAULT now()
+        created_at timestamptz NOT NULL DEFAULT now(),
+        accepted_at timestamptz,
+        completed_at timestamptz,
+        cancelled_at timestamptz,
+        cancelled_by uuid REFERENCES app_user(id) ON DELETE SET NULL,
+        cancelled_reason text
       )`,
       `CREATE INDEX IF NOT EXISTS idx_trade_session_room
          ON trade_session(room_id, created_at DESC)`,
+      `ALTER TABLE trade_session
+         ADD COLUMN IF NOT EXISTS accepted_at timestamptz`,
+      `ALTER TABLE trade_session
+         ADD COLUMN IF NOT EXISTS completed_at timestamptz`,
+      `ALTER TABLE trade_session
+         ADD COLUMN IF NOT EXISTS cancelled_at timestamptz`,
+      `ALTER TABLE trade_session
+         ADD COLUMN IF NOT EXISTS cancelled_by uuid REFERENCES app_user(id) ON DELETE SET NULL`,
+      `ALTER TABLE trade_session
+         ADD COLUMN IF NOT EXISTS cancelled_reason text`,
       `CREATE TABLE IF NOT EXISTS user_mute (
         id uuid PRIMARY KEY,
         user_id uuid NOT NULL REFERENCES app_user(id) ON DELETE CASCADE,
@@ -254,6 +269,21 @@ const MIGRATIONS: Migration[] = [
       `INSERT INTO room_admin_state (room_id, grid_visible, show_hover_when_grid_hidden, move_animations_enabled)
          VALUES ('${DEV_ROOM_ID}', true, true, true)
          ON CONFLICT (room_id) DO NOTHING`,
+    ],
+  },
+  {
+    id: '0008_admin_audit_log',
+    statements: [
+      `CREATE TABLE IF NOT EXISTS audit_log (
+        id bigserial PRIMARY KEY,
+        user_id uuid NOT NULL REFERENCES app_user(id) ON DELETE CASCADE,
+        room_id uuid REFERENCES room(id) ON DELETE SET NULL,
+        action text NOT NULL,
+        ctx jsonb NOT NULL DEFAULT '{}'::jsonb,
+        created_at timestamptz NOT NULL DEFAULT now()
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_audit_log_user ON audit_log(user_id, created_at DESC)`,
+      `CREATE INDEX IF NOT EXISTS idx_audit_log_room ON audit_log(room_id, created_at DESC)`,
     ],
   },
 ];

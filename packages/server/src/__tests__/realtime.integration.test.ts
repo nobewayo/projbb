@@ -1,6 +1,7 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { io, type Socket } from 'socket.io-client';
 import {
+  adminTileFlagUpdateDataSchema,
   chatMessageBroadcastSchema,
   chatTypingBroadcastSchema,
   chatTypingUpdateDataSchema,
@@ -11,8 +12,13 @@ import {
   roomOccupantMovedDataSchema,
   occupantProfileResponseSchema,
   tradeBootstrapResponseSchema,
+  tradeLifecycleResponseSchema,
+  tradeLifecycleBroadcastSchema,
   muteResponseSchema,
   reportResponseSchema,
+  socialStateSchema,
+  socialMuteBroadcastSchema,
+  socialReportBroadcastSchema,
   type MessageEnvelope,
 } from '@bitby/schemas';
 import type { FastifyInstance } from 'fastify';
@@ -25,6 +31,7 @@ import { runMigrations } from '../db/migrations.js';
 
 const PLANT_ITEM_ID = '11111111-1111-1111-1111-222222222201';
 const DEV_ROOM_ID = '11111111-1111-1111-1111-111111111111';
+const OWNER_USER_ID = '11111111-1111-1111-1111-111111111201';
 const HEARTBEAT_PING_OP = 'ping';
 const HEARTBEAT_PONG_OP = 'pong';
 
@@ -256,6 +263,7 @@ describe.sequential('realtime integration', () => {
     await pool.query('DELETE FROM user_mute');
     await pool.query('DELETE FROM user_report');
     await pool.query('DELETE FROM trade_session');
+    await pool.query('DELETE FROM audit_log');
     await pool.query('UPDATE room_item SET picked_up_at = NULL, picked_up_by = NULL');
     await pool.query(
       `UPDATE room_avatar SET room_id = NULL WHERE user_id = '11111111-1111-1111-1111-111111111299'`,
@@ -464,6 +472,89 @@ describe.sequential('realtime integration', () => {
     }
   });
 
+  it('enforces admin auth, broadcasts tile locks, and writes audit logs', async () => {
+    const observer = await createAuthedClient('test2');
+    const ownerToken = await login('test');
+    const regularToken = await login('test4');
+
+    const endpoint = `${httpBaseUrl}/admin/rooms/${DEV_ROOM_ID}/tiles/1/1/lock`;
+
+    const unauthenticated = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ locked: true }),
+    });
+    expect(unauthenticated.status).toBe(401);
+
+    const forbidden = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${regularToken}`,
+      },
+      body: JSON.stringify({ locked: true }),
+    });
+    expect(forbidden.status).toBe(403);
+
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${ownerToken}`,
+      },
+      body: JSON.stringify({ locked: true }),
+    });
+
+    expect(response.status).toBe(200);
+    const json = (await response.json()) as { tile?: { locked?: boolean } };
+    expect(json.tile?.locked).toBe(true);
+
+    const updateEnvelope = await observer.waitFor(
+      (message) => message.op === 'admin:tile_flag:update',
+      5_000,
+    );
+    const update = adminTileFlagUpdateDataSchema.parse(updateEnvelope.data);
+    expect(update.tile.locked).toBe(true);
+    expect(update.updatedBy).toBe('test');
+
+    const db = createPgPool(config);
+    try {
+      const auditResult = await db.query<{
+        user_id: string;
+        room_id: string | null;
+        action: string;
+        ctx: Record<string, unknown>;
+      }>(
+        `SELECT user_id, room_id, action, ctx
+           FROM audit_log
+          ORDER BY created_at DESC, id DESC
+          LIMIT 1`,
+      );
+
+      expect(auditResult.rowCount).toBe(1);
+      const auditRow = auditResult.rows[0];
+      expect(auditRow.user_id).toBe(OWNER_USER_ID);
+      expect(auditRow.room_id).toBe(DEV_ROOM_ID);
+      expect(auditRow.action).toBe('admin.tile.lock');
+
+      const context = auditRow.ctx;
+      expect(context.locked).toBe(true);
+      const tileContext = context.tile as { x?: number; y?: number } | undefined;
+      expect(tileContext?.x).toBe(1);
+      expect(tileContext?.y).toBe(1);
+
+      await db.query(
+        `INSERT INTO room_tile_flag (room_id, x, y, locked, no_pickup)
+           VALUES ($1, $2, $3, false, false)
+           ON CONFLICT (room_id, x, y) DO UPDATE
+             SET locked = EXCLUDED.locked`,
+        [DEV_ROOM_ID, 1, 1],
+      );
+    } finally {
+      await db.end();
+    }
+  });
+
   it('returns occupant profile summaries over REST', async () => {
     const token = await login('test');
     const alice = await createAuthedClient('test');
@@ -519,6 +610,366 @@ describe.sequential('realtime integration', () => {
     expect(parsed.trade.initiatorId).toBe(alice.userId);
     expect(parsed.trade.recipientId).toBe(bob.userId);
     expect(parsed.trade.roomId).toBe(DEV_ROOM_ID);
+
+    const initiatorPendingEnvelope = await alice.waitFor(
+      (message) => {
+        if (message.op !== 'trade:lifecycle:update') {
+          return false;
+        }
+        const parsedEnvelope = tradeLifecycleBroadcastSchema.safeParse(message.data);
+        return (
+          parsedEnvelope.success &&
+          parsedEnvelope.data.trade.id === parsed.trade.id &&
+          parsedEnvelope.data.trade.status === 'pending'
+        );
+      },
+      5_000,
+      'trade pending broadcast (initiator)',
+    );
+    const initiatorPending = tradeLifecycleBroadcastSchema.parse(initiatorPendingEnvelope.data);
+    expect(initiatorPending.participant.id).toBe(bob.userId);
+    expect(initiatorPending.trade.status).toBe('pending');
+    expect(initiatorPending.actorId).toBe(alice.userId);
+
+    const recipientPendingEnvelope = await bob.waitFor(
+      (message) => {
+        if (message.op !== 'trade:lifecycle:update') {
+          return false;
+        }
+        const parsedEnvelope = tradeLifecycleBroadcastSchema.safeParse(message.data);
+        return (
+          parsedEnvelope.success &&
+          parsedEnvelope.data.trade.id === parsed.trade.id &&
+          parsedEnvelope.data.trade.status === 'pending'
+        );
+      },
+      5_000,
+      'trade pending broadcast (recipient)',
+    );
+    const recipientPending = tradeLifecycleBroadcastSchema.parse(recipientPendingEnvelope.data);
+    expect(recipientPending.participant.id).toBe(alice.userId);
+    expect(recipientPending.trade.status).toBe('pending');
+    expect(recipientPending.actorId).toBe(alice.userId);
+  });
+
+  it('allows a recipient to accept and complete a trade session', async () => {
+    const initiatorToken = await login('test');
+    const recipientToken = await login('test2');
+    const alice = await createAuthedClient('test');
+    const bob = await createAuthedClient('test2');
+
+    expect(alice.userId).not.toBeNull();
+    expect(bob.userId).not.toBeNull();
+
+    const bootstrapResponse = await fetch(
+      `${httpBaseUrl}/rooms/${DEV_ROOM_ID}/occupants/${bob.userId}/trade`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${initiatorToken}`,
+        },
+        body: JSON.stringify({ context: 'context_menu' }),
+      },
+    );
+
+    expect(bootstrapResponse.status).toBe(200);
+    const bootstrapPayload = await bootstrapResponse.json();
+    const bootstrap = tradeBootstrapResponseSchema.parse(bootstrapPayload);
+
+    const acceptResponse = await fetch(
+      `${httpBaseUrl}/rooms/${DEV_ROOM_ID}/trades/${bootstrap.trade.id}/accept`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${recipientToken}`,
+        },
+      },
+    );
+
+    expect(acceptResponse.status).toBe(200);
+    const acceptPayload = await acceptResponse.json();
+    const accepted = tradeLifecycleResponseSchema.parse(acceptPayload);
+
+    expect(accepted.trade.status).toBe('accepted');
+    expect(accepted.trade.acceptedAt).toBeDefined();
+    expect(accepted.participant.id).toBe(alice.userId);
+
+    const initiatorAcceptEnvelope = await alice.waitFor(
+      (message) => {
+        if (message.op !== 'trade:lifecycle:update') {
+          return false;
+        }
+        const parsed = tradeLifecycleBroadcastSchema.safeParse(message.data);
+        return parsed.success && parsed.data.trade.id === bootstrap.trade.id && parsed.data.trade.status === 'accepted';
+      },
+      5_000,
+      'trade accepted broadcast (initiator)',
+    );
+    const initiatorAccept = tradeLifecycleBroadcastSchema.parse(initiatorAcceptEnvelope.data);
+    expect(initiatorAccept.participant.id).toBe(bob.userId);
+    expect(initiatorAccept.actorId).toBe(bob.userId);
+
+    const recipientAcceptEnvelope = await bob.waitFor(
+      (message) => {
+        if (message.op !== 'trade:lifecycle:update') {
+          return false;
+        }
+        const parsed = tradeLifecycleBroadcastSchema.safeParse(message.data);
+        return parsed.success && parsed.data.trade.id === bootstrap.trade.id && parsed.data.trade.status === 'accepted';
+      },
+      5_000,
+      'trade accepted broadcast (recipient)',
+    );
+    const recipientAccept = tradeLifecycleBroadcastSchema.parse(recipientAcceptEnvelope.data);
+    expect(recipientAccept.participant.id).toBe(alice.userId);
+    expect(recipientAccept.actorId).toBe(bob.userId);
+
+    const completeResponse = await fetch(
+      `${httpBaseUrl}/rooms/${DEV_ROOM_ID}/trades/${bootstrap.trade.id}/complete`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${initiatorToken}`,
+        },
+      },
+    );
+
+    expect(completeResponse.status).toBe(200);
+    const completePayload = await completeResponse.json();
+    const completed = tradeLifecycleResponseSchema.parse(completePayload);
+
+    expect(completed.trade.status).toBe('completed');
+    expect(completed.trade.completedAt).toBeDefined();
+    expect(completed.participant.id).toBe(bob.userId);
+
+    const initiatorCompleteEnvelope = await alice.waitFor(
+      (message) => {
+        if (message.op !== 'trade:lifecycle:update') {
+          return false;
+        }
+        const parsed = tradeLifecycleBroadcastSchema.safeParse(message.data);
+        return parsed.success && parsed.data.trade.id === bootstrap.trade.id && parsed.data.trade.status === 'completed';
+      },
+      5_000,
+      'trade completed broadcast (initiator)',
+    );
+    const initiatorComplete = tradeLifecycleBroadcastSchema.parse(initiatorCompleteEnvelope.data);
+    expect(initiatorComplete.participant.id).toBe(bob.userId);
+    expect(initiatorComplete.actorId).toBe(alice.userId);
+
+    const recipientCompleteEnvelope = await bob.waitFor(
+      (message) => {
+        if (message.op !== 'trade:lifecycle:update') {
+          return false;
+        }
+        const parsed = tradeLifecycleBroadcastSchema.safeParse(message.data);
+        return parsed.success && parsed.data.trade.id === bootstrap.trade.id && parsed.data.trade.status === 'completed';
+      },
+      5_000,
+      'trade completed broadcast (recipient)',
+    );
+    const recipientComplete = tradeLifecycleBroadcastSchema.parse(recipientCompleteEnvelope.data);
+    expect(recipientComplete.participant.id).toBe(alice.userId);
+    expect(recipientComplete.actorId).toBe(alice.userId);
+  });
+
+  it('supports cancelling trade sessions with explicit reasons', async () => {
+    const initiatorToken = await login('test');
+    const recipientToken = await login('test2');
+    const alice = await createAuthedClient('test');
+    const bob = await createAuthedClient('test2');
+
+    expect(alice.userId).not.toBeNull();
+    expect(bob.userId).not.toBeNull();
+
+    const bootstrapResponse = await fetch(
+      `${httpBaseUrl}/rooms/${DEV_ROOM_ID}/occupants/${bob.userId}/trade`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${initiatorToken}`,
+        },
+        body: JSON.stringify({ context: 'context_menu' }),
+      },
+    );
+
+    expect(bootstrapResponse.status).toBe(200);
+    const bootstrapPayload = await bootstrapResponse.json();
+    const bootstrap = tradeBootstrapResponseSchema.parse(bootstrapPayload);
+
+    const declineResponse = await fetch(
+      `${httpBaseUrl}/rooms/${DEV_ROOM_ID}/trades/${bootstrap.trade.id}/cancel`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${recipientToken}`,
+        },
+        body: JSON.stringify({ reason: 'declined' }),
+      },
+    );
+
+    expect(declineResponse.status).toBe(200);
+    const declinePayload = await declineResponse.json();
+    const cancelled = tradeLifecycleResponseSchema.parse(declinePayload);
+
+    expect(cancelled.trade.status).toBe('cancelled');
+    expect(cancelled.trade.cancelledReason).toBe('declined');
+    expect(cancelled.trade.cancelledBy).toBe(bob.userId);
+    expect(cancelled.participant.id).toBe(alice.userId);
+
+    const initiatorCancelEnvelope = await alice.waitFor(
+      (message) => {
+        if (message.op !== 'trade:lifecycle:update') {
+          return false;
+        }
+        const parsed = tradeLifecycleBroadcastSchema.safeParse(message.data);
+        return parsed.success && parsed.data.trade.id === bootstrap.trade.id && parsed.data.trade.status === 'cancelled';
+      },
+      5_000,
+      'trade cancelled broadcast (initiator)',
+    );
+    const initiatorCancel = tradeLifecycleBroadcastSchema.parse(initiatorCancelEnvelope.data);
+    expect(initiatorCancel.participant.id).toBe(bob.userId);
+    expect(initiatorCancel.actorId).toBe(bob.userId);
+
+    const recipientCancelEnvelope = await bob.waitFor(
+      (message) => {
+        if (message.op !== 'trade:lifecycle:update') {
+          return false;
+        }
+        const parsed = tradeLifecycleBroadcastSchema.safeParse(message.data);
+        return parsed.success && parsed.data.trade.id === bootstrap.trade.id && parsed.data.trade.status === 'cancelled';
+      },
+      5_000,
+      'trade cancelled broadcast (recipient)',
+    );
+    const recipientCancel = tradeLifecycleBroadcastSchema.parse(recipientCancelEnvelope.data);
+    expect(recipientCancel.participant.id).toBe(alice.userId);
+    expect(recipientCancel.actorId).toBe(bob.userId);
+  });
+
+  it('hydrates the latest trade lifecycle state on reconnect', async () => {
+    const initiatorToken = await login('test');
+    const recipientToken = await login('test2');
+    const alice = await createAuthedClient('test');
+    const bob = await createAuthedClient('test2');
+
+    expect(alice.userId).not.toBeNull();
+    expect(bob.userId).not.toBeNull();
+
+    const bootstrapResponse = await fetch(
+      `${httpBaseUrl}/rooms/${DEV_ROOM_ID}/occupants/${bob.userId}/trade`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${initiatorToken}`,
+        },
+        body: JSON.stringify({ context: 'context_menu' }),
+      },
+    );
+
+    expect(bootstrapResponse.status).toBe(200);
+    const bootstrapPayload = await bootstrapResponse.json();
+    const bootstrap = tradeBootstrapResponseSchema.parse(bootstrapPayload);
+
+    await alice.waitFor(
+      (message) => {
+        if (message.op !== 'trade:lifecycle:update') {
+          return false;
+        }
+        const parsed = tradeLifecycleBroadcastSchema.safeParse(message.data);
+        return (
+          parsed.success &&
+          parsed.data.trade.id === bootstrap.trade.id &&
+          parsed.data.trade.status === 'pending'
+        );
+      },
+      5_000,
+      'pending trade broadcast (initiator hydration)',
+    );
+
+    await bob.waitFor(
+      (message) => {
+        if (message.op !== 'trade:lifecycle:update') {
+          return false;
+        }
+        const parsed = tradeLifecycleBroadcastSchema.safeParse(message.data);
+        return (
+          parsed.success &&
+          parsed.data.trade.id === bootstrap.trade.id &&
+          parsed.data.trade.status === 'pending'
+        );
+      },
+      5_000,
+      'pending trade broadcast (recipient hydration)',
+    );
+
+    await alice.disconnect();
+
+    const reconnectToken = await login('test');
+    const aliceReconnect = new RealtimeTestClient('test', httpBaseUrl);
+    clients.push(aliceReconnect);
+    const reconnectEnvelope = await aliceReconnect.connectAndAuthenticate(reconnectToken);
+    const reconnectPayload = (reconnectEnvelope.data ?? {}) as { tradeLifecycle?: unknown };
+    expect(reconnectPayload.tradeLifecycle).not.toBeNull();
+    const reconnectTrade = tradeLifecycleBroadcastSchema.parse(
+      reconnectPayload.tradeLifecycle as Record<string, unknown>,
+    );
+    expect(reconnectTrade.trade.id).toBe(bootstrap.trade.id);
+    expect(reconnectTrade.trade.status).toBe('pending');
+    expect(reconnectTrade.participant.id).toBe(bob.userId);
+
+    const cancelResponse = await fetch(
+      `${httpBaseUrl}/rooms/${DEV_ROOM_ID}/trades/${bootstrap.trade.id}/cancel`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${recipientToken}`,
+        },
+        body: JSON.stringify({ reason: 'declined' }),
+      },
+    );
+
+    expect(cancelResponse.status).toBe(200);
+
+    const cancelEnvelope = await aliceReconnect.waitFor(
+      (message) => {
+        if (message.op !== 'trade:lifecycle:update') {
+          return false;
+        }
+        const parsed = tradeLifecycleBroadcastSchema.safeParse(message.data);
+        return (
+          parsed.success &&
+          parsed.data.trade.id === bootstrap.trade.id &&
+          parsed.data.trade.status === 'cancelled'
+        );
+      },
+      5_000,
+      'trade cancelled broadcast (initiator reconnect)',
+    );
+    const cancelBroadcast = tradeLifecycleBroadcastSchema.parse(cancelEnvelope.data);
+    expect(cancelBroadcast.trade.cancelledReason).toBe('declined');
+    expect(cancelBroadcast.trade.cancelledBy).toBe(bob.userId);
+
+    await bob.disconnect();
+
+    const recipientReconnectToken = await login('test2');
+    const bobReconnect = new RealtimeTestClient('test2', httpBaseUrl);
+    clients.push(bobReconnect);
+    const bobReconnectEnvelope = await bobReconnect.connectAndAuthenticate(recipientReconnectToken);
+    const bobReconnectPayload = (bobReconnectEnvelope.data ?? {}) as { tradeLifecycle?: unknown };
+    expect(bobReconnectPayload.tradeLifecycle).not.toBeNull();
+    const cancelledHydration = tradeLifecycleBroadcastSchema.parse(
+      bobReconnectPayload.tradeLifecycle as Record<string, unknown>,
+    );
+    expect(cancelledHydration.trade.id).toBe(bootstrap.trade.id);
+    expect(cancelledHydration.trade.status).toBe('cancelled');
+    expect(cancelledHydration.trade.cancelledBy).toBe(bob.userId);
   });
 
   it('records mute requests for occupants', async () => {
@@ -578,5 +1029,147 @@ describe.sequential('realtime integration', () => {
     expect(parsed.report.reportedUserId).toBe(bob.userId);
     expect(parsed.report.roomId).toBe(DEV_ROOM_ID);
     expect(parsed.report.reason).toBe('integration-test-report');
+  });
+
+  it('hydrates mute history on auth and broadcasts new mute records', async () => {
+    const token = await login('test');
+    const alice = new RealtimeTestClient('test', httpBaseUrl);
+    clients.push(alice);
+    const authEnvelope = await alice.connectAndAuthenticate(token);
+    const initialSocial = socialStateSchema.parse(
+      ((authEnvelope.data ?? {}) as { social?: unknown }).social ?? { mutes: [], reports: [] },
+    );
+    expect(initialSocial.mutes).toHaveLength(0);
+
+    const bob = await createAuthedClient('test2');
+    expect(bob.userId).not.toBeNull();
+
+    const muteResponse = await fetch(
+      `${httpBaseUrl}/rooms/${DEV_ROOM_ID}/occupants/${bob.userId}/mute`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ reason: 'integration-test-social-mute' }),
+      },
+    );
+
+    expect(muteResponse.status).toBe(200);
+
+    const updateEnvelope = await alice.waitFor(
+      (message) => message.op === 'social:mute:recorded',
+      5_000,
+      'social mute broadcast',
+    );
+    const broadcast = socialMuteBroadcastSchema.parse(updateEnvelope.data);
+    expect(broadcast.mute.mutedUserId).toBe(bob.userId);
+    expect(broadcast.mute.userId).toBe(alice.userId);
+
+    await alice.disconnect();
+
+    const reconnectToken = await login('test');
+    const aliceReconnect = new RealtimeTestClient('test', httpBaseUrl);
+    clients.push(aliceReconnect);
+    const reconnectEnvelope = await aliceReconnect.connectAndAuthenticate(reconnectToken);
+    const reconnectSocial = socialStateSchema.parse(
+      ((reconnectEnvelope.data ?? {}) as { social?: unknown }).social ?? { mutes: [], reports: [] },
+    );
+    expect(
+      reconnectSocial.mutes.some((entry) => entry.mutedUserId === bob.userId && entry.userId === alice.userId),
+    ).toBe(true);
+  });
+
+  it('hydrates report history on auth and broadcasts new reports', async () => {
+    const token = await login('test');
+    const alice = new RealtimeTestClient('test', httpBaseUrl);
+    clients.push(alice);
+    const authEnvelope = await alice.connectAndAuthenticate(token);
+    const initialSocial = socialStateSchema.parse(
+      ((authEnvelope.data ?? {}) as { social?: unknown }).social ?? { mutes: [], reports: [] },
+    );
+    expect(initialSocial.reports).toHaveLength(0);
+
+    const bob = await createAuthedClient('test2');
+    expect(bob.userId).not.toBeNull();
+
+    const reportResponse = await fetch(
+      `${httpBaseUrl}/rooms/${DEV_ROOM_ID}/occupants/${bob.userId}/report`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ reason: 'integration-test-social-report' }),
+      },
+    );
+
+    expect(reportResponse.status).toBe(200);
+
+    const updateEnvelope = await alice.waitFor(
+      (message) => message.op === 'social:report:recorded',
+      5_000,
+      'social report broadcast',
+    );
+    const broadcast = socialReportBroadcastSchema.parse(updateEnvelope.data);
+    expect(broadcast.report.reportedUserId).toBe(bob.userId);
+    expect(broadcast.report.reporterId).toBe(alice.userId);
+
+    await alice.disconnect();
+
+    const reconnectToken = await login('test');
+    const aliceReconnect = new RealtimeTestClient('test', httpBaseUrl);
+    clients.push(aliceReconnect);
+    const reconnectEnvelope = await aliceReconnect.connectAndAuthenticate(reconnectToken);
+    const reconnectSocial = socialStateSchema.parse(
+      ((reconnectEnvelope.data ?? {}) as { social?: unknown }).social ?? { mutes: [], reports: [] },
+    );
+    expect(
+      reconnectSocial.reports.some(
+        (entry) => entry.reportedUserId === bob.userId && entry.reporterId === alice.userId,
+      ),
+    ).toBe(true);
+  });
+
+  it('prunes chat history to retain the latest 200 messages', async () => {
+    const alice = await createAuthedClient('test');
+
+    const totalMessages = 205;
+    for (let index = 0; index < totalMessages; index += 1) {
+      await alice.sendAndAwaitAck(
+        'chat:send',
+        { body: `retention-${index}` },
+        'chat:ok',
+        5_000,
+        { errorOps: ['error:chat_payload'] },
+      );
+    }
+
+    const retentionPool = createPgPool(config);
+    try {
+      const countResult = await retentionPool.query<{ count: number }>(
+        'SELECT COUNT(*)::int AS count FROM chat_message WHERE room_id = $1',
+        [DEV_ROOM_ID],
+      );
+      expect(countResult.rows[0]?.count ?? 0).toBeLessThanOrEqual(200);
+    } finally {
+      await retentionPool.end();
+    }
+
+    const reconnectToken = await login('test3');
+    const reconnectClient = new RealtimeTestClient('test3', httpBaseUrl);
+    clients.push(reconnectClient);
+    const reconnectEnvelope = await reconnectClient.connectAndAuthenticate(reconnectToken);
+    const chatHistoryRaw = Array.isArray(reconnectEnvelope.data?.chatHistory)
+      ? (reconnectEnvelope.data.chatHistory as unknown[])
+      : [];
+    expect(chatHistoryRaw.length).toBeLessThanOrEqual(200);
+    expect(chatHistoryRaw.length).toBeGreaterThan(0);
+    const lastEntry = chatMessageBroadcastSchema.parse(
+      chatHistoryRaw[chatHistoryRaw.length - 1] ?? {},
+    );
+    expect(lastEntry.body.startsWith('retention-')).toBe(true);
   });
 });

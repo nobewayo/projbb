@@ -17,6 +17,7 @@ import { createMetricsBundle } from './metrics/registry.js';
 import { createRealtimeServer } from './ws/connection.js';
 import { createPreferenceStore } from './db/preferences.js';
 import { createAdminStateStore } from './db/admin.js';
+import { createAuditLogStore } from './db/audit.js';
 import { adminRoutes } from './api/admin.js';
 import { createSocialStore } from './db/social.js';
 import { occupantRoutes } from './api/occupants.js';
@@ -56,6 +57,7 @@ export const createServer = async ({
   });
   const preferenceStore = createPreferenceStore(pool);
   const adminStateStore = createAdminStateStore(pool);
+  const auditLogStore = createAuditLogStore(pool);
   const realtime = await createRealtimeServer({
     config,
     roomStore,
@@ -65,6 +67,7 @@ export const createServer = async ({
     metrics,
     preferenceStore,
     adminStateStore,
+    socialStore,
   });
 
   app.decorate('readiness', readiness);
@@ -75,12 +78,20 @@ export const createServer = async ({
   });
 
   await app.register(authRoutes, { config, userStore });
-  await app.register(adminRoutes, { roomStore, adminStateStore, realtime, itemStore });
+  await app.register(adminRoutes, {
+    config,
+    roomStore,
+    adminStateStore,
+    realtime,
+    itemStore,
+    auditLogStore,
+  });
   await app.register(occupantRoutes, {
     config,
     roomStore,
     itemStore,
     socialStore,
+    realtime,
   });
 
   app.get('/healthz', async () => ({ status: 'ok' }));
