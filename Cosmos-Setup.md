@@ -1,110 +1,269 @@
-# Bitby on Cosmos Cloud — Docker Compose Deployment Guide
+# Bitby on Cosmos Cloud — Zero-SSH Docker Compose Deployment
 
-> **Scope.** These instructions explain how to deploy the Bitby mono-repo on [Cosmos Cloud](https://cosmos-cloud.io) using **only the Cosmos dashboard**. No SSH access is required; every step happens in the browser. The final topology keeps the Fastify realtime server private on the internal network while the Vite/React client is the only service exposed to the public internet through Cosmos' reverse proxy.
-
----
-
-## 1. Prerequisites inside Cosmos
-
-1. **Create / select a project.** Sign in to Cosmos, open the workspace that owns your server, and create a new *Project* (or reuse an existing one) that will host the Bitby stack.
-2. **Attach a Git repository.** In the project sidebar choose **Repositories → Add repository** and authorize Cosmos to read the Git provider that hosts this repo. Point Cosmos at the Bitby repository's default branch so Compose builds always pick up the latest code.
-3. **Provision secrets.** Navigate to **Project Settings → Secrets** and add the following key/value pairs so they can be injected into the Compose stack later:
-   - `BITBY_JWT_SECRET` — a long random string (32+ characters).
-   - `BITBY_POSTGRES_PASSWORD` — the password you want Postgres to use (avoid the default `bitby`).
-   - Optional: `BITBY_CLIENT_ORIGIN` — the public URL you intend to use (e.g. `https://play.example.com`). You can also set this at deploy time once the domain is known.
+> **Scope.** This guide explains how to deploy the Bitby stack on [Cosmos Cloud](https://cosmos-cloud.io) **entirely from the dashboard**. You only need a Cosmos server with Docker enabled and a domain (optional). The Compose bundle below provisions Postgres, Redis, the Bitby backend, the production web client, and a one-shot prep container that clones and builds the repository inside the cluster — no separate Git attachment or manual image builds are required.
 
 ---
 
-## 2. Review the Cosmos-ready Compose bundle
+## 1. What you need before you start
 
-The repository ships a Compose file purpose-built for Cosmos along with Dockerfiles that build production images for the server and client:
-
-- `packages/infra/docker/docker-compose.cosmos.yml`
-- `packages/infra/docker/server.Dockerfile`
-- `packages/infra/docker/client.Dockerfile`
-- `packages/infra/docker/nginx.client.conf`
-
-The Compose stack defines four services:
-
-| Service   | Purpose | Network exposure |
-|-----------|---------|------------------|
-| `postgres` | Bitby's Postgres 15 database with persistent volume `postgres-data`. | Internal only |
-| `redis`    | Redis 7 for presence and pub/sub with volume `redis-data`. | Internal only |
-| `server`   | Fastify + Socket.IO backend listening on port `3001`. Cosmos only needs the `expose` directive so the container stays private. | Internal only |
-| `client`   | Nginx serving the built React client. Nginx also proxies `/auth/*`, `/admin/*`, `/metrics`, `/readyz`, `/healthz`, and `/ws` traffic to the private server container. | Published via Cosmos' HTTP proxy |
-
-The Dockerfiles perform a frozen `pnpm install`, build the shared schemas, compile the TypeScript server, and emit a production Vite bundle for the client. The client image honours two optional build arguments—`VITE_BITBY_WS_URL` and `VITE_BITBY_HTTP_URL`—if you need to hard-code endpoints. For most Cosmos deployments you can leave them empty so the runtime defaults use the same origin that serves the client.
+1. **Cosmos server:** Create (or pick) a server in Cosmos that has the Docker agent installed. All steps below happen from `Servers → <your server>`.
+2. **Repository URL:** A HTTPS Git URL for the Bitby repo. Public repos can use the anonymous URL; private repos should embed a read-only personal access token (e.g. `https://<token>@github.com/your-org/bitby.git`).
+3. **Secrets:** Generate the values you plan to use for:
+   - `JWT_SECRET` — at least 32 random characters.
+   - `POSTGRES_PASSWORD` — the password for the internal Postgres instance.
+   - Optional: `CLIENT_ORIGIN` (final HTTPS domain) and `BITBY_REPO_REF` (branch or tag to deploy).
 
 ---
 
-## 3. Create the Compose application in Cosmos
+## 2. Use the Cosmos-ready Compose stack
 
-1. Inside the project, click **Deployments → New deployment → Docker Compose**.
-2. Give the deployment a name such as `bitby-prod`.
-3. Under **Repository**, choose the Bitby repo you attached earlier and leave the branch on `main` (or the branch you wish to deploy).
-4. When Cosmos asks for the Compose file, browse the repository tree and select `packages/infra/docker/docker-compose.cosmos.yml`.
-5. Enable **Auto redeploy on push** if you want Cosmos to rebuild/restart the stack whenever the branch updates.
+Copy the following Compose file into the Cosmos **Docker Compose** editor. It is also stored at `packages/infra/docker/docker-compose.cosmos.yml` in the repository for reference.
+
+```yaml
+version: '3.9'
+
+services:
+  prep:
+    image: node:20-bookworm
+    restart: 'no'
+    environment:
+      BITBY_REPO_URL: ${BITBY_REPO_URL:-https://github.com/bitbyhq/bitby.git}
+      BITBY_REPO_REF: ${BITBY_REPO_REF:-main}
+    entrypoint: ['/bin/bash', '-lc']
+    command: |
+      set -euo pipefail
+      apt-get update
+      apt-get install -y --no-install-recommends git ca-certificates python3 build-essential
+      rm -rf /var/lib/apt/lists/*
+      rm -rf /workspace/repo
+      git clone --depth=1 --branch "${BITBY_REPO_REF}" "${BITBY_REPO_URL}" /workspace/repo
+      cd /workspace/repo
+      corepack enable
+      pnpm install --frozen-lockfile
+      pnpm --filter @bitby/schemas build
+      pnpm --filter @bitby/server build
+      pnpm --filter @bitby/client build
+    volumes:
+      - bitby-source:/workspace
+
+  postgres:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: bitby
+      POSTGRES_USER: bitby
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-bitby}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -d ${POSTGRES_DB:-bitby} -U ${POSTGRES_USER:-bitby}']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ['redis-server', '--appendonly', 'no', '--save', '', '--maxmemory-policy', 'volatile-lru']
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  server:
+    image: node:20-bookworm
+    restart: unless-stopped
+    depends_on:
+      prep:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: 3001
+      LOG_LEVEL: info
+      JWT_SECRET: ${JWT_SECRET:-change-me}
+      CLIENT_ORIGIN: ${CLIENT_ORIGIN:-http://localhost}
+      PGHOST: postgres
+      PGPORT: 5432
+      PGDATABASE: bitby
+      PGUSER: bitby
+      PGPASSWORD: ${POSTGRES_PASSWORD:-bitby}
+      REDIS_URL: redis://redis:6379
+    volumes:
+      - bitby-source:/workspace
+    working_dir: /workspace/repo
+    entrypoint: ['/bin/bash', '-lc']
+    command: |
+      set -euo pipefail
+      corepack enable
+      pnpm --filter @bitby/server start
+    expose:
+      - '3001'
+
+  client:
+    image: nginx:1.25-alpine
+    restart: unless-stopped
+    depends_on:
+      prep:
+        condition: service_completed_successfully
+      server:
+        condition: service_started
+    volumes:
+      - bitby-source:/workspace:ro
+    entrypoint: ['/bin/sh', '-c']
+    command: |
+      set -e
+      cat <<'EONGINX' >/etc/nginx/conf.d/default.conf
+      server {
+        listen 80;
+        server_name _;
+
+        root /usr/share/nginx/html;
+        index index.html;
+
+        gzip on;
+        gzip_types text/plain text/css application/json application/javascript application/octet-stream image/svg+xml;
+
+        location /ws {
+          proxy_pass http://server:3001/ws;
+          proxy_http_version 1.1;
+          proxy_set_header Upgrade $http_upgrade;
+          proxy_set_header Connection "Upgrade";
+          proxy_set_header Host $host;
+          proxy_read_timeout 65;
+        }
+
+        location /auth/ {
+          proxy_pass http://server:3001/auth/;
+          proxy_set_header Host $host;
+          proxy_set_header X-Real-IP $remote_addr;
+          proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+          proxy_set_header X-Forwarded-Proto $scheme;
+        }
+
+        location /admin/ {
+          proxy_pass http://server:3001/admin/;
+          proxy_set_header Host $host;
+          proxy_set_header X-Real-IP $remote_addr;
+          proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+          proxy_set_header X-Forwarded-Proto $scheme;
+        }
+
+        location /metrics {
+          proxy_pass http://server:3001/metrics;
+          proxy_set_header Host $host;
+          proxy_set_header X-Forwarded-Proto $scheme;
+        }
+
+        location /readyz {
+          proxy_pass http://server:3001/readyz;
+        }
+
+        location /healthz {
+          proxy_pass http://server:3001/healthz;
+        }
+
+        location / {
+          try_files $uri $uri/ /index.html;
+        }
+      }
+      EONGINX
+      rm -rf /usr/share/nginx/html/*
+      cp -r /workspace/repo/packages/client/dist/* /usr/share/nginx/html/
+      exec nginx -g 'daemon off;'
+    expose:
+      - '80'
+
+volumes:
+  bitby-source:
+  postgres-data:
+  redis-data:
+```
+
+**How it works.**
+- `prep` runs once on each deployment, cloning the repo, installing dependencies, and producing the server/client builds on a shared Docker volume.
+- `server` and `client` reuse that volume so the Node runtime runs compiled TypeScript while nginx serves the bundled React app. The nginx config forwards API and websocket traffic back to the internal server container.
+- `postgres` and `redis` stay private inside the Compose network; only the `client` service is published through Cosmos.
 
 ---
 
-## 4. Wire up environment variables, build args, and volumes
+## 3. Create the deployment from the Cosmos dashboard
 
-With the Compose preview open:
+1. Sign in to Cosmos and open **Servers → <your server>**.
+2. Click **Deployments → New Deployment → Docker Compose**.
+3. Give the deployment a name such as `bitby-prod`.
+4. Choose an appropriate compute profile for each service (Cosmos lets you override resources later).
+5. Paste the Compose file from §2 into the editor and save.
 
-1. Expand the **Environment variables & secrets** section for the `server` service and add the following entries:
-   - `JWT_SECRET` → `{{ secrets.BITBY_JWT_SECRET }}`
-   - `PGPASSWORD` → `{{ secrets.BITBY_POSTGRES_PASSWORD }}`
-   - `CLIENT_ORIGIN` → either `{{ secrets.BITBY_CLIENT_ORIGIN }}` or leave blank for now.
-2. Still under the `server` service, confirm the default values for `PGHOST`, `PGPORT`, `PGDATABASE`, and `PGUSER` match your requirements. They are pre-configured for the internal Postgres container, so most installations can leave them unchanged.
-3. For the `client` service, expand **Build arguments** and supply values only if you need to override the defaults:
-   - `VITE_BITBY_WS_URL` → leave empty to let the client reuse the public domain for websockets (`wss://<domain>/ws`).
-   - `VITE_BITBY_HTTP_URL` → leave empty to let REST requests reuse the public domain (`https://<domain>`).
-4. Ensure Cosmos automatically detects the named volumes `postgres-data` and `redis-data`. Leave their defaults so data survives container restarts.
-5. Save the configuration.
+Cosmos stores the Compose definition directly with the deployment; there is no separate "project" or Git attachment step required.
 
 ---
 
-## 5. Publish only the client through Cosmos' proxy
+## 4. Configure environment variables in Cosmos
 
-1. After saving, open the deployment's **Networking** tab.
-2. Cosmos will list each service with its exposed ports. For `client`, click **Expose HTTP** and choose the desired domain:
-   - **Domain:** select one of your managed domains or create a Cosmos-provided subdomain.
-   - **Route path:** `/`
-   - **Target port:** `80`
-   - **TLS:** enable Let’s Encrypt certificates so the site serves over HTTPS.
-3. Leave the `server`, `postgres`, and `redis` services unexposed. Because the Compose file only uses `expose`, Cosmos will keep them reachable solely from within the project network. The bundled `nginx.client.conf` forwards `/ws` websocket upgrades and `/auth/*`/`/admin/*` REST calls to the private server container, so the browser never needs a direct connection.
+1. Inside the deployment view open the **Environment** panel.
+2. Add the required variables (mark sensitive values as *secret*):
+   - `JWT_SECRET` → your random secret.
+   - `POSTGRES_PASSWORD` → password for the Postgres container.
+   - `CLIENT_ORIGIN` → final HTTPS origin for the site (e.g. `https://play.example.com`). You can update this after you bind the domain.
+   - `BITBY_REPO_URL` → HTTPS URL for the repository. Use a tokenised URL if the repo is private.
+   - Optional: `BITBY_REPO_REF` → branch/tag to deploy (defaults to `main`).
+3. Save the environment. Cosmos will inject the same variables into any service that references them in the Compose file.
+
+---
+
+## 5. Publish the web client via **URLs & Ports**
+
+1. Navigate to the deployment’s **URLs & Ports** tab.
+2. Click **Add URL** (or **Expose Port**) and configure:
+   - **Service:** `client`
+   - **Container Port:** `80`
+   - **Protocol:** HTTPS (enable the automatic Let’s Encrypt certificate).
+   - **Domain / Subdomain:** choose a managed domain or generate a Cosmos subdomain.
+   - Enable **Websocket support** so `/ws` upgrades reach the backend.
+3. Save the URL mapping. Leave the `server`, `postgres`, and `redis` services unexposed so they remain private inside the Compose network.
+
+If you need to expose the Fastify metrics endpoint separately, add another URL that points to `client` with the route path `/metrics` (nginx forwards it internally).
 
 ---
 
 ## 6. Deploy and verify
 
-1. From the deployment overview page click **Deploy**. Cosmos will build the server and client images using the Dockerfiles referenced in the Compose file.
-2. Watch the build logs to ensure both images compile successfully. The server image runs `pnpm --filter @bitby/server build` and the client image runs `pnpm --filter @bitby/client build`; compilation should finish without warnings.
-3. Once the containers start, open the **Logs** tab for each service:
-   - `postgres` should report readiness.
-   - `redis` should log the standard startup banner.
-   - `server` should log `Server is listening` on port 3001 and confirm migrations ran.
-   - `client` (nginx) should log that it is ready to accept connections on `0.0.0.0:80`.
-4. Visit the public domain you configured. The Bitby canvas should render, the blocking “Connecting…” overlay should disappear, and chat plus presence should load from the backend. Because nginx proxies websocket traffic to the private server, no additional firewall rules are required.
+1. From the deployment overview click **Deploy**. Cosmos will start the `prep` job first and stream the logs; expect the initial build to take several minutes while pnpm installs dependencies.
+2. Once `prep` exits successfully, Cosmos will launch `postgres`, `redis`, `server`, and `client`.
+3. Use the **Logs** tab to confirm each service is healthy:
+   - `postgres` prints `database system is ready to accept connections`.
+   - `redis` logs `Ready to accept connections`.
+   - `server` logs `Server is listening` on port 3001 after migrations run.
+   - `client` logs the nginx startup banner.
+4. Open the public URL you configured. The Bitby canvas should render, the reconnect overlay should clear, and chat/presence should function. Because nginx proxies `/ws`, no additional firewall rules are needed.
 
 ---
 
-## 7. Updating the deployment
+## 7. Updating the stack
 
-- **Code changes:** push updates to the tracked branch. If auto-redeploy is enabled, Cosmos will rebuild and roll out the new containers automatically. Otherwise, return to the deployment and click **Deploy** manually.
-- **Secrets:** rotate secrets from **Project Settings → Secrets**, then trigger a redeploy so the new values flow into the containers.
-- **Database backups:** because Postgres uses a named volume, schedule Cosmos' volume snapshots or export dumps using the Cosmos UI’s “Exec” console for the `postgres` service (no SSH needed).
-- **Scaling:** adjust CPU/RAM per service from the deployment’s **Resources** tab. Scale horizontally by adding replicas to the `client` service; keep `server` at a single replica until Redis session affinity is configured for multi-instance realtime.
+- **Code updates:** change `BITBY_REPO_REF` (or push new commits to the referenced branch) and click **Redeploy**. The `prep` job re-clones the repo on every deployment to pick up changes.
+- **Secrets:** edit the values in the **Environment** panel and redeploy so Cosmos restarts the services with the new secrets.
+- **Scaling:** adjust CPU/RAM allocations per service from the deployment sidebar. Scale horizontally by adding replicas to the `client` service; keep `server` at a single replica unless you introduce Redis-based session affinity for realtime traffic.
+- **Backups:** schedule Cosmos volume snapshots for `postgres-data`. You can also open the `postgres` console in the dashboard and run `pg_dump` or `psql` commands without SSH.
 
 ---
 
-## 8. Troubleshooting tips
+## 8. Troubleshooting
 
 | Symptom | Likely cause | Fix |
 |---------|--------------|-----|
-| Browser shows the reconnect overlay indefinitely | `CLIENT_ORIGIN` mismatch blocking CORS or websocket upgrades | Update the `CLIENT_ORIGIN` env var to the final HTTPS domain and redeploy. Ensure the Cosmos route is issuing TLS certificates. |
-| Login requests fail with 401 | Seeds are missing | The server runs migrations automatically. If seeds were wiped, open the `postgres` service → **Console** and run `SELECT username FROM app_user;` to confirm the `test` users exist. |
-| Static site loads but websocket closes immediately | The Cosmos route is not configured for websockets | In the route details enable websocket support (Cosmos toggles this automatically for HTTP routes, but confirm the option is on). |
-| Build fails with "Cannot find pnpm" | Corepack disabled in the build image | Ensure you kept the provided Dockerfiles; they call `corepack enable` before `pnpm install`. |
+| `prep` fails with `fatal: could not read Username` | Private repo without embedded token | Set `BITBY_REPO_URL` to include a PAT (e.g. `https://token@github.com/org/bitby.git`). Redeploy. |
+| Browser stuck on reconnect overlay | `CLIENT_ORIGIN` mismatch causing CORS/WebSocket rejection | Update `CLIENT_ORIGIN` to the exact HTTPS URL you published and redeploy. |
+| HTTP works but websocket closes instantly | Route not created with websocket support | Edit the URL mapping and ensure the **Websocket** toggle is enabled. |
+| Build logs show "pnpm: command not found" | `corepack` failed to run in the base image | Cosmos uses the official `node:20-bookworm` image which ships `corepack`. If you swap images, run `corepack enable` before invoking pnpm. |
+| Metrics/health endpoints 404 | Directly hitting the server container | Access them through the published domain (e.g. `https://play.example.com/metrics`) so nginx forwards the request. |
 
-With these steps, you can manage the entire Bitby deployment—builds, releases, secrets, and networking—directly from Cosmos' web dashboard without ever opening an SSH session.
+With this setup you can manage the entire Bitby deployment — cloning, builds, environment management, routing, and updates — directly from the Cosmos Cloud dashboard without touching SSH.
