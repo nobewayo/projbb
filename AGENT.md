@@ -481,30 +481,20 @@ When implementing, **Codex should**:
 
 ---
 
-## 23) Ready‑to‑Implement Tasks (First Sprint)
-
-1) Wire the item pickup loop (server validation, inventory persistence, optimistic UI) so the panel’s “Saml Op” control reflects authoritative acknowledgements.
-2) Add realtime typing bubbles and chat bubble rendering on the canvas while persisting the chat drawer’s system-message preference per user.
-3) Wire the new right-click context menus into authoritative flows so Info/Saml Op respect server state and avatar actions trigger real profile/trade/mute/report plumbing.
-4) Extend the admin quick menu so each toggle calls the authoritative API (lock/noPickup, latency trace) and persists dev overrides via Postgres/Redis.
-5) Establish automated integration/E2E tests that exercise auth → chat → move → item flows against the Postgres/Redis stack and wire them into CI.
-6) Audit `[realtime]` debug logging before release (demote, gate, or remove) so production builds ship without noisy console output.
-
----
-
-## 24) Progress Snapshot — 2025-09-25
+## 23) Progress Snapshot — 2025-09-25
 
 - ✅ `useRealtimeConnection` authenticates via `/auth/login`, maintains heartbeats, hydrates the room snapshot, streams historical chat, appends live `chat:new` envelopes, and exposes a composer that emits `chat:send` while the blocking overlay clears automatically after reconnect.
 - ✅ The React client now renders seeded room items beneath avatars, tracks per-item hit boxes, routes selections into the right panel’s item info view, and overlays realtime typing previews plus authoritative chat bubbles on the canvas while the chat composer listens globally (type anywhere, Enter to send, Esc to cancel) and honours the chat drawer’s per-user system-message preference alongside the admin quick toggles and movement gating.
 - ✅ Right-click context menus now surface tile, item, and avatar actions per spec, gating “Saml Op” to same-tile, non-`noPickup` squares while avatar actions now call the authoritative profile/trade/mute/report REST flows with server persistence and gating.
-- ✅ The admin quick menu now drives authoritative REST endpoints for grid/hover/move affordances, tile lock/noPickup flags, and latency trace requests, persisting overrides in Postgres (`room_admin_state`/`room_tile_flag`) and broadcasting updates across Redis so every connected client stays in sync.
+- ✅ Left-clicking items now falls through to tile movement; the item detail panel only opens from the right-click **Info** action so selection stays scoped to the authoritative context menu flow.
+- ✅ The admin quick menu now drives authoritative REST endpoints for grid/hover/move affordances, tile lock/noPickup flags, latency trace requests, and the new plant spawner, persisting overrides in Postgres (`room_admin_state`/`room_tile_flag`) while `/admin/rooms/:roomId/items/plant` inserts an Atrium Plant on the local tile, increments `roomSeq`, and fans out `room:item_added` via Redis so every connected client renders the new sprite immediately.
 - ✅ The “Saml Op” button now emits real `item:pickup` envelopes; the server validates tile/noPickup rules, persists the transfer to Postgres, increments `roomSeq`, broadcasts `room:item_removed`, and the client performs optimistic removal with pending/success/error copy while restoring items on authoritative rejection.
 - ✅ The backpack/right-panel inventory view hydrates from authoritative inventory snapshots, reflects item pickups immediately after server acknowledgement, and now opens via the bottom dock’s **Backpack** toggle, which retitles the panel and reveals the inventory beneath the divider while leaving the idle state text-free.
 - ✅ The Fastify server boots Postgres migrations/seeds, validates `auth`/`move`/`chat` envelopes, persists chat history to Postgres, relays cross-instance chat through Redis pub/sub, persists per-user chat drawer preferences, and exposes `/healthz`, `/readyz`, and `/metrics` endpoints instrumented with Prometheus counters.
 - ✅ `@bitby/schemas` publishes JSON Schemas for `auth`, `move`, and `chat` plus an OpenAPI document for `/auth/login`, keeping both tiers on a single contract for realtime and REST payloads.
 - ✅ Workspace scripts rebuild shared schemas before Vite launches, and lint/typecheck/test/build workflows cover the new chat, item, and observability codepaths.
 - ✅ `@bitby/server` now ships a Vitest-backed integration/E2E suite that boots Postgres/Redis via Testcontainers (or `BITBY_TEST_STACK=external`) and drives auth, heartbeat, reconnect, typing, chat, movement, and item pickup flows to guard regressions across the realtime pipeline.
-- Latest connectivity screenshot with chat + item panel: `browser:/invocations/twylxals/artifacts/artifacts/connected-room.png`.
+- Latest connectivity screenshot with chat + item panel: `browser:/invocations/qnntvkjk/artifacts/artifacts/connected-room.png`.
 - **Infra fallback:** When Docker is unavailable, install Postgres/Redis via `apt` (`sudo apt-get install -y postgresql redis-server`), start them with `sudo pg_ctlcluster 16 main start` and `redis-server --daemonize yes`, then create the `bitby` role/database before launching the server (see README §L6b).
 
 ### Immediate Next Focus

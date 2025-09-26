@@ -75,7 +75,7 @@ export const createServer = async ({
   });
 
   await app.register(authRoutes, { config, userStore });
-  await app.register(adminRoutes, { roomStore, adminStateStore, realtime });
+  await app.register(adminRoutes, { roomStore, adminStateStore, realtime, itemStore });
   await app.register(occupantRoutes, {
     config,
     roomStore,

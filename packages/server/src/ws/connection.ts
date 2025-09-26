@@ -12,6 +12,7 @@ import {
   adminAffordanceUpdateDataSchema,
   adminTileFlagUpdateDataSchema,
   adminLatencyTraceEventDataSchema,
+  roomItemAddedDataSchema,
   type ChatMessageBroadcast,
   type ChatPreferences,
   type ChatTypingBroadcast,
@@ -127,6 +128,11 @@ export interface RealtimeServer {
     updatedBy: string;
   }): Promise<void>;
   applyLatencyTrace(event: { trace: AdminLatencyTrace }): Promise<void>;
+  applyItemSpawn(event: {
+    item: RoomItemRecord;
+    roomSeq: number;
+    createdBy: string;
+  }): Promise<void>;
   shutdown(): Promise<void>;
 }
 
@@ -521,6 +527,29 @@ export const createRealtimeServer = async ({
     }
   };
 
+  const broadcastItemAdded = (
+    item: RoomItem,
+    roomSeq: number,
+    excludeSocketId?: string,
+  ): void => {
+    const payload = roomItemAddedDataSchema.parse({
+      item: cloneItem(item),
+      roomSeq,
+    });
+
+    for (const connection of developmentRoomState.connections.values()) {
+      if (excludeSocketId && connection.socket.id === excludeSocketId) {
+        continue;
+      }
+
+      safeSend(
+        connection.logger,
+        connection.socket,
+        createEnvelope('room:item_added', 0, payload),
+      );
+    }
+  };
+
   const pruneTypingIndicators = (now: number = Date.now()): void => {
     for (const indicator of developmentRoomState.typingIndicators.values()) {
       if (indicator.expiresAt <= now) {
@@ -736,6 +765,25 @@ export const createRealtimeServer = async ({
     }
   };
 
+  const applyItemSpawnInternal = async (
+    event: { item: RoomItemRecord; roomSeq: number; createdBy: string },
+    shouldPublish: boolean,
+  ): Promise<void> => {
+    const item = toRoomItem(event.item);
+    developmentRoomState.items.set(item.id, { ...item });
+
+    updateRoomSeq(event.roomSeq);
+    broadcastItemAdded(item, developmentRoomState.roomSeq);
+
+    if (shouldPublish) {
+      await pubsub.publish({
+        type: 'room:item:added',
+        roomId: developmentRoomState.id,
+        payload: event,
+      });
+    }
+  };
+
   await pubsub.subscribe(developmentRoomState.id, (event) => {
     if (event.type === 'chat:new' || event.type === 'chat:typing') {
       if (event.type === 'chat:new') {
@@ -765,6 +813,14 @@ export const createRealtimeServer = async ({
       void applyLatencyTraceInternal({ trace: event.payload }, false).catch((error) => {
         // eslint-disable-next-line no-console
         console.error('Failed to apply remote latency trace update', error);
+      });
+      return;
+    }
+
+    if (event.type === 'room:item:added') {
+      void applyItemSpawnInternal(event.payload, false).catch((error) => {
+        // eslint-disable-next-line no-console
+        console.error('Failed to apply remote item spawn', error);
       });
     }
   });
@@ -1433,6 +1489,14 @@ export const createRealtimeServer = async ({
     await applyLatencyTraceInternal(event, true);
   };
 
+  const applyItemSpawn = async (event: {
+    item: RoomItemRecord;
+    roomSeq: number;
+    createdBy: string;
+  }): Promise<void> => {
+    await applyItemSpawnInternal(event, true);
+  };
+
   const shutdown = async (): Promise<void> => {
     for (const connection of developmentRoomState.connections.values()) {
       try {
@@ -1449,6 +1513,7 @@ export const createRealtimeServer = async ({
     applyTileFlagUpdate,
     applyAffordanceUpdate,
     applyLatencyTrace,
+    applyItemSpawn,
     shutdown,
   };
 };

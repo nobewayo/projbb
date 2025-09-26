@@ -17,6 +17,7 @@ import {
   roomOccupantMovedDataSchema,
   roomOccupantLeftDataSchema,
   roomItemRemovedDataSchema,
+  roomItemAddedDataSchema,
   roomSnapshotSchema,
   adminAffordanceUpdateDataSchema,
   adminTileFlagUpdateDataSchema,
@@ -133,6 +134,7 @@ export interface RealtimeConnectionState extends InternalConnectionState {
   updateTileLock: (tile: { x: number; y: number }, locked: boolean) => Promise<boolean>;
   updateTileNoPickup: (tile: { x: number; y: number }, noPickup: boolean) => Promise<boolean>;
   requestLatencyTrace: () => Promise<boolean>;
+  spawnPlantAtTile: (tile: { x: number; y: number }) => Promise<boolean>;
   fetchOccupantProfile: (occupantId: string) => Promise<ActionResult<OccupantProfileSummary>>;
   initiateTradeWithOccupant: (
     occupantId: string,
@@ -1148,6 +1150,23 @@ export const useRealtimeConnection = (): RealtimeConnectionState => {
 
           return;
         }
+        case 'room:item_added': {
+          const parsed = roomItemAddedDataSchema.safeParse(envelope.data);
+          if (!parsed.success) {
+            updateState({ lastError: 'Received malformed room:item_added payload' });
+            return;
+          }
+
+          roomItemsRef.current.set(parsed.data.item.id, { ...parsed.data.item });
+
+          setState((previous) => ({
+            ...previous,
+            items: sortRoomItems(roomItemsRef.current.values()),
+            lastRoomSeq: parsed.data.roomSeq,
+          }));
+
+          return;
+        }
         case 'room:item_removed': {
           const parsed = roomItemRemovedDataSchema.safeParse(envelope.data);
           if (!parsed.success) {
@@ -1885,6 +1904,22 @@ export const useRealtimeConnection = (): RealtimeConnectionState => {
     return sendAdminPost(`/admin/rooms/${roomId}/latency-trace`, body);
   }, [sendAdminPost, state.room?.id, state.user?.id]);
 
+  const spawnPlantAtTile = useCallback(
+    async (tile: { x: number; y: number }): Promise<boolean> => {
+      const roomId = state.room?.id;
+      if (!roomId) {
+        return false;
+      }
+
+      return sendAdminPost(`/admin/rooms/${roomId}/items/plant`, {
+        tileX: tile.x,
+        tileY: tile.y,
+        updatedBy: state.user?.id ?? 'admin',
+      });
+    },
+    [sendAdminPost, state.room?.id, state.user?.id],
+  );
+
   const fetchOccupantProfile = useCallback(
     async (occupantId: string): Promise<ActionResult<OccupantProfileSummary>> => {
       const roomId = state.room?.id;
@@ -1978,6 +2013,7 @@ export const useRealtimeConnection = (): RealtimeConnectionState => {
       updateTileLock,
       updateTileNoPickup,
       requestLatencyTrace,
+      spawnPlantAtTile,
       fetchOccupantProfile,
       initiateTradeWithOccupant,
       muteOccupant,
@@ -1996,6 +2032,7 @@ export const useRealtimeConnection = (): RealtimeConnectionState => {
       updateTileLock,
       updateTileNoPickup,
       requestLatencyTrace,
+      spawnPlantAtTile,
       fetchOccupantProfile,
       initiateTradeWithOccupant,
       muteOccupant,
