@@ -1,9 +1,14 @@
 import { z } from 'zod';
-import { tradeParticipantSchema, tradeSessionSchema } from '../rest/occupants.js';
+import {
+  tradeNegotiationStateSchema,
+  tradeParticipantSchema,
+  tradeSessionSchema,
+} from '../rest/occupants.js';
 
 export const tradeLifecycleBroadcastSchema = z.object({
   trade: tradeSessionSchema,
   participant: tradeParticipantSchema,
+  negotiation: tradeNegotiationStateSchema,
   actorId: z.string().uuid().optional(),
 });
 

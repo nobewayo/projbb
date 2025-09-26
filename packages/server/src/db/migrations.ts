@@ -1,4 +1,5 @@
 import type { Pool, PoolClient } from 'pg';
+import { TRADE_MAX_SLOTS_PER_USER } from './social.js';
 
 interface Migration {
   id: string;
@@ -217,7 +218,9 @@ const MIGRATIONS: Migration[] = [
         completed_at timestamptz,
         cancelled_at timestamptz,
         cancelled_by uuid REFERENCES app_user(id) ON DELETE SET NULL,
-        cancelled_reason text
+        cancelled_reason text,
+        initiator_ready boolean NOT NULL DEFAULT false,
+        recipient_ready boolean NOT NULL DEFAULT false
       )`,
       `CREATE INDEX IF NOT EXISTS idx_trade_session_room
          ON trade_session(room_id, created_at DESC)`,
@@ -231,6 +234,20 @@ const MIGRATIONS: Migration[] = [
          ADD COLUMN IF NOT EXISTS cancelled_by uuid REFERENCES app_user(id) ON DELETE SET NULL`,
       `ALTER TABLE trade_session
          ADD COLUMN IF NOT EXISTS cancelled_reason text`,
+      `ALTER TABLE trade_session
+         ADD COLUMN IF NOT EXISTS initiator_ready boolean NOT NULL DEFAULT false`,
+      `ALTER TABLE trade_session
+         ADD COLUMN IF NOT EXISTS recipient_ready boolean NOT NULL DEFAULT false`,
+      `CREATE TABLE IF NOT EXISTS trade_proposal (
+        trade_id uuid NOT NULL REFERENCES trade_session(id) ON DELETE CASCADE,
+        offered_by uuid NOT NULL REFERENCES app_user(id) ON DELETE CASCADE,
+        slot_index integer NOT NULL CHECK (slot_index >= 0 AND slot_index < ${TRADE_MAX_SLOTS_PER_USER}),
+        inventory_item_id uuid NOT NULL REFERENCES user_inventory_item(id) ON DELETE CASCADE,
+        updated_at timestamptz NOT NULL DEFAULT now(),
+        PRIMARY KEY (trade_id, offered_by, slot_index)
+      )`,
+      `CREATE UNIQUE INDEX IF NOT EXISTS idx_trade_proposal_item
+         ON trade_proposal(trade_id, inventory_item_id)`,
       `CREATE TABLE IF NOT EXISTS user_mute (
         id uuid PRIMARY KEY,
         user_id uuid NOT NULL REFERENCES app_user(id) ON DELETE CASCADE,

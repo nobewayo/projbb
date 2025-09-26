@@ -160,6 +160,19 @@ export interface RealtimeConnectionState extends InternalConnectionState {
   completeTradeSession: (
     tradeId: string,
   ) => Promise<ActionResult<TradeLifecycleResponse>>;
+  updateTradeProposal: (
+    tradeId: string,
+    slotIndex: number,
+    inventoryItemId: string,
+  ) => Promise<ActionResult<TradeLifecycleResponse>>;
+  clearTradeProposal: (
+    tradeId: string,
+    slotIndex: number,
+  ) => Promise<ActionResult<TradeLifecycleResponse>>;
+  updateTradeReadiness: (
+    tradeId: string,
+    ready: boolean,
+  ) => Promise<ActionResult<TradeLifecycleResponse>>;
   muteOccupant: (occupantId: string) => Promise<ActionResult<MuteRecordSummary>>;
   reportOccupant: (
     occupantId: string,
@@ -192,6 +205,7 @@ type ChatBubbleInternal = { body: string; messageId: string; expiresAt: number }
 export interface TradeLifecycleEvent {
   trade: TradeLifecycleBroadcast['trade'];
   participant: TradeLifecycleBroadcast['participant'];
+  negotiation: TradeLifecycleBroadcast['negotiation'];
   actorId: string | null;
   revision: number;
   receivedAt: number;
@@ -944,6 +958,7 @@ export const useRealtimeConnection = (): RealtimeConnectionState => {
               initialTradeEvent = {
                 trade: tradeResult.data.trade,
                 participant: tradeResult.data.participant,
+                negotiation: tradeResult.data.negotiation,
                 actorId: tradeResult.data.actorId ?? null,
                 revision: 1,
                 receivedAt: Date.now(),
@@ -1246,6 +1261,7 @@ export const useRealtimeConnection = (): RealtimeConnectionState => {
             tradeLifecycleEvent: {
               trade: parsed.data.trade,
               participant: parsed.data.participant,
+              negotiation: parsed.data.negotiation,
               actorId: parsed.data.actorId ?? null,
               revision: (previous.tradeLifecycleEvent?.revision ?? 0) + 1,
               receivedAt: Date.now(),
@@ -2001,10 +2017,26 @@ export const useRealtimeConnection = (): RealtimeConnectionState => {
           return { ok: false, message, status: response.status };
         }
 
+        let rawText: string;
+        try {
+          rawText = await response.text();
+        } catch {
+          return { ok: false, message: 'Failed to read response payload', status: response.status };
+        }
+
+        const trimmed = rawText.trim();
+        if (trimmed.length === 0) {
+          return { ok: false, message: 'Empty response payload', status: response.status };
+        }
+
         let payload: unknown;
         try {
-          payload = await response.json();
-        } catch {
+          payload = JSON.parse(trimmed);
+        } catch (error) {
+          if (import.meta.env.DEV) {
+            // eslint-disable-next-line no-console
+            console.warn('[http] Failed to parse JSON payload', { path, raw: trimmed, error });
+          }
           return { ok: false, message: 'Malformed response payload', status: response.status };
         }
 
@@ -2190,6 +2222,72 @@ export const useRealtimeConnection = (): RealtimeConnectionState => {
     [sendAuthorizedRequest, state.room?.id],
   );
 
+  const updateTradeProposal = useCallback(
+    async (
+      tradeId: string,
+      slotIndex: number,
+      inventoryItemId: string,
+    ): Promise<ActionResult<TradeLifecycleResponse>> => {
+      const roomId = state.room?.id;
+      if (!roomId) {
+        return { ok: false, message: 'Room context unavailable', status: 400 };
+      }
+
+      return sendAuthorizedRequest(
+        `/rooms/${roomId}/trades/${tradeId}/proposals/${slotIndex}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ inventoryItemId }),
+        },
+        (payload) => tradeLifecycleResponseSchema.parse(payload),
+      );
+    },
+    [sendAuthorizedRequest, state.room?.id],
+  );
+
+  const clearTradeProposal = useCallback(
+    async (
+      tradeId: string,
+      slotIndex: number,
+    ): Promise<ActionResult<TradeLifecycleResponse>> => {
+      const roomId = state.room?.id;
+      if (!roomId) {
+        return { ok: false, message: 'Room context unavailable', status: 400 };
+      }
+
+      return sendAuthorizedRequest(
+        `/rooms/${roomId}/trades/${tradeId}/proposals/${slotIndex}`,
+        { method: 'DELETE' },
+        (payload) => tradeLifecycleResponseSchema.parse(payload),
+      );
+    },
+    [sendAuthorizedRequest, state.room?.id],
+  );
+
+  const updateTradeReadiness = useCallback(
+    async (
+      tradeId: string,
+      ready: boolean,
+    ): Promise<ActionResult<TradeLifecycleResponse>> => {
+      const roomId = state.room?.id;
+      if (!roomId) {
+        return { ok: false, message: 'Room context unavailable', status: 400 };
+      }
+
+      return sendAuthorizedRequest(
+        `/rooms/${roomId}/trades/${tradeId}/readiness`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ready }),
+        },
+        (payload) => tradeLifecycleResponseSchema.parse(payload),
+      );
+    },
+    [sendAuthorizedRequest, state.room?.id],
+  );
+
   const muteOccupant = useCallback(
     async (occupantId: string): Promise<ActionResult<MuteRecordSummary>> => {
       const roomId = state.room?.id;
@@ -2253,6 +2351,9 @@ export const useRealtimeConnection = (): RealtimeConnectionState => {
       acceptTradeSession,
       cancelTradeSession,
       completeTradeSession,
+      updateTradeProposal,
+      clearTradeProposal,
+      updateTradeReadiness,
       muteOccupant,
       reportOccupant,
     }),
@@ -2272,6 +2373,9 @@ export const useRealtimeConnection = (): RealtimeConnectionState => {
       spawnPlantAtTile,
       fetchOccupantProfile,
       initiateTradeWithOccupant,
+      updateTradeProposal,
+      clearTradeProposal,
+      updateTradeReadiness,
       muteOccupant,
       reportOccupant,
     ],

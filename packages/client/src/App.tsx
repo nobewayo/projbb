@@ -89,18 +89,21 @@ type TradeLifecycleState =
       status: 'pending';
       trade: TradeLifecycleAcknowledgement['trade'];
       participant: TradeLifecycleAcknowledgement['participant'];
+      negotiation: TradeLifecycleAcknowledgement['negotiation'];
       initiatedAt: number;
     }
   | {
       status: 'in-progress';
       trade: TradeLifecycleAcknowledgement['trade'];
       participant: TradeLifecycleAcknowledgement['participant'];
+      negotiation: TradeLifecycleAcknowledgement['negotiation'];
       startedAt: number;
     }
   | {
       status: 'cancelled';
       trade: TradeLifecycleAcknowledgement['trade'];
       participant: TradeLifecycleAcknowledgement['participant'];
+      negotiation: TradeLifecycleAcknowledgement['negotiation'];
       cancelledAt: number;
       reason: 'cancelled' | 'declined';
       cancelledBy: 'self' | 'participant';
@@ -109,6 +112,7 @@ type TradeLifecycleState =
       status: 'completed';
       trade: TradeLifecycleAcknowledgement['trade'];
       participant: TradeLifecycleAcknowledgement['participant'];
+      negotiation: TradeLifecycleAcknowledgement['negotiation'];
       completedAt: number;
     };
 
@@ -322,15 +326,15 @@ const ActiveContextMenu = forwardRef<HTMLDivElement | null, ActiveContextMenuPro
           label: 'View profile',
           description: 'Åbn spillerkortet i højre panel',
         },
-        {
-          action: 'trade',
-          label: 'Trade',
-          description: 'Start en byttehandel',
-          disabled: isSelf || occupant.roles.includes('npc'),
-        },
       ];
 
       if (!isSelf) {
+        actions.push({
+          action: 'trade',
+          label: 'Trade',
+          description: 'Start en byttehandel',
+          disabled: occupant.roles.includes('npc'),
+        });
         actions.push({
           action: 'mute',
           label: 'Mute',
@@ -498,6 +502,7 @@ const App = (): JSX.Element => {
   const profileRequestRef = useRef(0);
   const lastTradeEventRevisionRef = useRef(0);
   const connection = useRealtimeConnection();
+  const localUserId = connection.user?.id ?? null;
   const {
     sendChat,
     updateTypingPreview,
@@ -512,6 +517,9 @@ const App = (): JSX.Element => {
     acceptTradeSession,
     cancelTradeSession,
     completeTradeSession,
+    updateTradeProposal,
+    clearTradeProposal,
+    updateTradeReadiness,
     muteOccupant,
     reportOccupant,
   } = connection;
@@ -564,6 +572,7 @@ const App = (): JSX.Element => {
         status: 'in-progress',
         trade: result.data.trade,
         participant: result.data.participant,
+        negotiation: result.data.negotiation,
         startedAt,
       });
       showToast(`Trading with ${result.data.participant.username}`, 'success');
@@ -602,6 +611,7 @@ const App = (): JSX.Element => {
           status: 'cancelled',
           trade: result.data.trade,
           participant: result.data.participant,
+          negotiation: result.data.negotiation,
           cancelledAt,
           reason: resolvedReason,
           cancelledBy,
@@ -656,6 +666,7 @@ const App = (): JSX.Element => {
         status: 'completed',
         trade: result.data.trade,
         participant: result.data.participant,
+        negotiation: result.data.negotiation,
         completedAt,
       });
       showToast(`Trade with ${result.data.participant.username} completed`, 'success');
@@ -900,6 +911,90 @@ const App = (): JSX.Element => {
     }
 
     if (tradeState.status === 'in-progress') {
+      const trade = tradeState.trade;
+      const negotiation = tradeState.negotiation;
+      const localUserId = connection.user?.id ?? null;
+      const partnerUserId =
+        localUserId && localUserId === trade.initiatorId ? trade.recipientId : trade.initiatorId;
+      const proposalsByUser = new Map<string, Map<number, (typeof negotiation.proposals)[number]>>();
+      for (const proposal of negotiation.proposals) {
+        if (!proposalsByUser.has(proposal.offeredBy)) {
+          proposalsByUser.set(proposal.offeredBy, new Map());
+        }
+        proposalsByUser.get(proposal.offeredBy)?.set(proposal.slotIndex, proposal);
+      }
+      const buildSlots = (userId: string | null) => {
+        const slots: Array<{
+          slotIndex: number;
+          proposal: (typeof negotiation.proposals)[number] | null;
+        }> = [];
+        for (let index = 0; index < negotiation.maxSlotsPerUser; index += 1) {
+          const userSlots = (userId && proposalsByUser.get(userId)) ?? null;
+          slots.push({ slotIndex: index, proposal: userSlots?.get(index) ?? null });
+        }
+        return slots;
+      };
+      const ownSlots = buildSlots(localUserId);
+      const partnerSlots = buildSlots(partnerUserId);
+      const selfProposals = negotiation.proposals.filter(
+        (proposal) => localUserId && proposal.offeredBy === localUserId,
+      );
+
+      const handleSlotChange = (slotIndex: number, value: string) => {
+        if (!localUserId) {
+          return;
+        }
+        if (value === '') {
+          void clearTradeProposal(trade.id, slotIndex).then((result) => {
+            if (!result.ok) {
+              showToast(result.message, 'error');
+            }
+          });
+          return;
+        }
+        const currentId = ownSlots.find((slot) => slot.slotIndex === slotIndex)?.proposal?.item
+          .inventoryItemId;
+        if (currentId === value) {
+          return;
+        }
+        void updateTradeProposal(trade.id, slotIndex, value).then((result) => {
+          if (!result.ok) {
+            showToast(result.message, 'error');
+          }
+        });
+      };
+
+      const handleSlotClear = (slotIndex: number) => {
+        if (!localUserId) {
+          return;
+        }
+        void clearTradeProposal(trade.id, slotIndex).then((result) => {
+          if (!result.ok) {
+            showToast(result.message, 'error');
+          }
+        });
+      };
+
+      const localReady = localUserId
+        ? localUserId === trade.initiatorId
+          ? trade.initiatorReady
+          : trade.recipientReady
+        : false;
+      const partnerReady = partnerUserId
+        ? partnerUserId === trade.initiatorId
+          ? trade.initiatorReady
+          : trade.recipientReady
+        : false;
+      const completionEnabled = trade.initiatorReady && trade.recipientReady;
+
+      const handleReadinessToggle = (next: boolean) => {
+        void updateTradeReadiness(trade.id, next).then((result) => {
+          if (!result.ok) {
+            showToast(result.message, 'error');
+          }
+        });
+      };
+
       return (
         <aside className="trade-banner trade-banner--in-progress" role="status" aria-live="polite">
           <div className="trade-banner__header">
@@ -907,14 +1002,88 @@ const App = (): JSX.Element => {
             <p className="trade-banner__subtitle">Session active</p>
           </div>
           <p className="trade-banner__body">
-            Coordinate the exchange in voice or chat and click complete once both sides are ready.
-            Cancel if you need to restart the negotiation.
+            Coordinate the exchange and confirm readiness when your offer is finalised. Both sides
+            must be marked ready before the trade can be completed.
           </p>
+          <div className="trade-banner__negotiation">
+            <section className="trade-banner__offer" aria-label="Your offer">
+              <h3>Your offer</h3>
+              <ul>
+                {ownSlots.map((slot) => {
+                  const currentId = slot.proposal?.item.inventoryItemId ?? '';
+                  const reservedIds = new Set(
+                    selfProposals
+                      .filter((proposal) => proposal.slotIndex !== slot.slotIndex)
+                      .map((proposal) => proposal.item.inventoryItemId),
+                  );
+                  return (
+                    <li key={`own-slot-${slot.slotIndex}`} className="trade-banner__slot">
+                      <label>
+                        Slot {slot.slotIndex + 1}
+                        <select
+                          value={currentId}
+                          onChange={(event) => handleSlotChange(slot.slotIndex, event.target.value)}
+                          disabled={!localUserId || inventoryEntries.length === 0}
+                        >
+                          <option value="">Select item…</option>
+                          {inventoryEntries.map((entry) => {
+                            const disabled = reservedIds.has(entry.id);
+                            return (
+                              <option key={entry.id} value={entry.id} disabled={disabled}>
+                                {entry.name}
+                              </option>
+                            );
+                          })}
+                        </select>
+                      </label>
+                      {slot.proposal ? (
+                        <button
+                          type="button"
+                          className="trade-banner__button trade-banner__button--link"
+                          onClick={() => handleSlotClear(slot.slotIndex)}
+                        >
+                          Remove
+                        </button>
+                      ) : null}
+                    </li>
+                  );
+                })}
+              </ul>
+            </section>
+            <section className="trade-banner__offer" aria-label={`${participantName}'s offer`}>
+              <h3>{participantName}'s offer</h3>
+              <ul>
+                {partnerSlots.map((slot) => (
+                  <li key={`partner-slot-${slot.slotIndex}`} className="trade-banner__slot">
+                    <span className="trade-banner__slot-index">Slot {slot.slotIndex + 1}</span>
+                    <span className="trade-banner__slot-value">
+                      {slot.proposal ? slot.proposal.item.name : 'Empty'}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          </div>
+          <div className="trade-banner__readiness" role="group" aria-label="Trade readiness">
+            <label className="trade-banner__ready-toggle">
+              <input
+                type="checkbox"
+                checked={localReady}
+                onChange={(event) => handleReadinessToggle(event.target.checked)}
+                disabled={!localUserId}
+              />
+              I'm ready to trade
+            </label>
+            <p className="trade-banner__status">
+              {participantName} is {partnerReady ? 'ready' : 'still reviewing their offer'}.
+            </p>
+          </div>
           <div className="trade-banner__actions">
             <button
               type="button"
               className="trade-banner__button trade-banner__button--primary"
               onClick={handleTradeComplete}
+              disabled={!completionEnabled}
             >
               Complete trade
             </button>
@@ -980,7 +1149,13 @@ const App = (): JSX.Element => {
     handleTradeDismiss,
     handleTradeComplete,
     handleTradeInviteAccepted,
+    clearTradeProposal,
+    connection.user?.id,
+    inventoryEntries,
+    showToast,
     tradeState,
+    updateTradeProposal,
+    updateTradeReadiness,
   ]);
 
   useEffect(() => {
@@ -993,6 +1168,24 @@ const App = (): JSX.Element => {
       return;
     }
     lastTradeEventRevisionRef.current = event.revision;
+
+    const localUserId = connection.user?.id ?? null;
+    const partnerUserId =
+      localUserId && event.trade.initiatorId === localUserId
+        ? event.trade.recipientId
+        : event.trade.initiatorId;
+    const previousPartnerReady =
+      tradeState.status !== 'idle' && partnerUserId
+        ? partnerUserId === tradeState.trade.initiatorId
+          ? tradeState.trade.initiatorReady
+          : tradeState.trade.recipientReady
+        : null;
+    const nextPartnerReady =
+      partnerUserId
+        ? partnerUserId === event.trade.initiatorId
+          ? event.trade.initiatorReady
+          : event.trade.recipientReady
+        : null;
 
     const parseTimestamp = (value?: string | null): number => {
       if (!value) {
@@ -1009,6 +1202,7 @@ const App = (): JSX.Element => {
           status: 'in-progress',
           trade: event.trade,
           participant: event.participant,
+          negotiation: event.negotiation,
           startedAt,
         });
         break;
@@ -1025,6 +1219,7 @@ const App = (): JSX.Element => {
           status: 'cancelled',
           trade: event.trade,
           participant: event.participant,
+          negotiation: event.negotiation,
           cancelledAt,
           reason,
           cancelledBy,
@@ -1037,6 +1232,7 @@ const App = (): JSX.Element => {
           status: 'completed',
           trade: event.trade,
           participant: event.participant,
+          negotiation: event.negotiation,
           completedAt,
         });
         break;
@@ -1047,6 +1243,7 @@ const App = (): JSX.Element => {
           status: 'pending',
           trade: event.trade,
           participant: event.participant,
+          negotiation: event.negotiation,
           initiatedAt,
         });
         break;
@@ -1055,7 +1252,7 @@ const App = (): JSX.Element => {
         break;
     }
 
-    if (connection.user?.id && event.actorId && event.actorId !== connection.user.id) {
+    if (localUserId && event.actorId && event.actorId !== localUserId) {
       const participantName = event.participant.username;
       if (event.trade.status === 'accepted') {
         showToast(`${participantName} accepted the trade.`, 'success');
@@ -1070,7 +1267,23 @@ const App = (): JSX.Element => {
         showToast(copy, 'error');
       }
     }
-  }, [connection.tradeLifecycleEvent, connection.user?.id, showToast]);
+
+    if (
+      localUserId &&
+      partnerUserId &&
+      event.actorId === partnerUserId &&
+      previousPartnerReady !== null &&
+      nextPartnerReady !== null &&
+      previousPartnerReady !== nextPartnerReady
+    ) {
+      showToast(
+        nextPartnerReady
+          ? `${event.participant.username} is ready to trade.`
+          : `${event.participant.username} is no longer ready.`,
+        nextPartnerReady ? 'success' : 'info',
+      );
+    }
+  }, [connection.tradeLifecycleEvent, connection.user?.id, showToast, tradeState]);
 
   const chatLogEntries = useMemo(() => {
     const formattedHistory: ChatMessage[] = connection.chatLog.map((message) => {
@@ -1527,6 +1740,10 @@ const App = (): JSX.Element => {
       }
 
       if (action === 'trade') {
+        if (localUserId && localUserId === occupant.id) {
+          showToast('Du kan ikke handle med dig selv.', 'error');
+          return;
+        }
         void initiateTradeWithOccupant(occupant.id).then((result) => {
           if (result.ok) {
             const initiatedTimestamp = Date.parse(result.data.trade.createdAt);
@@ -1534,6 +1751,7 @@ const App = (): JSX.Element => {
               status: 'pending',
               trade: result.data.trade,
               participant: result.data.participant,
+              negotiation: result.data.negotiation,
               initiatedAt: Number.isFinite(initiatedTimestamp)
                 ? initiatedTimestamp
                 : Date.now(),
@@ -1569,6 +1787,7 @@ const App = (): JSX.Element => {
     },
     [
       closeContextMenu,
+      localUserId,
       initiateTradeWithOccupant,
       muteOccupant,
       reportOccupant,
@@ -1997,7 +2216,7 @@ const App = (): JSX.Element => {
               onTileContextMenu={handleTileContextMenu}
               onItemContextMenu={handleItemContextMenu}
               onOccupantContextMenu={handleOccupantContextMenu}
-              localOccupantId={connection.user?.id ?? null}
+        localOccupantId={localUserId}
               showGrid={isGridVisible}
               showHoverWhenGridHidden={showHoverWhenGridHidden}
               moveAnimationsEnabled={areMoveAnimationsEnabled}
@@ -2207,7 +2426,7 @@ const App = (): JSX.Element => {
           onSelectItemPickup={handleContextMenuItemPickup}
           getPickupAvailability={getPickupAvailability}
           onSelectOccupantAction={handleOccupantMenuAction}
-          localOccupantId={connection.user?.id ?? null}
+          localOccupantId={localUserId}
           mutedOccupantIds={mutedOccupantSet}
         />
       ) : null}

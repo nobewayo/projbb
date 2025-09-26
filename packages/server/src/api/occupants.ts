@@ -5,7 +5,8 @@ import { extractBearerToken } from '../auth/http.js';
 import type { ServerConfig } from '../config.js';
 import type { RoomStore } from '../db/rooms.js';
 import type { ItemStore } from '../db/items.js';
-import type { SocialStore, TradeSessionRecord } from '../db/social.js';
+import type { SocialStore, TradeProposalRecord, TradeSessionRecord } from '../db/social.js';
+import { TRADE_MAX_SLOTS_PER_USER } from '../db/social.js';
 import type { RealtimeServer } from '../ws/connection.js';
 
 interface OccupantRoutesOptions {
@@ -30,9 +31,25 @@ const tradeParamsSchema = z.object({
   tradeId: z.string().uuid('tradeId must be a UUID'),
 });
 
+const tradeSlotParamsSchema = tradeParamsSchema.extend({
+  slotIndex: z
+    .coerce.number({ invalid_type_error: 'slotIndex must be a number' })
+    .int('slotIndex must be an integer')
+    .min(0, 'slotIndex must be non-negative')
+    .max(TRADE_MAX_SLOTS_PER_USER - 1, 'slotIndex exceeds available slots'),
+});
+
 const tradeCancelBodySchema = z
   .object({ reason: z.enum(['cancelled', 'declined']).default('cancelled') })
   .default({ reason: 'cancelled' });
+
+const tradeProposalBodySchema = z.object({
+  inventoryItemId: z.string().uuid('inventoryItemId must be a UUID'),
+});
+
+const tradeReadinessBodySchema = z.object({
+  ready: z.boolean(),
+});
 
 const muteBodySchema = z
   .object({ reason: z.string().min(1).max(512).optional() })
@@ -126,7 +143,30 @@ export const occupantRoutes: FastifyPluginCallback<OccupantRoutesOptions> = (
     cancelledAt: trade.cancelledAt?.toISOString(),
     cancelledBy: trade.cancelledBy ?? undefined,
     cancelledReason: trade.cancelledReason ?? undefined,
+    initiatorReady: trade.initiatorReady,
+    recipientReady: trade.recipientReady,
   });
+
+  const mapTradeProposal = (proposal: TradeProposalRecord) => ({
+    slotIndex: proposal.slotIndex,
+    offeredBy: proposal.offeredBy,
+    updatedAt: proposal.updatedAt.toISOString(),
+    item: {
+      inventoryItemId: proposal.inventoryItemId,
+      roomItemId: proposal.roomItemId,
+      name: proposal.name,
+      description: proposal.description,
+      textureKey: proposal.textureKey,
+    },
+  });
+
+  const buildNegotiationState = async (tradeId: string) => {
+    const proposals = await socialStore.listTradeProposalsForTrade(tradeId);
+    return {
+      proposals: proposals.map((proposal) => mapTradeProposal(proposal)),
+      maxSlotsPerUser: TRADE_MAX_SLOTS_PER_USER,
+    };
+  };
 
   const resolveTradeParticipant = async (params: {
     trade: TradeSessionRecord;
@@ -233,12 +273,15 @@ export const occupantRoutes: FastifyPluginCallback<OccupantRoutesOptions> = (
 
     await realtime.applyTradeLifecycleUpdate({ trade, actorId: auth.userId });
 
+    const negotiation = await buildNegotiationState(trade.id);
+
     await reply.send({
       trade: mapTradeRecord(trade),
       participant: {
         id: context.occupant.id,
         username: context.occupant.username,
       },
+      negotiation,
     });
   });
 
@@ -289,9 +332,12 @@ export const occupantRoutes: FastifyPluginCallback<OccupantRoutesOptions> = (
 
     await realtime.applyTradeLifecycleUpdate({ trade: updated, actorId: auth.userId });
 
+    const negotiation = await buildNegotiationState(updated.id);
+
     await reply.send({
       trade: mapTradeRecord(updated),
       participant,
+      negotiation,
     });
   });
 
@@ -351,9 +397,12 @@ export const occupantRoutes: FastifyPluginCallback<OccupantRoutesOptions> = (
 
     await realtime.applyTradeLifecycleUpdate({ trade: updated, actorId: auth.userId });
 
+    const negotiation = await buildNegotiationState(updated.id);
+
     await reply.send({
       trade: mapTradeRecord(updated),
       participant,
+      negotiation,
     });
   });
 
@@ -399,9 +448,202 @@ export const occupantRoutes: FastifyPluginCallback<OccupantRoutesOptions> = (
 
     await realtime.applyTradeLifecycleUpdate({ trade: updated, actorId: auth.userId });
 
+    const negotiation = await buildNegotiationState(updated.id);
+
     await reply.send({
       trade: mapTradeRecord(updated),
       participant,
+      negotiation,
+    });
+  });
+
+  app.post('/rooms/:roomId/trades/:tradeId/proposals/:slotIndex', async (request, reply) => {
+    const auth = requireAuth(request);
+    if (!auth) {
+      await reply.code(401).send({ message: 'Authentication required' });
+      return;
+    }
+
+    const paramsResult = tradeSlotParamsSchema.safeParse(request.params);
+    if (!paramsResult.success) {
+      await reply
+        .code(400)
+        .send({ message: 'Invalid route parameters', issues: paramsResult.error.issues });
+      return;
+    }
+
+    const bodyResult = tradeProposalBodySchema.safeParse(request.body ?? {});
+    if (!bodyResult.success) {
+      await reply
+        .code(400)
+        .send({ message: 'Invalid request body', issues: bodyResult.error.issues });
+      return;
+    }
+
+    const { roomId, tradeId, slotIndex } = paramsResult.data;
+    const { inventoryItemId } = bodyResult.data;
+
+    const context = await resolveTradeContext(roomId, tradeId, auth.userId);
+    if ('message' in context) {
+      await reply.code(context.status).send({ message: context.message });
+      return;
+    }
+
+    if (context.trade.status !== 'accepted') {
+      await reply
+        .code(409)
+        .send({ message: 'Trade must be active before proposing items' });
+      return;
+    }
+
+    const proposal = await socialStore.upsertTradeProposal({
+      tradeId,
+      offeredBy: auth.userId,
+      slotIndex,
+      inventoryItemId,
+    });
+
+    if (!proposal) {
+      await reply.code(409).send({ message: 'Failed to update trade proposal' });
+      return;
+    }
+
+    const updatedTrade = await socialStore.getTradeSessionById(tradeId);
+    if (!updatedTrade) {
+      await reply.code(500).send({ message: 'Trade session disappeared after update' });
+      return;
+    }
+
+    const participant = await resolveTradeParticipant({ trade: updatedTrade, requesterId: auth.userId });
+    const negotiation = await buildNegotiationState(tradeId);
+
+    await realtime.applyTradeLifecycleUpdate({ trade: updatedTrade, actorId: auth.userId });
+
+    await reply.send({
+      trade: mapTradeRecord(updatedTrade),
+      participant,
+      negotiation,
+    });
+  });
+
+  app.delete('/rooms/:roomId/trades/:tradeId/proposals/:slotIndex', async (request, reply) => {
+    const auth = requireAuth(request);
+    if (!auth) {
+      await reply.code(401).send({ message: 'Authentication required' });
+      return;
+    }
+
+    const paramsResult = tradeSlotParamsSchema.safeParse(request.params);
+    if (!paramsResult.success) {
+      await reply
+        .code(400)
+        .send({ message: 'Invalid route parameters', issues: paramsResult.error.issues });
+      return;
+    }
+
+    const { roomId, tradeId, slotIndex } = paramsResult.data;
+
+    const context = await resolveTradeContext(roomId, tradeId, auth.userId);
+    if ('message' in context) {
+      await reply.code(context.status).send({ message: context.message });
+      return;
+    }
+
+    if (context.trade.status !== 'accepted') {
+      await reply
+        .code(409)
+        .send({ message: 'Trade must be active before clearing proposals' });
+      return;
+    }
+
+    const removed = await socialStore.removeTradeProposal({
+      tradeId,
+      offeredBy: auth.userId,
+      slotIndex,
+    });
+
+    if (!removed) {
+      await reply.code(404).send({ message: 'Proposal slot not found' });
+      return;
+    }
+
+    const updatedTrade = await socialStore.getTradeSessionById(tradeId);
+    if (!updatedTrade) {
+      await reply.code(500).send({ message: 'Trade session disappeared after update' });
+      return;
+    }
+
+    const participant = await resolveTradeParticipant({ trade: updatedTrade, requesterId: auth.userId });
+    const negotiation = await buildNegotiationState(tradeId);
+
+    await realtime.applyTradeLifecycleUpdate({ trade: updatedTrade, actorId: auth.userId });
+
+    await reply.send({
+      trade: mapTradeRecord(updatedTrade),
+      participant,
+      negotiation,
+    });
+  });
+
+  app.post('/rooms/:roomId/trades/:tradeId/readiness', async (request, reply) => {
+    const auth = requireAuth(request);
+    if (!auth) {
+      await reply.code(401).send({ message: 'Authentication required' });
+      return;
+    }
+
+    const paramsResult = tradeParamsSchema.safeParse(request.params);
+    if (!paramsResult.success) {
+      await reply
+        .code(400)
+        .send({ message: 'Invalid route parameters', issues: paramsResult.error.issues });
+      return;
+    }
+
+    const bodyResult = tradeReadinessBodySchema.safeParse(request.body ?? {});
+    if (!bodyResult.success) {
+      await reply
+        .code(400)
+        .send({ message: 'Invalid request body', issues: bodyResult.error.issues });
+      return;
+    }
+
+    const { roomId, tradeId } = paramsResult.data;
+    const { ready } = bodyResult.data;
+
+    const context = await resolveTradeContext(roomId, tradeId, auth.userId);
+    if ('message' in context) {
+      await reply.code(context.status).send({ message: context.message });
+      return;
+    }
+
+    if (context.trade.status !== 'accepted') {
+      await reply.code(409).send({ message: 'Trade must be active to update readiness' });
+      return;
+    }
+
+    const updatedTrade = await socialStore.updateTradeParticipantReadiness({
+      tradeId,
+      actorId: auth.userId,
+      ready,
+    });
+
+    if (!updatedTrade) {
+      await reply
+        .code(409)
+        .send({ message: ready ? 'No proposals available to confirm readiness' : 'Unable to update readiness' });
+      return;
+    }
+
+    const participant = await resolveTradeParticipant({ trade: updatedTrade, requesterId: auth.userId });
+    const negotiation = await buildNegotiationState(tradeId);
+
+    await realtime.applyTradeLifecycleUpdate({ trade: updatedTrade, actorId: auth.userId });
+
+    await reply.send({
+      trade: mapTradeRecord(updatedTrade),
+      participant,
+      negotiation,
     });
   });
 
