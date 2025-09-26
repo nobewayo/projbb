@@ -1,3 +1,6 @@
+// @module: canvas
+// @tags: grid, rendering, input
+
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { CANVAS_HEIGHT, CANVAS_WIDTH } from './constants';
 import { buildGridDefinition, createTileKey, findTileAtPoint } from './geometry';

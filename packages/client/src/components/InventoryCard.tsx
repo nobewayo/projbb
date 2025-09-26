@@ -1,3 +1,6 @@
+// @module: ui-inventory
+// @tags: inventory, panel, ui
+
 export interface InventoryEntry {
   id: string;
   name: string;
