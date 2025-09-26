@@ -17,6 +17,7 @@ import {
   socialReportBroadcastSchema,
   tradeLifecycleBroadcastSchema,
   tradeSessionSchema,
+  tradeNegotiationStateSchema,
   type ChatMessageBroadcast,
   type ChatPreferences,
   type ChatTypingBroadcast,
@@ -43,7 +44,14 @@ import type {
 } from '../db/items.js';
 import type { PreferenceStore } from '../db/preferences.js';
 import type { AdminStateStore, RoomAdminStateRecord } from '../db/admin.js';
-import type { SocialStore, MuteRecord, ReportRecord, TradeSessionRecord } from '../db/social.js';
+import type {
+  SocialStore,
+  MuteRecord,
+  ReportRecord,
+  TradeSessionRecord,
+  TradeProposalRecord,
+} from '../db/social.js';
+import { TRADE_MAX_SLOTS_PER_USER } from '../db/social.js';
 
 const HEARTBEAT_INTERVAL_MS = 15_000;
 const HEARTBEAT_GRACE_MS = HEARTBEAT_INTERVAL_MS * 2;
@@ -78,6 +86,7 @@ type SocialMutePayload = SocialMuteRecord;
 type SocialReportPayload = SocialReportRecord;
 
 type TradeLifecyclePayload = TradeLifecycleBroadcast['trade'];
+type TradeNegotiationPayload = TradeLifecycleBroadcast['negotiation'];
 
 interface UserSocialState {
   mutes: Map<string, SocialMutePayload>;
@@ -268,6 +277,21 @@ const toTradePayload = (record: TradeSessionRecord): TradeLifecyclePayload => ({
   cancelledAt: record.cancelledAt?.toISOString(),
   cancelledBy: record.cancelledBy ?? undefined,
   cancelledReason: record.cancelledReason ?? undefined,
+  initiatorReady: record.initiatorReady,
+  recipientReady: record.recipientReady,
+});
+
+const toTradeProposalPayload = (record: TradeProposalRecord) => ({
+  slotIndex: record.slotIndex,
+  offeredBy: record.offeredBy,
+  updatedAt: record.updatedAt.toISOString(),
+  item: {
+    inventoryItemId: record.inventoryItemId,
+    roomItemId: record.roomItemId,
+    name: record.name,
+    description: record.description,
+    textureKey: record.textureKey,
+  },
 });
 
 const cloneOccupant = (occupant: RoomOccupant): RoomOccupant => ({
@@ -450,6 +474,16 @@ export const createRealtimeServer = async ({
     return { id: otherUserId, username: 'Unknown occupant' };
   };
 
+  const buildTradeNegotiationPayload = async (
+    tradeId: string,
+  ): Promise<TradeNegotiationPayload> => {
+    const proposals = await socialStore.listTradeProposalsForTrade(tradeId);
+    return {
+      proposals: proposals.map((proposal) => toTradeProposalPayload(proposal)),
+      maxSlotsPerUser: TRADE_MAX_SLOTS_PER_USER,
+    } satisfies TradeNegotiationPayload;
+  };
+
   const hydrateTradeLifecycleForUser = async (
     userId: string,
   ): Promise<TradeLifecycleBroadcast | null> => {
@@ -464,9 +498,12 @@ export const createRealtimeServer = async ({
       requesterId: userId,
     });
 
+    const negotiation = await buildTradeNegotiationPayload(tradePayload.id);
+
     return tradeLifecycleBroadcastSchema.parse({
       trade: tradePayload,
       participant,
+      negotiation,
     });
   };
 
@@ -633,10 +670,12 @@ export const createRealtimeServer = async ({
     }
   };
 
-  const emitTradeLifecycleUpdate = async (
-    trade: TradeLifecyclePayload,
-    actorId?: string,
-  ): Promise<void> => {
+  const emitTradeLifecycleUpdate = async (event: {
+    trade: TradeLifecyclePayload;
+    negotiation: TradeNegotiationPayload;
+    actorId?: string;
+  }): Promise<void> => {
+    const { trade, negotiation, actorId } = event;
     const recipients = new Map<string, TradeParticipantSummary>();
     const targetUserIds = [trade.initiatorId, trade.recipientId];
 
@@ -660,6 +699,7 @@ export const createRealtimeServer = async ({
       const payload = tradeLifecycleBroadcastSchema.parse({
         trade,
         participant,
+        negotiation,
         actorId: actorId ?? undefined,
       });
       safeSend(
@@ -1046,16 +1086,20 @@ export const createRealtimeServer = async ({
   };
 
   const applyTradeLifecycleInternal = async (
-    event: { trade: TradeLifecyclePayload; actorId?: string },
+    event: { trade: TradeLifecyclePayload; negotiation: TradeNegotiationPayload; actorId?: string },
     shouldPublish: boolean,
   ): Promise<void> => {
-    await emitTradeLifecycleUpdate(event.trade, event.actorId);
+    await emitTradeLifecycleUpdate({
+      trade: event.trade,
+      negotiation: event.negotiation,
+      actorId: event.actorId,
+    });
 
     if (shouldPublish) {
       await pubsub.publish({
         type: 'trade:lifecycle:update',
         roomId: developmentRoomState.id,
-        payload: { trade: event.trade, actorId: event.actorId },
+        payload: { trade: event.trade, negotiation: event.negotiation, actorId: event.actorId },
       });
     }
   };
@@ -1131,13 +1175,14 @@ export const createRealtimeServer = async ({
 
     if (event.type === 'trade:lifecycle:update') {
       const tradeResult = tradeSessionSchema.safeParse(event.payload.trade);
-      if (!tradeResult.success) {
+      const negotiationResult = tradeNegotiationStateSchema.safeParse(event.payload.negotiation);
+      if (!tradeResult.success || !negotiationResult.success) {
         // eslint-disable-next-line no-console
         console.error('Received malformed trade lifecycle payload');
         return;
       }
       void applyTradeLifecycleInternal(
-        { trade: tradeResult.data, actorId: event.payload.actorId },
+        { trade: tradeResult.data, negotiation: negotiationResult.data, actorId: event.payload.actorId },
         false,
       ).catch((error) => {
         // eslint-disable-next-line no-console
@@ -1844,7 +1889,11 @@ export const createRealtimeServer = async ({
     actorId: string;
   }): Promise<void> => {
     const payload = toTradePayload(event.trade);
-    await applyTradeLifecycleInternal({ trade: payload, actorId: event.actorId }, true);
+    const negotiation = await buildTradeNegotiationPayload(event.trade.id);
+    await applyTradeLifecycleInternal(
+      { trade: payload, negotiation, actorId: event.actorId },
+      true,
+    );
   };
 
   const shutdown = async (): Promise<void> => {

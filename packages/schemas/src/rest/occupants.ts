@@ -32,6 +32,8 @@ export const tradeSessionSchema = z.object({
   cancelledAt: z.string().min(1).optional(),
   cancelledBy: z.string().uuid().optional(),
   cancelledReason: z.enum(['cancelled', 'declined']).optional(),
+  initiatorReady: z.boolean().default(false),
+  recipientReady: z.boolean().default(false),
 });
 
 export const tradeParticipantSchema = z.object({
@@ -39,14 +41,36 @@ export const tradeParticipantSchema = z.object({
   username: z.string().min(1),
 });
 
+export const tradeProposalItemSchema = z.object({
+  inventoryItemId: z.string().uuid(),
+  roomItemId: z.string().uuid(),
+  name: z.string().min(1),
+  description: z.string().min(1),
+  textureKey: z.string().min(1),
+});
+
+export const tradeProposalSchema = z.object({
+  slotIndex: z.number().int().min(0),
+  offeredBy: z.string().uuid(),
+  item: tradeProposalItemSchema,
+  updatedAt: z.string().min(1),
+});
+
+export const tradeNegotiationStateSchema = z.object({
+  proposals: z.array(tradeProposalSchema),
+  maxSlotsPerUser: z.number().int().positive(),
+});
+
 export const tradeBootstrapResponseSchema = z.object({
   trade: tradeSessionSchema,
   participant: tradeParticipantSchema,
+  negotiation: tradeNegotiationStateSchema,
 });
 
 export const tradeLifecycleResponseSchema = z.object({
   trade: tradeSessionSchema,
   participant: tradeParticipantSchema,
+  negotiation: tradeNegotiationStateSchema,
 });
 
 export const muteRecordSchema = z.object({
@@ -78,6 +102,8 @@ export type OccupantProfile = z.infer<typeof occupantProfileSchema>;
 export type TradeSession = z.infer<typeof tradeSessionSchema>;
 export type TradeBootstrapResponse = z.infer<typeof tradeBootstrapResponseSchema>;
 export type TradeLifecycleResponse = z.infer<typeof tradeLifecycleResponseSchema>;
+export type TradeProposal = z.infer<typeof tradeProposalSchema>;
+export type TradeNegotiationState = z.infer<typeof tradeNegotiationStateSchema>;
 export type MuteRecord = z.infer<typeof muteRecordSchema>;
 export type MuteResponse = z.infer<typeof muteResponseSchema>;
 export type ReportRecord = z.infer<typeof reportRecordSchema>;

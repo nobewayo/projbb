@@ -1,6 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import type { Pool } from 'pg';
 
+export const TRADE_MAX_SLOTS_PER_USER = 3;
+
 export interface TradeSessionRecord {
   id: string;
   initiatorId: string;
@@ -13,6 +15,20 @@ export interface TradeSessionRecord {
   cancelledAt: Date | null;
   cancelledBy: string | null;
   cancelledReason: 'cancelled' | 'declined' | null;
+  initiatorReady: boolean;
+  recipientReady: boolean;
+}
+
+export interface TradeProposalRecord {
+  tradeId: string;
+  slotIndex: number;
+  offeredBy: string;
+  inventoryItemId: string;
+  roomItemId: string;
+  name: string;
+  description: string;
+  textureKey: string;
+  updatedAt: Date;
 }
 
 export interface MuteRecord {
@@ -53,6 +69,23 @@ export interface SocialStore {
     status: 'accepted' | 'completed' | 'cancelled';
     reason?: 'cancelled' | 'declined';
   }): Promise<TradeSessionRecord | null>;
+  updateTradeParticipantReadiness(params: {
+    tradeId: string;
+    actorId: string;
+    ready: boolean;
+  }): Promise<TradeSessionRecord | null>;
+  listTradeProposalsForTrade(tradeId: string): Promise<TradeProposalRecord[]>;
+  upsertTradeProposal(params: {
+    tradeId: string;
+    offeredBy: string;
+    slotIndex: number;
+    inventoryItemId: string;
+  }): Promise<TradeProposalRecord | null>;
+  removeTradeProposal(params: {
+    tradeId: string;
+    offeredBy: string;
+    slotIndex: number;
+  }): Promise<boolean>;
   recordMute(params: {
     userId: string;
     mutedUserId: string;
@@ -70,6 +103,8 @@ export interface SocialStore {
 }
 
 export const createSocialStore = (pool: Pool): SocialStore => {
+  const MAX_TRADE_SLOTS_PER_USER = TRADE_MAX_SLOTS_PER_USER;
+
   const mapTradeRow = (row: {
     id: string;
     initiator_id: string;
@@ -82,6 +117,8 @@ export const createSocialStore = (pool: Pool): SocialStore => {
     cancelled_at: Date | string | null;
     cancelled_by: string | null;
     cancelled_reason: 'cancelled' | 'declined' | null;
+    initiator_ready: boolean;
+    recipient_ready: boolean;
   }): TradeSessionRecord => ({
     id: row.id,
     initiatorId: row.initiator_id,
@@ -94,6 +131,8 @@ export const createSocialStore = (pool: Pool): SocialStore => {
     cancelledAt: row.cancelled_at ? new Date(row.cancelled_at) : null,
     cancelledBy: row.cancelled_by,
     cancelledReason: row.cancelled_reason ?? null,
+    initiatorReady: row.initiator_ready,
+    recipientReady: row.recipient_ready,
   });
 
   const createTradeSession: SocialStore['createTradeSession'] = async ({
@@ -118,7 +157,8 @@ export const createSocialStore = (pool: Pool): SocialStore => {
       `INSERT INTO trade_session (id, initiator_id, recipient_id, room_id, status)
          VALUES ($1, $2, $3, $4, 'pending')
          RETURNING id, initiator_id, recipient_id, room_id, status, created_at,
-                   accepted_at, completed_at, cancelled_at, cancelled_by, cancelled_reason`,
+                   accepted_at, completed_at, cancelled_at, cancelled_by, cancelled_reason,
+                   initiator_ready, recipient_ready`,
       [id, initiatorId, recipientId, roomId],
     );
 
@@ -140,7 +180,8 @@ export const createSocialStore = (pool: Pool): SocialStore => {
       cancelled_reason: 'cancelled' | 'declined' | null;
     }>(
       `SELECT id, initiator_id, recipient_id, room_id, status, created_at,
-              accepted_at, completed_at, cancelled_at, cancelled_by, cancelled_reason
+              accepted_at, completed_at, cancelled_at, cancelled_by, cancelled_reason,
+              initiator_ready, recipient_ready
          FROM trade_session
         WHERE id = $1
         LIMIT 1`,
@@ -171,7 +212,8 @@ export const createSocialStore = (pool: Pool): SocialStore => {
       cancelled_reason: 'cancelled' | 'declined' | null;
     }>(
       `SELECT id, initiator_id, recipient_id, room_id, status, created_at,
-              accepted_at, completed_at, cancelled_at, cancelled_by, cancelled_reason
+              accepted_at, completed_at, cancelled_at, cancelled_by, cancelled_reason,
+              initiator_ready, recipient_ready
          FROM trade_session
         WHERE initiator_id = $1
            OR recipient_id = $1
@@ -211,6 +253,8 @@ export const createSocialStore = (pool: Pool): SocialStore => {
         `UPDATE trade_session
             SET status = 'accepted',
                 accepted_at = now(),
+                initiator_ready = false,
+                recipient_ready = false,
                 cancelled_at = NULL,
                 cancelled_by = NULL,
                 cancelled_reason = NULL
@@ -218,7 +262,8 @@ export const createSocialStore = (pool: Pool): SocialStore => {
             AND status = 'pending'
             AND recipient_id = $2
           RETURNING id, initiator_id, recipient_id, room_id, status, created_at,
-                    accepted_at, completed_at, cancelled_at, cancelled_by, cancelled_reason`,
+                    accepted_at, completed_at, cancelled_at, cancelled_by, cancelled_reason,
+                    initiator_ready, recipient_ready`,
         [tradeId, actorId],
       );
 
@@ -248,12 +293,15 @@ export const createSocialStore = (pool: Pool): SocialStore => {
             SET status = 'cancelled',
                 cancelled_at = now(),
                 cancelled_by = $2,
-                cancelled_reason = $3
+                cancelled_reason = $3,
+                initiator_ready = false,
+                recipient_ready = false
           WHERE id = $1
             AND status IN ('pending', 'accepted')
             AND (initiator_id = $2 OR recipient_id = $2)
           RETURNING id, initiator_id, recipient_id, room_id, status, created_at,
-                    accepted_at, completed_at, cancelled_at, cancelled_by, cancelled_reason`,
+                    accepted_at, completed_at, cancelled_at, cancelled_by, cancelled_reason,
+                    initiator_ready, recipient_ready`,
         [tradeId, actorId, cancellationReason],
       );
 
@@ -276,6 +324,8 @@ export const createSocialStore = (pool: Pool): SocialStore => {
       cancelled_at: Date | string | null;
       cancelled_by: string | null;
       cancelled_reason: 'cancelled' | 'declined' | null;
+      initiator_ready: boolean;
+      recipient_ready: boolean;
     }>(
       `UPDATE trade_session
           SET status = 'completed',
@@ -284,7 +334,8 @@ export const createSocialStore = (pool: Pool): SocialStore => {
           AND status = 'accepted'
           AND (initiator_id = $2 OR recipient_id = $2)
         RETURNING id, initiator_id, recipient_id, room_id, status, created_at,
-                  accepted_at, completed_at, cancelled_at, cancelled_by, cancelled_reason`,
+                  accepted_at, completed_at, cancelled_at, cancelled_by, cancelled_reason,
+                  initiator_ready, recipient_ready`,
       [tradeId, actorId],
     );
 
@@ -293,6 +344,247 @@ export const createSocialStore = (pool: Pool): SocialStore => {
     }
 
     return mapTradeRow(result.rows[0]);
+  };
+
+  const updateTradeParticipantReadiness: SocialStore['updateTradeParticipantReadiness'] = async ({
+    tradeId,
+    actorId,
+    ready,
+  }) => {
+    const trade = await getTradeSessionById(tradeId);
+    if (!trade) {
+      return null;
+    }
+
+    if (trade.status !== 'accepted') {
+      return null;
+    }
+
+    let column: 'initiator_ready' | 'recipient_ready';
+    if (trade.initiatorId === actorId) {
+      column = 'initiator_ready';
+    } else if (trade.recipientId === actorId) {
+      column = 'recipient_ready';
+    } else {
+      return null;
+    }
+
+    if (ready) {
+      const countResult = await pool.query<{ count: string }>(
+        `SELECT COUNT(*) AS count
+           FROM trade_proposal
+          WHERE trade_id = $1
+            AND offered_by = $2`,
+        [tradeId, actorId],
+      );
+
+      const count = Number.parseInt(countResult.rows[0]?.count ?? '0', 10);
+      if (!Number.isFinite(count) || count === 0) {
+        return null;
+      }
+    }
+
+    const result = await pool.query<{ 
+      id: string;
+      initiator_id: string;
+      recipient_id: string;
+      room_id: string;
+      status: 'pending' | 'accepted' | 'completed' | 'cancelled';
+      created_at: Date | string;
+      accepted_at: Date | string | null;
+      completed_at: Date | string | null;
+      cancelled_at: Date | string | null;
+      cancelled_by: string | null;
+      cancelled_reason: 'cancelled' | 'declined' | null;
+      initiator_ready: boolean;
+      recipient_ready: boolean;
+    }>(
+      `UPDATE trade_session
+          SET ${column} = $3
+        WHERE id = $1
+          AND (initiator_id = $2 OR recipient_id = $2)
+        RETURNING id, initiator_id, recipient_id, room_id, status, created_at,
+                  accepted_at, completed_at, cancelled_at, cancelled_by, cancelled_reason,
+                  initiator_ready, recipient_ready`,
+      [tradeId, actorId, ready],
+    );
+
+    if (result.rowCount === 0) {
+      return null;
+    }
+
+    return mapTradeRow(result.rows[0]);
+  };
+
+  const listTradeProposalsForTrade: SocialStore['listTradeProposalsForTrade'] = async (tradeId) => {
+    const result = await pool.query<{
+      trade_id: string;
+      offered_by: string;
+      slot_index: number;
+      inventory_item_id: string;
+      room_item_id: string;
+      name: string;
+      description: string;
+      texture_key: string;
+      updated_at: Date | string;
+    }>(
+      `SELECT tp.trade_id, tp.offered_by, tp.slot_index, tp.inventory_item_id,
+              uii.room_item_id, ri.name, ri.description, ri.texture_key, tp.updated_at
+         FROM trade_proposal tp
+         JOIN user_inventory_item uii ON uii.id = tp.inventory_item_id
+         JOIN room_item ri ON ri.id = uii.room_item_id
+        WHERE tp.trade_id = $1
+        ORDER BY tp.offered_by ASC, tp.slot_index ASC`,
+      [tradeId],
+    );
+
+    return result.rows.map((row) => ({
+      tradeId: row.trade_id,
+      offeredBy: row.offered_by,
+      slotIndex: row.slot_index,
+      inventoryItemId: row.inventory_item_id,
+      roomItemId: row.room_item_id,
+      name: row.name,
+      description: row.description,
+      textureKey: row.texture_key,
+      updatedAt: new Date(row.updated_at),
+    } satisfies TradeProposalRecord));
+  };
+
+  const removeTradeProposalsForItem = async (tradeId: string, inventoryItemId: string) => {
+    await pool.query(
+      `DELETE FROM trade_proposal
+        WHERE trade_id = $1
+          AND inventory_item_id = $2`,
+      [tradeId, inventoryItemId],
+    );
+  };
+
+  const resetReadinessForParticipant = async (tradeId: string, participantId: string) => {
+    await pool.query(
+      `UPDATE trade_session
+          SET initiator_ready = CASE WHEN initiator_id = $2 THEN false ELSE initiator_ready END,
+              recipient_ready = CASE WHEN recipient_id = $2 THEN false ELSE recipient_ready END
+        WHERE id = $1`,
+      [tradeId, participantId],
+    );
+  };
+
+  const upsertTradeProposal: SocialStore['upsertTradeProposal'] = async ({
+    tradeId,
+    offeredBy,
+    slotIndex,
+    inventoryItemId,
+  }) => {
+    if (slotIndex < 0 || slotIndex >= MAX_TRADE_SLOTS_PER_USER) {
+      return null;
+    }
+
+    const trade = await getTradeSessionById(tradeId);
+    if (!trade) {
+      return null;
+    }
+
+    if (trade.status !== 'accepted') {
+      return null;
+    }
+
+    if (trade.initiatorId !== offeredBy && trade.recipientId !== offeredBy) {
+      return null;
+    }
+
+    const itemResult = await pool.query<{
+      id: string;
+      user_id: string;
+      room_item_id: string;
+      name: string;
+      description: string;
+      texture_key: string;
+    }>(
+      `SELECT uii.id, uii.user_id, uii.room_item_id, ri.name, ri.description, ri.texture_key
+         FROM user_inventory_item uii
+         JOIN room_item ri ON ri.id = uii.room_item_id
+        WHERE uii.id = $1
+          AND uii.user_id = $2
+        LIMIT 1`,
+      [inventoryItemId, offeredBy],
+    );
+
+    if (itemResult.rowCount === 0) {
+      return null;
+    }
+
+    const itemRow = itemResult.rows[0];
+
+    await removeTradeProposalsForItem(tradeId, inventoryItemId);
+
+    const result = await pool.query<{
+      trade_id: string;
+      offered_by: string;
+      slot_index: number;
+      inventory_item_id: string;
+      updated_at: Date | string;
+    }>(
+      `INSERT INTO trade_proposal (trade_id, offered_by, slot_index, inventory_item_id, updated_at)
+         VALUES ($1, $2, $3, $4, now())
+         ON CONFLICT (trade_id, offered_by, slot_index)
+         DO UPDATE SET inventory_item_id = EXCLUDED.inventory_item_id, updated_at = now()
+         RETURNING trade_id, offered_by, slot_index, inventory_item_id, updated_at`,
+      [tradeId, offeredBy, slotIndex, inventoryItemId],
+    );
+
+    if (result.rowCount === 0) {
+      return null;
+    }
+
+    await resetReadinessForParticipant(tradeId, offeredBy);
+
+    const row = result.rows[0];
+    return {
+      tradeId: row.trade_id,
+      offeredBy: row.offered_by,
+      slotIndex: row.slot_index,
+      inventoryItemId: row.inventory_item_id,
+      roomItemId: itemRow.room_item_id,
+      name: itemRow.name,
+      description: itemRow.description,
+      textureKey: itemRow.texture_key,
+      updatedAt: new Date(row.updated_at),
+    } satisfies TradeProposalRecord;
+  };
+
+  const removeTradeProposal: SocialStore['removeTradeProposal'] = async ({
+    tradeId,
+    offeredBy,
+    slotIndex,
+  }) => {
+    if (slotIndex < 0 || slotIndex >= MAX_TRADE_SLOTS_PER_USER) {
+      return false;
+    }
+
+    const trade = await getTradeSessionById(tradeId);
+    if (!trade) {
+      return false;
+    }
+
+    if (trade.initiatorId !== offeredBy && trade.recipientId !== offeredBy) {
+      return false;
+    }
+
+    const result = await pool.query(
+      `DELETE FROM trade_proposal
+        WHERE trade_id = $1
+          AND offered_by = $2
+          AND slot_index = $3`,
+      [tradeId, offeredBy, slotIndex],
+    );
+
+    if (result.rowCount === 0) {
+      return false;
+    }
+
+    await resetReadinessForParticipant(tradeId, offeredBy);
+    return true;
   };
 
   const recordMute: SocialStore['recordMute'] = async ({
@@ -441,6 +733,10 @@ export const createSocialStore = (pool: Pool): SocialStore => {
     getTradeSessionById,
     getLatestTradeSessionForUser,
     updateTradeSessionStatus,
+    updateTradeParticipantReadiness,
+    listTradeProposalsForTrade,
+    upsertTradeProposal,
+    removeTradeProposal,
     recordMute,
     recordReport,
     getUserProfile,
