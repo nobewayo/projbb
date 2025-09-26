@@ -44,11 +44,17 @@ export const roomItemRemovedDataSchema = z.object({
   roomSeq: z.number().int().min(0, 'roomSeq must be non-negative'),
 });
 
+export const roomItemAddedDataSchema = z.object({
+  item: roomItemSchema,
+  roomSeq: z.number().int().min(0, 'roomSeq must be non-negative'),
+});
+
 export type InventoryItem = z.infer<typeof inventoryItemSchema>;
 export type ItemPickupRequestData = z.infer<typeof itemPickupRequestDataSchema>;
 export type ItemPickupOkData = z.infer<typeof itemPickupOkDataSchema>;
 export type ItemPickupErrorData = z.infer<typeof itemPickupErrorDataSchema>;
 export type ItemPickupErrorCode = z.infer<typeof itemPickupErrorCodeSchema>;
 export type RoomItemRemovedData = z.infer<typeof roomItemRemovedDataSchema>;
+export type RoomItemAddedData = z.infer<typeof roomItemAddedDataSchema>;
 
 export { roomItemSchema };

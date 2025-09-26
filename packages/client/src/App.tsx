@@ -465,6 +465,7 @@ const App = (): JSX.Element => {
     updateTileLock,
     updateTileNoPickup,
     requestLatencyTrace,
+    spawnPlantAtTile,
     fetchOccupantProfile,
     initiateTradeWithOccupant,
     muteOccupant,
@@ -1539,6 +1540,28 @@ const App = (): JSX.Element => {
           void requestLatencyTrace();
         },
       },
+      {
+        label: 'Plant',
+        onClick: () => {
+          if (!localTile) {
+            showToast('Stå på et felt for at plante.', 'error');
+            return;
+          }
+
+          void spawnPlantAtTile(localTile)
+            .then((ok) => {
+              if (ok) {
+                showToast('Plant placeret på feltet.', 'success');
+              } else {
+                showToast('Kunne ikke plante her.', 'error');
+              }
+            })
+            .catch(() => {
+              showToast('Kunne ikke plante her.', 'error');
+            });
+        },
+        disabled: !localTile,
+      },
     ],
     [
       areMoveAnimationsEnabled,
@@ -1547,6 +1570,8 @@ const App = (): JSX.Element => {
       localTileLocked,
       localTileNoPickup,
       requestLatencyTrace,
+      showToast,
+      spawnPlantAtTile,
       showHoverWhenGridHidden,
       updateAdminAffordances,
       updateTileLock,
@@ -1644,7 +1669,6 @@ const App = (): JSX.Element => {
               pendingMoveTarget={connection.pendingMoveTarget}
               onTileClick={handleTileClick}
               items={canvasItems}
-              onItemClick={handleItemClick}
               onTileContextMenu={handleTileContextMenu}
               onItemContextMenu={handleItemContextMenu}
               onOccupantContextMenu={handleOccupantContextMenu}

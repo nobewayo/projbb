@@ -48,7 +48,6 @@ type GridCanvasProps = {
   pendingMoveTarget: { x: number; y: number } | null;
   onTileClick?: (tile: GridTile) => void;
   items: CanvasItem[];
-  onItemClick?: (item: CanvasItem) => void;
   onTileContextMenu?: (payload: {
     tile: GridTile;
     items: CanvasItem[];
@@ -555,7 +554,6 @@ const GridCanvas = ({
   pendingMoveTarget,
   onTileClick,
   items,
-  onItemClick,
   onTileContextMenu,
   onItemContextMenu,
   onOccupantContextMenu,
@@ -1042,28 +1040,6 @@ const GridCanvas = ({
       const x = (event.clientX - rect.left) * scaleX;
       const y = (event.clientY - rect.top) * scaleY;
 
-      if (event.button === 0 && onItemClick) {
-        for (let index = itemDrawOrderRef.current.length - 1; index >= 0; index -= 1) {
-          const id = itemDrawOrderRef.current[index];
-          const bounds = id ? itemBoundsRef.current.get(id) : undefined;
-          if (!bounds) {
-            continue;
-          }
-
-          if (
-            x >= bounds.x &&
-            x <= bounds.x + bounds.width &&
-            y >= bounds.y &&
-            y <= bounds.y + bounds.height
-          ) {
-            event.preventDefault();
-            event.stopPropagation();
-            onItemClick(bounds.item);
-            return;
-          }
-        }
-      }
-
       if (!onTileClick || event.button !== 0) {
         return;
       }
@@ -1169,7 +1145,6 @@ const GridCanvas = ({
     };
   }, [
     grid,
-    onItemClick,
     onTileClick,
     onItemContextMenu,
     onTileContextMenu,

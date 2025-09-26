@@ -3,6 +3,7 @@ import type { FastifyBaseLogger } from 'fastify';
 import type { ServerConfig } from '../config.js';
 import type { TileFlagRecord } from '../db/rooms.js';
 import type { DevAffordanceState } from '../db/admin.js';
+import type { RoomItemRecord } from '../db/items.js';
 
 const ROOM_EVENT_CHANNEL = (roomId: string): string => `room.${roomId}.events`;
 
@@ -48,7 +49,13 @@ export type RoomAdminEvent =
       payload: { traceId: string; requestedBy: string; requestedAt: string };
     };
 
-export type RoomEvent = RoomChatEvent | RoomAdminEvent;
+export type RoomItemEvent = {
+  type: 'room:item:added';
+  roomId: string;
+  payload: { item: RoomItemRecord; roomSeq: number; createdBy: string };
+};
+
+export type RoomEvent = RoomChatEvent | RoomAdminEvent | RoomItemEvent;
 
 export interface RoomPubSub {
   publish(event: RoomEvent): Promise<void>;

@@ -39,6 +39,15 @@ export interface ItemStore {
   attemptPickup(
     params: { itemId: string; userId: string; roomId: string },
   ): Promise<ItemPickupResult>;
+  createRoomItem(params: {
+    roomId: string;
+    name: string;
+    description: string;
+    textureKey: string;
+    tileX: number;
+    tileY: number;
+    id?: string;
+  }): Promise<RoomItemRecord>;
 }
 
 const mapRoomItemRow = (row: {
@@ -251,9 +260,52 @@ export const createItemStore = (pool: Pool): ItemStore => {
       return { ok: true, item: updatedItem, inventoryItem };
     });
 
+  const createRoomItem = async ({
+    roomId,
+    name,
+    description,
+    textureKey,
+    tileX,
+    tileY,
+    id,
+  }: {
+    roomId: string;
+    name: string;
+    description: string;
+    textureKey: string;
+    tileX: number;
+    tileY: number;
+    id?: string;
+  }): Promise<RoomItemRecord> => {
+    const itemId = id ?? randomUUID();
+    const result = await pool.query<{
+      id: string;
+      room_id: string;
+      name: string;
+      description: string;
+      texture_key: string;
+      tile_x: number;
+      tile_y: number;
+      picked_up_at: Date | string | null;
+      picked_up_by: string | null;
+    }>(
+      `INSERT INTO room_item (id, room_id, name, description, texture_key, tile_x, tile_y, picked_up_at, picked_up_by)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, NULL, NULL)
+      RETURNING id, room_id, name, description, texture_key, tile_x, tile_y, picked_up_at, picked_up_by`,
+      [itemId, roomId, name, description, textureKey, tileX, tileY],
+    );
+
+    if (result.rowCount === 0) {
+      throw new Error('Failed to insert room item');
+    }
+
+    return mapRoomItemRow(result.rows[0]);
+  };
+
   return {
     listRoomItems,
     listInventoryForUser,
     attemptPickup,
+    createRoomItem,
   };
 };
