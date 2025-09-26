@@ -9,11 +9,16 @@ import {
   itemPickupRequestDataSchema,
   messageEnvelopeSchema,
   moveRequestDataSchema,
+  adminAffordanceUpdateDataSchema,
+  adminTileFlagUpdateDataSchema,
+  adminLatencyTraceEventDataSchema,
   type ChatMessageBroadcast,
   type ChatPreferences,
   type ChatTypingBroadcast,
   type MessageEnvelope,
   type MoveErrorCode,
+  type AdminDevAffordanceState,
+  type AdminLatencyTrace,
 } from '@bitby/schemas';
 import { z } from 'zod';
 import type { ServerConfig } from '../config.js';
@@ -29,6 +34,7 @@ import type {
   RoomItemRecord,
 } from '../db/items.js';
 import type { PreferenceStore } from '../db/preferences.js';
+import type { AdminStateStore, RoomAdminStateRecord } from '../db/admin.js';
 
 const HEARTBEAT_INTERVAL_MS = 15_000;
 const HEARTBEAT_GRACE_MS = HEARTBEAT_INTERVAL_MS * 2;
@@ -67,6 +73,7 @@ interface DevelopmentRoomState {
   connections: Map<string, RegisteredConnection>;
   items: Map<string, RoomItem>;
   typingIndicators: Map<string, TypingIndicatorState>;
+  adminState: RoomAdminStateRecord;
 }
 
 interface RoomItem {
@@ -105,10 +112,21 @@ interface RealtimeDependencies {
   pubsub: RoomPubSub;
   metrics: MetricsBundle;
   preferenceStore: PreferenceStore;
+  adminStateStore: AdminStateStore;
 }
 
-interface RealtimeServer {
+export interface RealtimeServer {
   handleConnection(context: ConnectionContext): void;
+  applyTileFlagUpdate(event: {
+    tile: TileFlagRecord;
+    roomSeq: number;
+    updatedBy: string;
+  }): Promise<void>;
+  applyAffordanceUpdate(event: {
+    state: AdminDevAffordanceState;
+    updatedBy: string;
+  }): Promise<void>;
+  applyLatencyTrace(event: { trace: AdminLatencyTrace }): Promise<void>;
   shutdown(): Promise<void>;
 }
 
@@ -254,6 +272,7 @@ export const createRealtimeServer = async ({
   pubsub,
   metrics,
   preferenceStore,
+  adminStateStore,
 }: RealtimeDependencies): Promise<RealtimeServer> => {
   const roomRecord = await roomStore.getRoomBySlug(DEVELOPMENT_ROOM_SLUG);
   if (!roomRecord) {
@@ -263,6 +282,8 @@ export const createRealtimeServer = async ({
   const tileFlags = await roomStore.getTileFlags(roomRecord.id);
   const occupantList = await roomStore.listOccupants(roomRecord.id);
   const roomItems = await itemStore.listRoomItems(roomRecord.id);
+
+  const adminStateRecord = await adminStateStore.getRoomState(roomRecord.id);
 
   const developmentRoomState: DevelopmentRoomState = {
     id: roomRecord.id,
@@ -274,6 +295,7 @@ export const createRealtimeServer = async ({
     connections: new Map(),
     items: new Map(roomItems.map((record) => [record.id, toRoomItem(record)])),
     typingIndicators: new Map(),
+    adminState: adminStateRecord,
   };
 
   for (const occupant of occupantList) {
@@ -285,6 +307,21 @@ export const createRealtimeServer = async ({
       developmentRoomState.roomSeq = roomSeq;
     }
   };
+
+  const serialiseAdminState = (): {
+    affordances: AdminDevAffordanceState;
+    lastLatencyTrace: AdminLatencyTrace | null;
+  } => ({
+    affordances: { ...developmentRoomState.adminState.affordances },
+    lastLatencyTrace: developmentRoomState.adminState.lastLatencyTrace
+      ? {
+          traceId: developmentRoomState.adminState.lastLatencyTrace.traceId,
+          requestedAt: developmentRoomState.adminState.lastLatencyTrace.requestedAt.toISOString(),
+          requestedBy:
+            developmentRoomState.adminState.lastLatencyTrace.requestedBy ?? 'system',
+        }
+      : null,
+  });
 
   const buildSnapshot = (): RoomSnapshot => ({
     id: developmentRoomState.id,
@@ -298,6 +335,7 @@ export const createRealtimeServer = async ({
       noPickup: tile.noPickup,
     })),
     items: sortItems(developmentRoomState.items),
+    adminState: serialiseAdminState(),
   });
 
   const isTileLocked = (x: number, y: number): boolean =>
@@ -411,7 +449,7 @@ export const createRealtimeServer = async ({
       clearTypingIndicator(connection.userId);
       const payload: ChatTypingBroadcast = { userId: connection.userId, isTyping: false };
       broadcastTypingEvent(payload, socket.id);
-      await pubsub.publishChat({
+      await pubsub.publish({
         type: 'chat:typing',
         roomId: developmentRoomState.id,
         payload,
@@ -570,11 +608,165 @@ export const createRealtimeServer = async ({
     }
   };
 
-  await pubsub.subscribeToChat(developmentRoomState.id, (event) => {
-    if (event.type === 'chat:new') {
-      metrics.chatEvents.inc();
+  const broadcastTileFlagUpdate = (
+    tile: TileFlagRecord,
+    roomSeq: number,
+    updatedBy: string,
+  ): void => {
+    const payload = adminTileFlagUpdateDataSchema.parse({
+      tile: { x: tile.x, y: tile.y, locked: tile.locked, noPickup: tile.noPickup },
+      roomSeq,
+      updatedBy,
+    });
+    for (const connection of developmentRoomState.connections.values()) {
+      safeSend(
+        connection.logger,
+        connection.socket,
+        createEnvelope('admin:tile_flag:update', 0, payload),
+      );
     }
-    broadcastChatEvent(event);
+  };
+
+  const broadcastAffordanceUpdate = (
+    state: AdminDevAffordanceState,
+    updatedBy: string,
+  ): void => {
+    const payload = adminAffordanceUpdateDataSchema.parse({
+      state,
+      updatedBy,
+    });
+    for (const connection of developmentRoomState.connections.values()) {
+      safeSend(
+        connection.logger,
+        connection.socket,
+        createEnvelope('admin:affordance:update', 0, payload),
+      );
+    }
+  };
+
+  const broadcastLatencyTrace = (trace: AdminLatencyTrace): void => {
+    const payload = adminLatencyTraceEventDataSchema.parse({ trace });
+    for (const connection of developmentRoomState.connections.values()) {
+      safeSend(
+        connection.logger,
+        connection.socket,
+        createEnvelope('admin:latency:trace', 0, payload),
+      );
+    }
+  };
+
+  const applyTileFlagUpdateInternal = async (
+    event: { tile: TileFlagRecord; roomSeq: number; updatedBy: string },
+    shouldPublish: boolean,
+  ): Promise<void> => {
+    const { tile, roomSeq, updatedBy } = event;
+    const key = createTileKey(tile.x, tile.y);
+    developmentRoomState.tileIndex.set(key, { ...tile });
+    const existingIndex = developmentRoomState.tiles.findIndex(
+      (candidate) => candidate.x === tile.x && candidate.y === tile.y,
+    );
+    if (existingIndex >= 0) {
+      developmentRoomState.tiles[existingIndex] = { ...tile };
+    } else {
+      developmentRoomState.tiles.push({ ...tile });
+    }
+
+    updateRoomSeq(roomSeq);
+    broadcastTileFlagUpdate(tile, roomSeq, updatedBy);
+
+    if (shouldPublish) {
+      await pubsub.publish({
+        type: 'admin:tile_flag:update',
+        roomId: developmentRoomState.id,
+        payload: { tile, roomSeq, updatedBy },
+      });
+    }
+  };
+
+  const applyAffordanceUpdateInternal = async (
+    event: { state: AdminDevAffordanceState; updatedBy: string },
+    shouldPublish: boolean,
+  ): Promise<void> => {
+    developmentRoomState.adminState = {
+      ...developmentRoomState.adminState,
+      affordances: { ...event.state },
+    };
+
+    broadcastAffordanceUpdate(event.state, event.updatedBy);
+
+    if (shouldPublish) {
+      await pubsub.publish({
+        type: 'admin:affordance:update',
+        roomId: developmentRoomState.id,
+        payload: { state: event.state, updatedBy: event.updatedBy },
+      });
+    }
+  };
+
+  const applyLatencyTraceInternal = async (
+    event: { trace: AdminLatencyTrace },
+    shouldPublish: boolean,
+  ): Promise<void> => {
+    const requestedAt = new Date(event.trace.requestedAt);
+    const safeRequestedAt = Number.isNaN(requestedAt.getTime())
+      ? new Date()
+      : requestedAt;
+
+    developmentRoomState.adminState = {
+      ...developmentRoomState.adminState,
+      lastLatencyTrace: {
+        traceId: event.trace.traceId,
+        requestedAt: safeRequestedAt,
+        requestedBy: event.trace.requestedBy,
+      },
+    };
+
+    broadcastLatencyTrace({ ...event.trace, requestedAt: safeRequestedAt.toISOString() });
+
+    if (shouldPublish) {
+      await pubsub.publish({
+        type: 'admin:latency:trace',
+        roomId: developmentRoomState.id,
+        payload: {
+          traceId: event.trace.traceId,
+          requestedAt: safeRequestedAt.toISOString(),
+          requestedBy: event.trace.requestedBy,
+        },
+      });
+    }
+  };
+
+  await pubsub.subscribe(developmentRoomState.id, (event) => {
+    if (event.type === 'chat:new' || event.type === 'chat:typing') {
+      if (event.type === 'chat:new') {
+        metrics.chatEvents.inc();
+      }
+      broadcastChatEvent(event);
+      return;
+    }
+
+    if (event.type === 'admin:tile_flag:update') {
+      void applyTileFlagUpdateInternal(event.payload, false).catch((error) => {
+        // eslint-disable-next-line no-console
+        console.error('Failed to apply remote tile flag update', error);
+      });
+      return;
+    }
+
+    if (event.type === 'admin:affordance:update') {
+      void applyAffordanceUpdateInternal(event.payload, false).catch((error) => {
+        // eslint-disable-next-line no-console
+        console.error('Failed to apply remote affordance update', error);
+      });
+      return;
+    }
+
+    if (event.type === 'admin:latency:trace') {
+      void applyLatencyTraceInternal({ trace: event.payload }, false).catch((error) => {
+        // eslint-disable-next-line no-console
+        console.error('Failed to apply remote latency trace update', error);
+      });
+    }
   });
 
   const attemptMove = async (
@@ -788,7 +980,7 @@ export const createRealtimeServer = async ({
 
     metrics.chatEvents.inc();
     broadcastChatEvent(event);
-    await pubsub.publishChat(event);
+    await pubsub.publish(event);
 
     acknowledge(logger, socket, envelope, 'chat:ok', {
       messageId: record.id,
@@ -824,7 +1016,7 @@ export const createRealtimeServer = async ({
         roomId: developmentRoomState.id,
         payload,
       };
-      await pubsub.publishChat(event);
+      await pubsub.publish(event);
       acknowledge(logger, socket, envelope, 'chat:typing:ok', {
         isTyping: true,
         expiresAt: payload.expiresAt,
@@ -835,7 +1027,7 @@ export const createRealtimeServer = async ({
     clearTypingIndicator(user.id);
     const payload: ChatTypingBroadcast = { userId: user.id, isTyping: false };
     broadcastTypingEvent(payload, socket.id);
-    await pubsub.publishChat({
+    await pubsub.publish({
       type: 'chat:typing',
       roomId: developmentRoomState.id,
       payload,
@@ -1222,6 +1414,25 @@ export const createRealtimeServer = async ({
     });
   };
 
+  const applyTileFlagUpdate = async (event: {
+    tile: TileFlagRecord;
+    roomSeq: number;
+    updatedBy: string;
+  }): Promise<void> => {
+    await applyTileFlagUpdateInternal(event, true);
+  };
+
+  const applyAffordanceUpdate = async (event: {
+    state: AdminDevAffordanceState;
+    updatedBy: string;
+  }): Promise<void> => {
+    await applyAffordanceUpdateInternal(event, true);
+  };
+
+  const applyLatencyTrace = async (event: { trace: AdminLatencyTrace }): Promise<void> => {
+    await applyLatencyTraceInternal(event, true);
+  };
+
   const shutdown = async (): Promise<void> => {
     for (const connection of developmentRoomState.connections.values()) {
       try {
@@ -1235,6 +1446,9 @@ export const createRealtimeServer = async ({
 
   return {
     handleConnection,
+    applyTileFlagUpdate,
+    applyAffordanceUpdate,
+    applyLatencyTrace,
     shutdown,
   };
 };

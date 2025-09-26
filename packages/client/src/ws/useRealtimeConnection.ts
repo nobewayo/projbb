@@ -18,6 +18,13 @@ import {
   roomOccupantLeftDataSchema,
   roomItemRemovedDataSchema,
   roomSnapshotSchema,
+  adminAffordanceUpdateDataSchema,
+  adminTileFlagUpdateDataSchema,
+  adminLatencyTraceEventDataSchema,
+  occupantProfileResponseSchema,
+  tradeBootstrapResponseSchema,
+  muteResponseSchema,
+  reportResponseSchema,
   type ChatMessageBroadcast,
   type ChatPreferences,
   type InventoryItem,
@@ -25,6 +32,12 @@ import {
   type RoomOccupant,
   type RoomItem,
   type RoomTileFlag,
+  type AdminState,
+  type AdminDevAffordanceState,
+  type OccupantProfile,
+  type TradeBootstrapResponse,
+  type MuteResponse,
+  type ReportResponse,
 } from '@bitby/schemas';
 
 const DEFAULT_HEARTBEAT_MS = 15_000;
@@ -33,6 +46,14 @@ const LOGIN_USERNAME_FALLBACK = 'test';
 const LOGIN_PASSWORD_FALLBACK = 'password123';
 const TYPING_TTL_MS = 6_000;
 const CHAT_BUBBLE_TTL_MS = 7_000;
+const DEFAULT_ADMIN_STATE: AdminState = {
+  affordances: {
+    gridVisible: true,
+    showHoverWhenGridHidden: true,
+    moveAnimationsEnabled: true,
+  },
+  lastLatencyTrace: null,
+};
 
 const sortRoomItems = (items: Iterable<RoomItem>): RoomItem[] =>
   Array.from(items).sort((a, b) => {
@@ -108,6 +129,19 @@ export interface RealtimeConnectionState extends InternalConnectionState {
   updateTypingPreview: (preview: string) => void;
   clearTypingPreview: () => void;
   updateShowSystemMessages: (show: boolean) => void;
+  updateAdminAffordances: (updates: Partial<AdminDevAffordanceState>) => Promise<boolean>;
+  updateTileLock: (tile: { x: number; y: number }, locked: boolean) => Promise<boolean>;
+  updateTileNoPickup: (tile: { x: number; y: number }, noPickup: boolean) => Promise<boolean>;
+  requestLatencyTrace: () => Promise<boolean>;
+  fetchOccupantProfile: (occupantId: string) => Promise<ActionResult<OccupantProfileSummary>>;
+  initiateTradeWithOccupant: (
+    occupantId: string,
+  ) => Promise<ActionResult<TradeSessionBootstrap>>;
+  muteOccupant: (occupantId: string) => Promise<ActionResult<MuteRecordSummary>>;
+  reportOccupant: (
+    occupantId: string,
+    reason?: string,
+  ) => Promise<ActionResult<ReportRecordSummary>>;
 }
 
 interface PickupResultState {
@@ -132,6 +166,15 @@ interface ChatBubbleView {
 type TypingIndicatorInternal = { preview: string | null; expiresAt: number };
 type ChatBubbleInternal = { body: string; messageId: string; expiresAt: number };
 
+export type ActionResult<T> =
+  | { ok: true; data: T }
+  | { ok: false; message: string; status: number };
+
+export type OccupantProfileSummary = OccupantProfile;
+export type TradeSessionBootstrap = TradeBootstrapResponse;
+export type MuteRecordSummary = MuteResponse['mute'];
+export type ReportRecordSummary = ReportResponse['report'];
+
 interface InternalConnectionState {
   status: ConnectionStatus;
   lastError: string | null;
@@ -152,6 +195,7 @@ interface InternalConnectionState {
   typingIndicators: TypingIndicatorView[];
   chatBubbles: ChatBubbleView[];
   chatPreferences: ChatPreferences | null;
+  adminState: AdminState;
 }
 
 const cloneOccupant = (occupant: RoomOccupant): RoomOccupant => ({
@@ -298,6 +342,7 @@ export const useRealtimeConnection = (): RealtimeConnectionState => {
     typingIndicators: [],
     chatBubbles: [],
     chatPreferences: null,
+    adminState: { ...DEFAULT_ADMIN_STATE },
   });
 
   const socketRef = useRef<Socket | null>(null);
@@ -841,6 +886,7 @@ export const useRealtimeConnection = (): RealtimeConnectionState => {
             typingIndicators: typingIndicatorsList,
             chatBubbles: [],
             chatPreferences,
+            adminState: snapshotResult.data.adminState,
           }));
 
           startPingTimer(intervalFromServer);
@@ -974,7 +1020,7 @@ export const useRealtimeConnection = (): RealtimeConnectionState => {
 
           removeTypingIndicator(parsed.data.userId);
           const isSystemMessage = parsed.data.roles.some(
-            (role) => role.toLowerCase() === 'system',
+            (role: string) => role.toLowerCase() === 'system',
           );
           if (!isSystemMessage) {
             upsertChatBubble(parsed.data.userId, parsed.data.id, parsed.data.body);
@@ -1124,6 +1170,66 @@ export const useRealtimeConnection = (): RealtimeConnectionState => {
               (id) => id !== parsed.data.itemId,
             ),
             lastRoomSeq: parsed.data.roomSeq,
+          }));
+
+          return;
+        }
+        case 'admin:tile_flag:update': {
+          const parsed = adminTileFlagUpdateDataSchema.safeParse(envelope.data);
+          if (!parsed.success) {
+            updateState({ lastError: 'Received malformed admin tile flag update' });
+            return;
+          }
+
+          const { tile, roomSeq } = parsed.data;
+          setState((previous) => {
+            const nextFlags = [...previous.tileFlags];
+            const index = nextFlags.findIndex(
+              (flag) => flag.x === tile.x && flag.y === tile.y,
+            );
+            if (index >= 0) {
+              nextFlags[index] = { ...tile };
+            } else {
+              nextFlags.push({ ...tile });
+            }
+            const nextSeq = previous.lastRoomSeq
+              ? Math.max(previous.lastRoomSeq, roomSeq)
+              : roomSeq;
+            return { ...previous, tileFlags: nextFlags, lastRoomSeq: nextSeq };
+          });
+
+          return;
+        }
+        case 'admin:affordance:update': {
+          const parsed = adminAffordanceUpdateDataSchema.safeParse(envelope.data);
+          if (!parsed.success) {
+            updateState({ lastError: 'Received malformed admin affordance payload' });
+            return;
+          }
+
+          setState((previous) => ({
+            ...previous,
+            adminState: {
+              ...previous.adminState,
+              affordances: { ...parsed.data.state },
+            },
+          }));
+
+          return;
+        }
+        case 'admin:latency:trace': {
+          const parsed = adminLatencyTraceEventDataSchema.safeParse(envelope.data);
+          if (!parsed.success) {
+            updateState({ lastError: 'Received malformed latency trace payload' });
+            return;
+          }
+
+          setState((previous) => ({
+            ...previous,
+            adminState: {
+              ...previous.adminState,
+              lastLatencyTrace: parsed.data.trace,
+            },
           }));
 
           return;
@@ -1626,6 +1732,238 @@ export const useRealtimeConnection = (): RealtimeConnectionState => {
     [state.status],
   );
 
+  const sendAdminPost = useCallback(
+    async (path: string, body: Record<string, unknown>): Promise<boolean> => {
+      if (state.status !== 'connected') {
+        return false;
+      }
+
+      const baseUrl = resolveHttpBaseUrl();
+      try {
+        const response = await fetch(`${baseUrl}${path}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify(body),
+        });
+
+        if (!response.ok) {
+          if (import.meta.env.DEV) {
+            console.warn('[admin] Request failed', path, response.status);
+          }
+          return false;
+        }
+
+        return true;
+      } catch (error) {
+        if (import.meta.env.DEV) {
+          console.error('[admin] Request error', path, error);
+        }
+        return false;
+      }
+    },
+    [state.status],
+  );
+
+  const sendAuthorizedRequest = useCallback(
+    async <T>(
+      path: string,
+      options: RequestInit,
+      parse: (payload: unknown) => T,
+    ): Promise<ActionResult<T>> => {
+      const token = tokenRef.current;
+      if (!token) {
+        return { ok: false, message: 'Authentication required', status: 401 };
+      }
+
+      const baseUrl = resolveHttpBaseUrl();
+      const headers = new Headers(options.headers ?? {});
+      if (options.body && !headers.has('Content-Type')) {
+        headers.set('Content-Type', 'application/json');
+      }
+      headers.set('Authorization', `Bearer ${token}`);
+
+      try {
+        const response = await fetch(`${baseUrl}${path}`, {
+          ...options,
+          headers,
+          credentials: 'include',
+        });
+
+        if (!response.ok) {
+          let message = `Request failed (${response.status})`;
+          try {
+            const errorJson = await response.json();
+            if (errorJson && typeof errorJson.message === 'string') {
+              message = errorJson.message;
+            }
+          } catch {
+            // Ignore JSON parse errors and fall back to the default message.
+          }
+          return { ok: false, message, status: response.status };
+        }
+
+        let payload: unknown;
+        try {
+          payload = await response.json();
+        } catch {
+          return { ok: false, message: 'Malformed response payload', status: response.status };
+        }
+
+        try {
+          const data = parse(payload);
+          return { ok: true, data };
+        } catch (error) {
+          const message =
+            error instanceof Error ? error.message : 'Unable to parse response payload';
+          return { ok: false, message, status: response.status };
+        }
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : 'Failed to reach the server';
+        return { ok: false, message, status: 0 };
+      }
+    },
+    [],
+  );
+
+  const updateAdminAffordances = useCallback(
+    async (updates: Partial<AdminDevAffordanceState>): Promise<boolean> => {
+      const roomId = state.room?.id;
+      if (!roomId) {
+        return false;
+      }
+
+      const payload = {
+        ...state.adminState.affordances,
+        ...updates,
+        updatedBy: state.user?.id ?? 'admin',
+      } satisfies Record<string, unknown>;
+      return sendAdminPost(`/admin/rooms/${roomId}/dev-affordances`, payload);
+    },
+    [sendAdminPost, state.adminState.affordances, state.room?.id, state.user?.id],
+  );
+
+  const updateTileLock = useCallback(
+    async (tile: { x: number; y: number }, locked: boolean): Promise<boolean> => {
+      const roomId = state.room?.id;
+      if (!roomId) {
+        return false;
+      }
+
+      return sendAdminPost(`/admin/rooms/${roomId}/tiles/${tile.x}/${tile.y}/lock`, {
+        locked,
+        updatedBy: state.user?.id ?? 'admin',
+      });
+    },
+    [sendAdminPost, state.room?.id, state.user?.id],
+  );
+
+  const updateTileNoPickup = useCallback(
+    async (tile: { x: number; y: number }, noPickup: boolean): Promise<boolean> => {
+      const roomId = state.room?.id;
+      if (!roomId) {
+        return false;
+      }
+
+      return sendAdminPost(`/admin/rooms/${roomId}/tiles/${tile.x}/${tile.y}/no-pickup`, {
+        noPickup,
+        updatedBy: state.user?.id ?? 'admin',
+      });
+    },
+    [sendAdminPost, state.room?.id, state.user?.id],
+  );
+
+  const requestLatencyTrace = useCallback(async (): Promise<boolean> => {
+    const roomId = state.room?.id;
+    if (!roomId) {
+      return false;
+    }
+
+    const userId = state.user?.id;
+    const body = userId ? { requestedBy: userId } : {};
+    return sendAdminPost(`/admin/rooms/${roomId}/latency-trace`, body);
+  }, [sendAdminPost, state.room?.id, state.user?.id]);
+
+  const fetchOccupantProfile = useCallback(
+    async (occupantId: string): Promise<ActionResult<OccupantProfileSummary>> => {
+      const roomId = state.room?.id;
+      if (!roomId) {
+        return { ok: false, message: 'Room context unavailable', status: 400 };
+      }
+
+      return sendAuthorizedRequest(
+        `/rooms/${roomId}/occupants/${occupantId}/profile`,
+        { method: 'GET' },
+        (payload) => occupantProfileResponseSchema.parse(payload).profile,
+      );
+    },
+    [sendAuthorizedRequest, state.room?.id],
+  );
+
+  const initiateTradeWithOccupant = useCallback(
+    async (occupantId: string): Promise<ActionResult<TradeSessionBootstrap>> => {
+      const roomId = state.room?.id;
+      if (!roomId) {
+        return { ok: false, message: 'Room context unavailable', status: 400 };
+      }
+
+      return sendAuthorizedRequest(
+        `/rooms/${roomId}/occupants/${occupantId}/trade`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ context: 'context_menu' }),
+        },
+        (payload) => tradeBootstrapResponseSchema.parse(payload),
+      );
+    },
+    [sendAuthorizedRequest, state.room?.id],
+  );
+
+  const muteOccupant = useCallback(
+    async (occupantId: string): Promise<ActionResult<MuteRecordSummary>> => {
+      const roomId = state.room?.id;
+      if (!roomId) {
+        return { ok: false, message: 'Room context unavailable', status: 400 };
+      }
+
+      return sendAuthorizedRequest(
+        `/rooms/${roomId}/occupants/${occupantId}/mute`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ reason: 'context_menu' }),
+        },
+        (payload) => muteResponseSchema.parse(payload).mute,
+      );
+    },
+    [sendAuthorizedRequest, state.room?.id],
+  );
+
+  const reportOccupant = useCallback(
+    async (
+      occupantId: string,
+      reason: string = 'context_menu',
+    ): Promise<ActionResult<ReportRecordSummary>> => {
+      const roomId = state.room?.id;
+      if (!roomId) {
+        return { ok: false, message: 'Room context unavailable', status: 400 };
+      }
+
+      return sendAuthorizedRequest(
+        `/rooms/${roomId}/occupants/${occupantId}/report`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ reason }),
+        },
+        (payload) => reportResponseSchema.parse(payload).report,
+      );
+    },
+    [sendAuthorizedRequest, state.room?.id],
+  );
+
   return useMemo(
     () => ({
       ...state,
@@ -1636,6 +1974,14 @@ export const useRealtimeConnection = (): RealtimeConnectionState => {
       updateTypingPreview,
       clearTypingPreview,
       updateShowSystemMessages,
+      updateAdminAffordances,
+      updateTileLock,
+      updateTileNoPickup,
+      requestLatencyTrace,
+      fetchOccupantProfile,
+      initiateTradeWithOccupant,
+      muteOccupant,
+      reportOccupant,
     }),
     [
       state,
@@ -1646,6 +1992,14 @@ export const useRealtimeConnection = (): RealtimeConnectionState => {
       updateTypingPreview,
       clearTypingPreview,
       updateShowSystemMessages,
+      updateAdminAffordances,
+      updateTileLock,
+      updateTileNoPickup,
+      requestLatencyTrace,
+      fetchOccupantProfile,
+      initiateTradeWithOccupant,
+      muteOccupant,
+      reportOccupant,
     ],
   );
 };

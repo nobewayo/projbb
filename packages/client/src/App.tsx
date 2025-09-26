@@ -11,7 +11,10 @@ import {
 import type { CSSProperties } from 'react';
 import GridCanvas, { type CanvasItem, type CanvasOccupant } from './canvas/GridCanvas';
 import './styles.css';
-import { useRealtimeConnection } from './ws/useRealtimeConnection';
+import {
+  useRealtimeConnection,
+  type OccupantProfileSummary,
+} from './ws/useRealtimeConnection';
 import type { GridTile } from './canvas/types';
 import { createTileKey } from './canvas/geometry';
 import plantTexture from './assets/items/plant.png';
@@ -20,6 +23,7 @@ import couchTexture from './assets/items/couch.png';
 const dockButtons = [
   'Rooms',
   'Shop',
+  'Backpack',
   'Log',
   'Search',
   'Quests',
@@ -71,6 +75,18 @@ type PickupAvailability = {
 
 type OccupantMenuAction = 'profile' | 'trade' | 'mute' | 'report';
 
+type ProfilePanelState =
+  | { status: 'idle' }
+  | { status: 'loading'; occupantId: string; occupantName: string }
+  | { status: 'error'; occupantId: string; occupantName: string; message: string }
+  | { status: 'loaded'; profile: OccupantProfileSummary };
+
+type ActionToast = {
+  id: number;
+  message: string;
+  tone: 'success' | 'error';
+};
+
 interface ActiveContextMenuProps {
   state: ContextMenuState;
   onClose: () => void;
@@ -79,6 +95,7 @@ interface ActiveContextMenuProps {
   getPickupAvailability: (item: CanvasItem) => PickupAvailability;
   onSelectOccupantAction: (action: OccupantMenuAction, occupant: CanvasOccupant) => void;
   localOccupantId: string | null;
+  mutedOccupantIds: Set<string>;
 }
 
 const FOCUSABLE_SELECTOR = 'button:not([disabled])';
@@ -94,6 +111,7 @@ const ActiveContextMenu = forwardRef<HTMLDivElement | null, ActiveContextMenuPro
       getPickupAvailability,
       onSelectOccupantAction,
       localOccupantId,
+      mutedOccupantIds,
     },
     ref,
   ) => {
@@ -289,7 +307,8 @@ const ActiveContextMenu = forwardRef<HTMLDivElement | null, ActiveContextMenuPro
           action: 'mute',
           label: 'Mute',
           description: 'Skjul spillerens chat',
-          disabled: isSelf,
+          disabled:
+            isSelf || occupant.roles.includes('npc') || mutedOccupantIds.has(occupant.id),
         },
         {
           action: 'report',
@@ -418,24 +437,6 @@ const placeholderChatHistory: ChatMessage[] = [
   },
 ];
 
-const panelSections = [
-  {
-    title: 'Room overview',
-    body:
-      'Live occupants, furniture states, and queued moderation events surface here once the realtime feeds are connected. Expect inline moderation cards, visitor summaries, and streaming alerts to pack this column so admins never lose context while monitoring rooms.',
-  },
-  {
-    title: 'Quest tracker',
-    body:
-      'Track daily quests, event timers, and party tasks. Progress updates from the authoritative server stream directly into this stack, keeping collaborators aligned on milestones without needing to leave the canvas or pop additional dialogs.',
-  },
-  {
-    title: 'Pinned threads',
-    body:
-      'Moderators can pin essential announcements or support replies for quick reference without leaving the canvas. Long-form guidance, policy notes, and escalation timelines can all live here as fully formatted text blocks.',
-  },
-];
-
 const App = (): JSX.Element => {
   const [isChatVisible, setIsChatVisible] = useState(true);
   const [isAdminPanelVisible, setIsAdminPanelVisible] = useState(
@@ -443,21 +444,94 @@ const App = (): JSX.Element => {
   );
   const [showSystemMessages, setShowSystemMessages] = useState(true);
   const [showBackToTop, setShowBackToTop] = useState(false);
-  const [isGridVisible, setIsGridVisible] = useState(true);
-  const [showHoverWhenGridHidden, setShowHoverWhenGridHidden] = useState(true);
-  const [areMoveAnimationsEnabled, setAreMoveAnimationsEnabled] = useState(true);
   const [chatDraft, setChatDraft] = useState('');
   const chatDraftRef = useRef(chatDraft);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [contextMenuState, setContextMenuState] = useState<ContextMenuState | null>(null);
   const chatMessagesRef = useRef<HTMLOListElement | null>(null);
   const contextMenuRef = useRef<HTMLDivElement | null>(null);
+  const [profilePanelState, setProfilePanelState] = useState<ProfilePanelState>({ status: 'idle' });
+  const [activeDockView, setActiveDockView] = useState<'default' | 'backpack'>('default');
+  const [actionToast, setActionToast] = useState<ActionToast | null>(null);
+  const [mutedOccupantIds, setMutedOccupantIds] = useState<string[]>([]);
+  const toastTimerRef = useRef<number | null>(null);
+  const profileRequestRef = useRef(0);
   const connection = useRealtimeConnection();
-  const { sendChat, updateTypingPreview, clearTypingPreview } = connection;
+  const {
+    sendChat,
+    updateTypingPreview,
+    clearTypingPreview,
+    updateAdminAffordances,
+    updateTileLock,
+    updateTileNoPickup,
+    requestLatencyTrace,
+    fetchOccupantProfile,
+    initiateTradeWithOccupant,
+    muteOccupant,
+    reportOccupant,
+  } = connection;
+  const showToast = useCallback((message: string, tone: 'success' | 'error') => {
+    setActionToast({ id: Date.now(), message, tone });
+  }, []);
+  const requestProfile = useCallback(
+    (occupantId: string, occupantName: string) => {
+      profileRequestRef.current += 1;
+      const requestId = profileRequestRef.current;
+      setActiveDockView('default');
+      setSelectedItemId(null);
+      setProfilePanelState({
+        status: 'loading',
+        occupantId,
+        occupantName,
+      });
+      void fetchOccupantProfile(occupantId).then((result) => {
+        if (profileRequestRef.current !== requestId) {
+          return;
+        }
+        if (!result.ok) {
+          setProfilePanelState({
+            status: 'error',
+            occupantId,
+            occupantName,
+            message: result.message,
+          });
+          return;
+        }
+        setProfilePanelState({ status: 'loaded', profile: result.data });
+      });
+    },
+    [fetchOccupantProfile],
+  );
+  const adminAffordances = connection.adminState.affordances;
+  const isGridVisible = adminAffordances.gridVisible;
+  const showHoverWhenGridHidden = adminAffordances.showHoverWhenGridHidden;
+  const areMoveAnimationsEnabled = adminAffordances.moveAnimationsEnabled;
 
   useEffect(() => {
     chatDraftRef.current = chatDraft;
   }, [chatDraft]);
+
+  useEffect(() => {
+    if (!actionToast) {
+      return () => undefined;
+    }
+
+    if (toastTimerRef.current !== null) {
+      window.clearTimeout(toastTimerRef.current);
+    }
+
+    toastTimerRef.current = window.setTimeout(() => {
+      setActionToast(null);
+      toastTimerRef.current = null;
+    }, 4000);
+
+    return () => {
+      if (toastTimerRef.current !== null) {
+        window.clearTimeout(toastTimerRef.current);
+        toastTimerRef.current = null;
+      }
+    };
+  }, [actionToast]);
 
   useEffect(() => {
     const isEditableElement = (element: Element | null): boolean => {
@@ -594,13 +668,126 @@ const App = (): JSX.Element => {
     return items;
   }, [connection.items]);
 
+  const inventoryEntries = useMemo(
+    () =>
+      connection.inventory.map((item) => {
+        const acquiredAt = new Date(item.acquiredAt);
+        const acquiredLabel = Number.isNaN(acquiredAt.getTime())
+          ? ''
+          : acquiredAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        return {
+          id: item.id,
+          name: item.name,
+          description: item.description,
+          acquiredAt,
+          acquiredLabel,
+          texture: ITEM_TEXTURES[item.textureKey] ?? DEFAULT_ITEM_TEXTURE,
+        };
+      }),
+    [connection.inventory],
+  );
+
+  const mutedOccupantSet = useMemo(() => new Set(mutedOccupantIds), [mutedOccupantIds]);
+
+  const handleProfileRetry = useCallback(() => {
+    if (profilePanelState.status === 'error') {
+      requestProfile(profilePanelState.occupantId, profilePanelState.occupantName);
+    }
+  }, [profilePanelState, requestProfile]);
+
+  const handleProfileClose = useCallback(() => {
+    setProfilePanelState({ status: 'idle' });
+    setActiveDockView('default');
+  }, []);
+
+  const profilePanelContent = useMemo(() => {
+    switch (profilePanelState.status) {
+      case 'idle':
+        return null;
+      case 'loading':
+        return (
+          <article className="profile-card" aria-busy="true">
+            <header className="profile-card__header">
+              <h2>Loading profile…</h2>
+              <p>Fetching the latest data for {profilePanelState.occupantName}.</p>
+            </header>
+          </article>
+        );
+      case 'error':
+        return (
+          <article className="profile-card profile-card--error">
+            <header className="profile-card__header">
+              <h2>Profile unavailable</h2>
+            </header>
+            <p className="profile-card__body">{profilePanelState.message}</p>
+            <div className="profile-card__actions">
+              <button type="button" onClick={handleProfileRetry}>
+                Retry
+              </button>
+              <button
+                type="button"
+                className="profile-card__secondary"
+                onClick={handleProfileClose}
+              >
+                Back to panel
+              </button>
+            </div>
+          </article>
+        );
+      case 'loaded': {
+        const profile = profilePanelState.profile;
+        const joinedAt = new Date(profile.createdAt);
+        const joinedLabel = Number.isNaN(joinedAt.getTime())
+          ? 'Unknown'
+          : joinedAt.toLocaleDateString();
+        return (
+          <article className="profile-card">
+            <header className="profile-card__header">
+              <h2>{profile.username}</h2>
+              <p>{profile.roles.map((role) => role.toUpperCase()).join(' · ') || 'PLAYER'}</p>
+            </header>
+            <dl className="profile-card__meta">
+              <div>
+                <dt>Member since</dt>
+                <dd>{joinedLabel}</dd>
+              </div>
+              <div>
+                <dt>Current tile</dt>
+                <dd>
+                  ({profile.position.x}, {profile.position.y})
+                </dd>
+              </div>
+              <div>
+                <dt>Backpack items</dt>
+                <dd>{profile.inventoryCount}</dd>
+              </div>
+              <div>
+                <dt>Room</dt>
+                <dd>{profile.room.name}</dd>
+              </div>
+            </dl>
+            <div className="profile-card__actions">
+              <button type="button" onClick={handleProfileClose}>
+                Back to panel
+              </button>
+            </div>
+          </article>
+        );
+      }
+      default:
+        return null;
+    }
+  }, [handleProfileClose, handleProfileRetry, profilePanelState]);
+
   const chatLogEntries = useMemo(() => {
     const formattedHistory: ChatMessage[] = connection.chatLog.map((message) => {
       const timestamp = new Date(message.createdAt);
       const time = Number.isNaN(timestamp.getTime())
         ? ''
         : timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-      const isSystem = message.roles.some((role) => role.toLowerCase() === 'system');
+      const isSystem = message.roles.some(
+        (role: string) => role.toLowerCase() === 'system',
+      );
       return {
         id: message.id,
         actor: message.username,
@@ -751,6 +938,43 @@ const App = (): JSX.Element => {
     [canvasItems, selectedItemId],
   );
 
+  const isBackpackOpen = activeDockView === 'backpack';
+
+  const panelHeading = useMemo(() => {
+    if (selectedItem) {
+      return { title: 'Item Info', subtitle: selectedItem.name } as const;
+    }
+    if (profilePanelState.status === 'loaded') {
+      return {
+        title: 'Player Profile',
+        subtitle: profilePanelState.profile.username,
+      } as const;
+    }
+    if (profilePanelState.status === 'loading' || profilePanelState.status === 'error') {
+      return {
+        title: 'Player Profile',
+        subtitle: profilePanelState.occupantName,
+      } as const;
+    }
+    if (isBackpackOpen) {
+      return { title: 'Backpack', subtitle: null } as const;
+    }
+    return { title: 'Right Panel', subtitle: null } as const;
+  }, [isBackpackOpen, profilePanelState, selectedItem]);
+
+  const rightPanelAriaLabel = useMemo(() => {
+    if (selectedItem) {
+      return 'Item information panel';
+    }
+    if (profilePanelState.status !== 'idle') {
+      return 'Player profile panel';
+    }
+    if (isBackpackOpen) {
+      return 'Backpack panel';
+    }
+    return 'Right panel';
+  }, [isBackpackOpen, profilePanelState.status, selectedItem]);
+
   const selectedItemTileKey = useMemo(() => {
     if (!selectedItem) {
       return null;
@@ -783,6 +1007,22 @@ const App = (): JSX.Element => {
       connection.occupants.find((occupant) => occupant.id === connection.user?.id) ?? null
     );
   }, [connection.occupants, connection.user]);
+  const localTile = localOccupant
+    ? { x: localOccupant.position.x, y: localOccupant.position.y }
+    : null;
+  const localTileFlag = useMemo(() => {
+    if (!localTile) {
+      return null;
+    }
+
+    return (
+      connection.tileFlags.find(
+        (flag) => flag.x === localTile.x && flag.y === localTile.y,
+      ) ?? null
+    );
+  }, [connection.tileFlags, localTile?.x, localTile?.y]);
+  const localTileLocked = localTileFlag?.locked ?? false;
+  const localTileNoPickup = localTileFlag?.noPickup ?? false;
 
   const pickupStatusMessage = useMemo(() => {
     if (!selectedItem) {
@@ -919,10 +1159,12 @@ const App = (): JSX.Element => {
 
   const handleItemClick = useCallback(
     (item: CanvasItem): void => {
+      setActiveDockView('default');
       itemCacheRef.current.set(item.id, item);
       if (lastPickupResult && lastPickupResult.itemId !== item.id) {
         clearPickupResult(lastPickupResult.itemId);
       }
+      setProfilePanelState({ status: 'idle' });
       setSelectedItemId(item.id);
     },
     [clearPickupResult, lastPickupResult],
@@ -945,6 +1187,7 @@ const App = (): JSX.Element => {
     if (selectedItemId) {
       clearPickupResult(selectedItemId);
     }
+    setActiveDockView('default');
     setSelectedItemId(null);
   }, [clearPickupResult, selectedItemId]);
 
@@ -980,8 +1223,57 @@ const App = (): JSX.Element => {
       if (import.meta.env.DEV) {
         console.debug('[avatars] Context menu action', { action, occupant });
       }
+
+      if (action === 'profile') {
+        requestProfile(occupant.id, occupant.username);
+        return;
+      }
+
+      if (action === 'trade') {
+        void initiateTradeWithOccupant(occupant.id).then((result) => {
+          if (result.ok) {
+            showToast(`Trade invite sent to ${occupant.username}`, 'success');
+          } else {
+            showToast(result.message, 'error');
+          }
+        });
+        return;
+      }
+
+      if (action === 'mute') {
+        void muteOccupant(occupant.id).then((result) => {
+          if (result.ok) {
+            setMutedOccupantIds((previous) =>
+              previous.includes(occupant.id) ? previous : [...previous, occupant.id],
+            );
+            showToast(`${occupant.username} muted`, 'success');
+            // TODO: Persist muted IDs across reconnects and proactively filter chat once the
+            // realtime layer surfaces mute metadata so muted occupants stay hidden after reload.
+          } else {
+            showToast(result.message, 'error');
+          }
+        });
+        return;
+      }
+
+      if (action === 'report') {
+        void reportOccupant(occupant.id).then((result) => {
+          if (result.ok) {
+            showToast(`Report submitted for ${occupant.username}`, 'success');
+          } else {
+            showToast(result.message, 'error');
+          }
+        });
+      }
     },
-    [closeContextMenu],
+    [
+      closeContextMenu,
+      initiateTradeWithOccupant,
+      muteOccupant,
+      reportOccupant,
+      requestProfile,
+      showToast,
+    ],
   );
 
   const handleTileContextMenu = useCallback(
@@ -1162,6 +1454,19 @@ const App = (): JSX.Element => {
   const handleMenuButtonClick = (label: string): void => {
     if (label === 'Admin') {
       setIsAdminPanelVisible((prev) => !prev);
+      return;
+    }
+
+    if (label === 'Backpack') {
+      setActiveDockView((previous) => {
+        const next = previous === 'backpack' ? 'default' : 'backpack';
+        if (next === 'backpack') {
+          setSelectedItemId(null);
+          setProfilePanelState({ status: 'idle' });
+        }
+        return next;
+      });
+      return;
     }
   };
 
@@ -1176,9 +1481,33 @@ const App = (): JSX.Element => {
         },
       },
       {
+        label: localTileLocked ? 'Unlock tile' : 'Lock tile',
+        onClick: () => {
+          if (!localTile) {
+            return;
+          }
+
+          void updateTileLock(localTile, !localTileLocked);
+        },
+        pressed: localTileLocked,
+        disabled: !localTile,
+      },
+      {
+        label: localTileNoPickup ? 'Allow pickups' : 'Block pickups',
+        onClick: () => {
+          if (!localTile) {
+            return;
+          }
+
+          void updateTileNoPickup(localTile, !localTileNoPickup);
+        },
+        pressed: localTileNoPickup,
+        disabled: !localTile,
+      },
+      {
         label: isGridVisible ? 'Hide grid' : 'Show grid',
         onClick: () => {
-          setIsGridVisible((prev) => !prev);
+          void updateAdminAffordances({ gridVisible: !isGridVisible });
         },
         pressed: !isGridVisible,
       },
@@ -1187,7 +1516,9 @@ const App = (): JSX.Element => {
           ? 'Disable hidden hover highlight'
           : 'Enable hidden hover highlight',
         onClick: () => {
-          setShowHoverWhenGridHidden((prev) => !prev);
+          void updateAdminAffordances({
+            showHoverWhenGridHidden: !showHoverWhenGridHidden,
+          });
         },
         pressed: showHoverWhenGridHidden,
       },
@@ -1196,20 +1527,31 @@ const App = (): JSX.Element => {
           ? 'Disable move animations'
           : 'Enable move animations',
         onClick: () => {
-          setAreMoveAnimationsEnabled((prev) => !prev);
+          void updateAdminAffordances({
+            moveAnimationsEnabled: !areMoveAnimationsEnabled,
+          });
         },
         pressed: !areMoveAnimationsEnabled,
       },
       {
         label: 'Latency trace',
         onClick: () => {
-          if (import.meta.env.DEV) {
-            console.debug('[admin] Latency trace requested');
-          }
+          void requestLatencyTrace();
         },
       },
     ],
-    [areMoveAnimationsEnabled, isGridVisible, showHoverWhenGridHidden],
+    [
+      areMoveAnimationsEnabled,
+      isGridVisible,
+      localTile,
+      localTileLocked,
+      localTileNoPickup,
+      requestLatencyTrace,
+      showHoverWhenGridHidden,
+      updateAdminAffordances,
+      updateTileLock,
+      updateTileNoPickup,
+    ],
   );
 
   return (
@@ -1230,6 +1572,15 @@ const App = (): JSX.Element => {
               ) : null}
             </div>
           </div>
+        </div>
+      ) : null}
+      {actionToast ? (
+        <div
+          className={`action-toast action-toast--${actionToast.tone}`}
+          role="status"
+          aria-live="polite"
+        >
+          {actionToast.message}
         </div>
       ) : null}
       <div className="stage">
@@ -1310,24 +1661,33 @@ const App = (): JSX.Element => {
             aria-label="Primary actions"
             style={primaryMenuStyle}
           >
-            {dockButtons.map((label) => (
-              <button
-                key={label}
-                type="button"
-                onClick={() => handleMenuButtonClick(label)}
-                aria-pressed={label === 'Admin' ? isAdminPanelVisible : undefined}
-                data-active={label === 'Admin' ? isAdminPanelVisible : undefined}
-              >
-                {label}
-              </button>
-            ))}
+            {dockButtons.map((label) => {
+              const isPressed =
+                label === 'Admin'
+                  ? isAdminPanelVisible
+                  : label === 'Backpack'
+                  ? isBackpackOpen
+                  : undefined;
+              const pressedProp = typeof isPressed === 'boolean' ? isPressed : undefined;
+              return (
+                <button
+                  key={label}
+                  type="button"
+                  onClick={() => handleMenuButtonClick(label)}
+                  aria-pressed={pressedProp}
+                  data-active={pressedProp}
+                >
+                  {label}
+                </button>
+              );
+            })}
           </nav>
-          <aside className="right-panel" aria-label={selectedItem ? 'Item information panel' : 'Right panel placeholder'}>
+          <aside className="right-panel" aria-label={rightPanelAriaLabel}>
             <header className="right-panel__header">
               <div className="right-panel__heading">
-                <h1>{selectedItem ? 'Item Info' : 'Right Panel'}</h1>
-                {selectedItem ? (
-                  <p className="right-panel__subtitle">{selectedItem.name}</p>
+                <h1>{panelHeading.title}</h1>
+                {panelHeading.subtitle ? (
+                  <p className="right-panel__subtitle">{panelHeading.subtitle}</p>
                 ) : null}
               </div>
               <span className="right-panel__header-divider" aria-hidden="true" />
@@ -1336,9 +1696,19 @@ const App = (): JSX.Element => {
               className={
                 selectedItem
                   ? 'right-panel__sections right-panel__sections--item'
+                  : isBackpackOpen
+                  ? 'right-panel__sections right-panel__sections--backpack'
                   : 'right-panel__sections'
               }
-              aria-label={selectedItem ? 'Selected item details' : 'Upcoming panel modules'}
+              aria-label={
+                selectedItem
+                  ? 'Selected item details'
+                  : profilePanelContent
+                  ? 'Player profile content'
+                  : isBackpackOpen
+                  ? 'Backpack inventory'
+                  : 'Right panel content'
+              }
             >
               {selectedItem ? (
                 <article key={selectedItem.id} className="item-info">
@@ -1382,14 +1752,37 @@ const App = (): JSX.Element => {
                     <p className="item-info__hint">{pickupStatusMessage}</p>
                   ) : null}
                 </article>
-              ) : (
-                panelSections.map((section) => (
-                  <article key={section.title} className="right-panel__section">
-                    <h2>{section.title}</h2>
-                    <p>{section.body}</p>
-                  </article>
-                ))
-              )}
+              ) : null}
+              {!selectedItem && profilePanelContent}
+              {isBackpackOpen && !selectedItem ? (
+                <article className="inventory-card">
+                  <header className="inventory-card__header">
+                    <h2>Backpack</h2>
+                    <span className="inventory-card__count">{inventoryEntries.length} items</span>
+                  </header>
+                  {inventoryEntries.length === 0 ? (
+                    <p className="inventory-card__empty">
+                      Your backpack is empty. Collect an item to populate this list instantly.
+                    </p>
+                  ) : (
+                    <ul className="inventory-card__list">
+                      {inventoryEntries.map((entry) => (
+                        <li key={entry.id} className="inventory-card__item" title={entry.description}>
+                          <span className="inventory-card__avatar" aria-hidden="true">
+                            <img src={entry.texture} alt="" />
+                          </span>
+                          <div className="inventory-card__item-body">
+                            <span className="inventory-card__item-name">{entry.name}</span>
+                            <span className="inventory-card__item-meta">
+                              {entry.acquiredLabel ? `Collected at ${entry.acquiredLabel}` : 'Collected'}
+                            </span>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </article>
+              ) : null}
             </section>
           </aside>
         </div>
@@ -1476,6 +1869,7 @@ const App = (): JSX.Element => {
             onClick={item.onClick}
             aria-pressed={item.pressed}
             data-active={item.pressed}
+            disabled={item.disabled}
           >
             {item.label}
           </button>
@@ -1491,6 +1885,7 @@ const App = (): JSX.Element => {
           getPickupAvailability={getPickupAvailability}
           onSelectOccupantAction={handleOccupantMenuAction}
           localOccupantId={connection.user?.id ?? null}
+          mutedOccupantIds={mutedOccupantSet}
         />
       ) : null}
     </div>

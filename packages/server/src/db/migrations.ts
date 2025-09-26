@@ -203,6 +203,59 @@ const MIGRATIONS: Migration[] = [
          ON user_chat_preference(updated_at)`
     ],
   },
+  {
+    id: '0006_social_interactions',
+    statements: [
+      `CREATE TABLE IF NOT EXISTS trade_session (
+        id uuid PRIMARY KEY,
+        initiator_id uuid NOT NULL REFERENCES app_user(id) ON DELETE CASCADE,
+        recipient_id uuid NOT NULL REFERENCES app_user(id) ON DELETE CASCADE,
+        room_id uuid NOT NULL REFERENCES room(id) ON DELETE CASCADE,
+        status text NOT NULL DEFAULT 'pending',
+        created_at timestamptz NOT NULL DEFAULT now()
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_trade_session_room
+         ON trade_session(room_id, created_at DESC)`,
+      `CREATE TABLE IF NOT EXISTS user_mute (
+        id uuid PRIMARY KEY,
+        user_id uuid NOT NULL REFERENCES app_user(id) ON DELETE CASCADE,
+        muted_user_id uuid NOT NULL REFERENCES app_user(id) ON DELETE CASCADE,
+        room_id uuid NOT NULL REFERENCES room(id) ON DELETE CASCADE,
+        created_at timestamptz NOT NULL DEFAULT now(),
+        UNIQUE (user_id, muted_user_id)
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_user_mute_user
+         ON user_mute(user_id)`,
+      `CREATE TABLE IF NOT EXISTS user_report (
+        id uuid PRIMARY KEY,
+        reporter_id uuid NOT NULL REFERENCES app_user(id) ON DELETE CASCADE,
+        reported_user_id uuid NOT NULL REFERENCES app_user(id) ON DELETE CASCADE,
+        room_id uuid NOT NULL REFERENCES room(id) ON DELETE CASCADE,
+        reason text NOT NULL,
+        created_at timestamptz NOT NULL DEFAULT now()
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_user_report_reporter
+         ON user_report(reporter_id, created_at DESC)`
+    ],
+  },
+  {
+    id: '0007_room_admin_state',
+    statements: [
+      `CREATE TABLE IF NOT EXISTS room_admin_state (
+        room_id uuid PRIMARY KEY REFERENCES room(id) ON DELETE CASCADE,
+        grid_visible boolean NOT NULL DEFAULT true,
+        show_hover_when_grid_hidden boolean NOT NULL DEFAULT true,
+        move_animations_enabled boolean NOT NULL DEFAULT true,
+        last_latency_trace_id uuid,
+        last_latency_trace_requested_at timestamptz,
+        last_latency_trace_requested_by uuid REFERENCES app_user(id) ON DELETE SET NULL,
+        updated_at timestamptz NOT NULL DEFAULT now()
+      )`,
+      `INSERT INTO room_admin_state (room_id, grid_visible, show_hover_when_grid_hidden, move_animations_enabled)
+         VALUES ('${DEV_ROOM_ID}', true, true, true)
+         ON CONFLICT (room_id) DO NOTHING`,
+    ],
+  },
 ];
 
 const ensureMigrationTable = async (pool: Pool): Promise<void> => {

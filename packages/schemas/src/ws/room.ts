@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { adminStateSchema } from './admin.js';
 
 export const roomTileFlagSchema = z.object({
   x: z.number().int().min(0, 'tile.x must be non-negative'),
@@ -33,6 +34,7 @@ export const roomSnapshotSchema = z.object({
   occupants: z.array(roomOccupantSchema),
   tiles: z.array(roomTileFlagSchema),
   items: z.array(roomItemSchema),
+  adminState: adminStateSchema,
 });
 
 export const roomOccupantMovedDataSchema = z.object({

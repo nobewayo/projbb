@@ -21,6 +21,13 @@ export interface RoomStore {
   getRoomBySlug(slug: string): Promise<RoomRecord | null>;
   getRoomById(id: string): Promise<RoomRecord | null>;
   getTileFlags(roomId: string): Promise<TileFlagRecord[]>;
+  getTileFlag(roomId: string, x: number, y: number): Promise<TileFlagRecord | null>;
+  updateTileFlag(
+    roomId: string,
+    x: number,
+    y: number,
+    updates: Partial<Omit<TileFlagRecord, 'x' | 'y'>>,
+  ): Promise<TileFlagRecord>;
   listOccupants(roomId: string): Promise<RoomSnapshotOccupant[]>;
   getOccupant(userId: string): Promise<RoomOccupantRecord | null>;
   upsertOccupantPosition(
@@ -98,6 +105,53 @@ export const createRoomStore = (pool: Pool): RoomStore => {
       locked: row.locked,
       noPickup: row.no_pickup,
     }));
+  };
+
+  const getTileFlag = async (
+    roomId: string,
+    x: number,
+    y: number,
+  ): Promise<TileFlagRecord | null> => {
+    const result = await pool.query<{ x: number; y: number; locked: boolean; no_pickup: boolean }>(
+      `SELECT x, y, locked, no_pickup
+         FROM room_tile_flag
+        WHERE room_id = $1 AND x = $2 AND y = $3
+        LIMIT 1`,
+      [roomId, x, y],
+    );
+
+    if (result.rowCount === 0) {
+      return null;
+    }
+
+    const row = result.rows[0];
+    return { x: row.x, y: row.y, locked: row.locked, noPickup: row.no_pickup };
+  };
+
+  const updateTileFlag = async (
+    roomId: string,
+    x: number,
+    y: number,
+    updates: Partial<Omit<TileFlagRecord, 'x' | 'y'>>,
+  ): Promise<TileFlagRecord> => {
+    const current = await getTileFlag(roomId, x, y);
+    const next: TileFlagRecord = {
+      x,
+      y,
+      locked: updates.locked ?? current?.locked ?? false,
+      noPickup: updates.noPickup ?? current?.noPickup ?? false,
+    };
+
+    await pool.query(
+      `INSERT INTO room_tile_flag (room_id, x, y, locked, no_pickup)
+         VALUES ($1, $2, $3, $4, $5)
+         ON CONFLICT (room_id, x, y) DO UPDATE
+           SET locked = EXCLUDED.locked,
+               no_pickup = EXCLUDED.no_pickup`,
+      [roomId, next.x, next.y, next.locked, next.noPickup],
+    );
+
+    return next;
   };
 
   const listOccupants = async (roomId: string): Promise<RoomSnapshotOccupant[]> => {
@@ -192,6 +246,8 @@ export const createRoomStore = (pool: Pool): RoomStore => {
     getRoomBySlug,
     getRoomById,
     getTileFlags,
+    getTileFlag,
+    updateTileFlag,
     listOccupants,
     getOccupant,
     upsertOccupantPosition,
