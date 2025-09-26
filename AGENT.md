@@ -517,5 +517,13 @@ When implementing, **Codex should**:
 - Always read `codemap.json` first to locate files for a task by `@module`, `@tags`, or exports.
 - When you create or edit a file, add or update the `@module` and `@tags` header.
 - After edits, run `pnpm codemap` and commit the refreshed map together with your code.
+- When preparing PRs:
+  - Do not wait on CI to finish before writing the PR body.
+  - Commit first, then compute changed lines:
+    ```
+    chmod +x tools/ci/diff-lines.sh
+    tools/ci/diff-lines.sh origin/main > .ci/changed-lines.txt
+    ```
+  - Do not try to make or upload screenshots locally. Link the "Smoke" artifact on the PR instead.
 
 **End of AGENT.md**
