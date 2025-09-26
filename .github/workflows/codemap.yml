@@ -1,0 +1,32 @@
+name: Codemap
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  codemap:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Enable pnpm and install
+        run: |
+          corepack enable
+          pnpm i --frozen-lockfile || pnpm i
+
+      - name: Generate codemap
+        run: pnpm codemap
+
+      - name: Verify codemap is fresh
+        run: |
+          git diff --exit-code -- codemap.json CODEMAP.md || {
+            echo "codemap is stale. Run pnpm codemap and commit the updates."
+            exit 1
+          }
