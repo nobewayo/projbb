@@ -53,7 +53,9 @@ const ProfilePanel = ({ state, onRetry, onClose }: ProfilePanelProps): JSX.Eleme
             day: 'numeric',
           });
       const roleLabels = profile.roles
-        .map((role) => (role.toLowerCase() === 'user' ? 'PLAYER' : role.toUpperCase()))
+        .map((role: string) =>
+          role.toLowerCase() === 'user' ? 'PLAYER' : role.toUpperCase(),
+        )
         .filter(Boolean);
       return (
         <article className="profile-card">

@@ -57,19 +57,21 @@ type ContextMenuPosition = {
   y: number;
 };
 
-type TileContextMenuState = {
-  type: 'tile';
-  tile: GridTile;
+type BaseContextMenuState = {
   items: CanvasItem[];
   focusedItemId: string | null;
   position: ContextMenuPosition;
 };
 
-type OccupantContextMenuState = {
+type TileContextMenuState = BaseContextMenuState & {
+  type: 'tile';
+  tile: GridTile;
+};
+
+type OccupantContextMenuState = BaseContextMenuState & {
   type: 'occupant';
   occupant: CanvasOccupant;
   tile: GridTile;
-  position: ContextMenuPosition;
 };
 
 type ContextMenuState = TileContextMenuState | OccupantContextMenuState;
@@ -239,74 +241,74 @@ const ActiveContextMenu = forwardRef<HTMLDivElement | null, ActiveContextMenuPro
       [focusByOffset, onClose],
     );
 
-    const renderTileMenu = (payload: TileContextMenuState): JSX.Element => {
-      const { tile, items, focusedItemId } = payload;
-      return (
-        <>
-          <header className="context-menu__header">
-            <div>
-              <span className="context-menu__title">Felt ({tile.gridX}, {tile.gridY})</span>
-            </div>
-            <p className="context-menu__subtitle">
-              {items.length === 1
-                ? '1 genstand på feltet'
-                : `${items.length} genstande på feltet`}
-            </p>
-          </header>
-          {items.length === 0 ? (
-            <p className="context-menu__empty">Ingen genstande på dette felt.</p>
-          ) : (
-            <ul className="context-menu__list">
-              {items.map((item) => {
-                const availability = getPickupAvailability(item);
-                const isFocused = focusedItemId === item.id;
-                return (
-                  <li
-                    key={item.id}
-                    className={
-                      isFocused
-                        ? 'context-menu__list-item context-menu__list-item--focused'
-                        : 'context-menu__list-item'
-                    }
-                    data-can-pickup={availability.canPickup || undefined}
-                  >
-                    <div className="context-menu__item-row">
-                      <span className="context-menu__item-name">{item.name}</span>
-                      <span className="context-menu__item-meta">
-                        ({item.tileX}, {item.tileY})
-                      </span>
-                    </div>
-                    <div className="context-menu__actions" role="group" aria-label={`Handlinger for ${item.name}`}>
-                      <button
-                        type="button"
-                        role="menuitem"
-                        onClick={() => onSelectItemInfo(item)}
-                      >
-                        Info
-                      </button>
-                      <button
-                        type="button"
-                        role="menuitem"
-                        onClick={() => onSelectItemPickup(item)}
-                        disabled={!availability.canPickup}
-                      >
-                        Saml Op
-                      </button>
-                    </div>
-                    <p className="context-menu__status" role="status">
-                      {availability.message}
-                    </p>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </>
-      );
-    };
+    const renderTileSection = (
+      tile: GridTile,
+      items: CanvasItem[],
+      focusedItemId: string | null,
+    ): JSX.Element => (
+      <section className="context-menu__section" aria-label="Tile items">
+        <header className="context-menu__header">
+          <div>
+            <span className="context-menu__title">Felt ({tile.gridX}, {tile.gridY})</span>
+          </div>
+          <p className="context-menu__subtitle">
+            {items.length === 1
+              ? '1 genstand på feltet'
+              : `${items.length} genstande på feltet`}
+          </p>
+        </header>
+        {items.length === 0 ? (
+          <p className="context-menu__empty">Ingen genstande på dette felt.</p>
+        ) : (
+          <ul className="context-menu__list">
+            {items.map((item) => {
+              const availability = getPickupAvailability(item);
+              const isFocused = focusedItemId === item.id;
+              return (
+                <li
+                  key={item.id}
+                  className={
+                    isFocused
+                      ? 'context-menu__list-item context-menu__list-item--focused'
+                      : 'context-menu__list-item'
+                  }
+                  data-can-pickup={availability.canPickup || undefined}
+                >
+                  <div className="context-menu__item-row">
+                    <span className="context-menu__item-name">{item.name}</span>
+                    <span className="context-menu__item-meta">
+                      ({item.tileX}, {item.tileY})
+                    </span>
+                  </div>
+                  <div className="context-menu__actions" role="group" aria-label={`Handlinger for ${item.name}`}>
+                    <button type="button" role="menuitem" onClick={() => onSelectItemInfo(item)}>
+                      Info
+                    </button>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => onSelectItemPickup(item)}
+                      disabled={!availability.canPickup}
+                    >
+                      Saml Op
+                    </button>
+                  </div>
+                  <p className="context-menu__status" role="status">
+                    {availability.message}
+                  </p>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </section>
+    );
+
+    const renderTileMenu = (payload: TileContextMenuState): JSX.Element =>
+      renderTileSection(payload.tile, payload.items, payload.focusedItemId);
 
     const renderOccupantMenu = (payload: OccupantContextMenuState): JSX.Element => {
-      const { occupant, tile } = payload;
+      const { occupant, tile, items, focusedItemId } = payload;
       const isSelf = localOccupantId !== null && localOccupantId === occupant.id;
 
       const actions: Array<{
@@ -326,20 +328,21 @@ const ActiveContextMenu = forwardRef<HTMLDivElement | null, ActiveContextMenuPro
           description: 'Start en byttehandel',
           disabled: isSelf || occupant.roles.includes('npc'),
         },
-        {
+      ];
+
+      if (!isSelf) {
+        actions.push({
           action: 'mute',
           label: 'Mute',
           description: 'Skjul spillerens chat',
-          disabled:
-            isSelf || occupant.roles.includes('npc') || mutedOccupantIds.has(occupant.id),
-        },
-        {
+          disabled: occupant.roles.includes('npc') || mutedOccupantIds.has(occupant.id),
+        });
+        actions.push({
           action: 'report',
           label: 'Report',
           description: 'Indsend en rapport til moderatorerne',
-          disabled: isSelf,
-        },
-      ];
+        });
+      }
 
       return (
         <>
@@ -371,6 +374,12 @@ const ActiveContextMenu = forwardRef<HTMLDivElement | null, ActiveContextMenuPro
               </li>
             ))}
           </ul>
+          {items.length > 0 ? (
+            <>
+              <div className="context-menu__divider" role="separator" />
+              {renderTileSection(tile, items, focusedItemId)}
+            </>
+          ) : null}
         </>
       );
     };
@@ -1569,9 +1578,10 @@ const App = (): JSX.Element => {
   );
 
   const handleTileContextMenu = useCallback(
-    ({ tile, items, clientX, clientY }: {
+    ({ tile, items, focusedItemId, clientX, clientY }: {
       tile: GridTile;
       items: CanvasItem[];
+      focusedItemId: string | null;
       clientX: number;
       clientY: number;
     }) => {
@@ -1582,7 +1592,7 @@ const App = (): JSX.Element => {
         type: 'tile',
         tile,
         items,
-        focusedItemId: null,
+        focusedItemId: focusedItemId ?? null,
         position: { x: clientX, y: clientY },
       });
     },
@@ -1594,12 +1604,14 @@ const App = (): JSX.Element => {
       tile,
       item,
       items,
+      focusedItemId,
       clientX,
       clientY,
     }: {
       tile: GridTile;
       item: CanvasItem;
       items: CanvasItem[];
+      focusedItemId: string | null;
       clientX: number;
       clientY: number;
     }) => {
@@ -1610,7 +1622,7 @@ const App = (): JSX.Element => {
         type: 'tile',
         tile,
         items,
-        focusedItemId: item.id,
+        focusedItemId: focusedItemId ?? item.id,
         position: { x: clientX, y: clientY },
       });
     },
@@ -1621,18 +1633,27 @@ const App = (): JSX.Element => {
     ({
       occupant,
       tile,
+      items,
+      focusedItemId,
       clientX,
       clientY,
     }: {
       occupant: CanvasOccupant;
       tile: GridTile;
+      items: CanvasItem[];
+      focusedItemId: string | null;
       clientX: number;
       clientY: number;
     }) => {
+      items.forEach((entry) => {
+        itemCacheRef.current.set(entry.id, entry);
+      });
       setContextMenuState({
         type: 'occupant',
         occupant,
         tile,
+        items,
+        focusedItemId: focusedItemId ?? null,
         position: { x: clientX, y: clientY },
       });
     },
@@ -1685,7 +1706,19 @@ const App = (): JSX.Element => {
         return null;
       }
 
-      return previous;
+      const latestItems = canvasItems.filter(
+        (item) => item.tileX === previous.tile.gridX && item.tileY === previous.tile.gridY,
+      );
+      const focusedExists =
+        previous.focusedItemId !== null &&
+        latestItems.some((item) => item.id === previous.focusedItemId);
+
+      return {
+        ...previous,
+        occupant: latestOccupant,
+        items: latestItems,
+        focusedItemId: focusedExists ? previous.focusedItemId : null,
+      };
     });
   }, [canvasItems, connection.occupants, contextMenuState]);
 

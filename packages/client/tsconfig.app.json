@@ -11,7 +11,7 @@
         "../schemas/dist/index.js"
       ]
     },
-    "types": ["vite/client"]
+    "types": ["vite/client", "vitest/importMeta", "vitest/globals"]
   },
   "include": ["src/**/*.ts", "src/**/*.tsx"],
   "exclude": ["node_modules", "dist"]

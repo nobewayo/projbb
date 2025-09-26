@@ -51,6 +51,7 @@ type GridCanvasProps = {
   onTileContextMenu?: (payload: {
     tile: GridTile;
     items: CanvasItem[];
+    focusedItemId: string | null;
     clientX: number;
     clientY: number;
   }) => void;
@@ -58,12 +59,15 @@ type GridCanvasProps = {
     tile: GridTile;
     item: CanvasItem;
     items: CanvasItem[];
+    focusedItemId: string | null;
     clientX: number;
     clientY: number;
   }) => void;
   onOccupantContextMenu?: (payload: {
     occupant: CanvasOccupant;
     tile: GridTile;
+    items: CanvasItem[];
+    focusedItemId: string | null;
     clientX: number;
     clientY: number;
   }) => void;
@@ -1059,73 +1063,107 @@ const GridCanvas = ({
       const x = (event.clientX - rect.left) * scaleX;
       const y = (event.clientY - rect.top) * scaleY;
 
-      if (onOccupantContextMenu) {
-        for (let index = occupantDrawOrderRef.current.length - 1; index >= 0; index -= 1) {
-          const id = occupantDrawOrderRef.current[index];
-          if (!id) {
-            continue;
+      const getTileItems = (tile: GridTile | null): CanvasItem[] =>
+        tile
+          ? itemsRef.current.filter(
+              (item) => item.tileX === tile.gridX && item.tileY === tile.gridY,
+            )
+          : [];
+
+      let occupantHit: { occupant: CanvasOccupant; tile: GridTile } | null = null;
+      for (let index = occupantDrawOrderRef.current.length - 1; index >= 0; index -= 1) {
+        const id = occupantDrawOrderRef.current[index];
+        if (!id) {
+          continue;
+        }
+        const bounds = occupantBoundsRef.current.get(id);
+        if (
+          bounds &&
+          x >= bounds.x &&
+          x <= bounds.x + bounds.width &&
+          y >= bounds.y &&
+          y <= bounds.y + bounds.height
+        ) {
+          const tile = occupantTargetsRef.current.get(id)?.tile ?? null;
+          if (tile) {
+            occupantHit = { occupant: bounds.occupant, tile };
           }
-          const bounds = occupantBoundsRef.current.get(id);
-          if (
-            bounds &&
-            x >= bounds.x &&
-            x <= bounds.x + bounds.width &&
-            y >= bounds.y &&
-            y <= bounds.y + bounds.height
-          ) {
-            const tile = occupantTargetsRef.current.get(id)?.tile ?? null;
-            if (tile) {
-              onOccupantContextMenu({
-                occupant: bounds.occupant,
-                tile,
-                clientX: event.clientX,
-                clientY: event.clientY,
-              });
-              return;
-            }
-          }
+          break;
         }
       }
 
-      const tile = findTileAtPoint(grid, x, y);
-      if (!tile) {
+      let itemHit: { item: CanvasItem; tile: GridTile | null } | null = null;
+      for (let index = itemDrawOrderRef.current.length - 1; index >= 0; index -= 1) {
+        const id = itemDrawOrderRef.current[index];
+        if (!id) {
+          continue;
+        }
+        const bounds = itemBoundsRef.current.get(id);
+        if (
+          bounds &&
+          x >= bounds.x &&
+          x <= bounds.x + bounds.width &&
+          y >= bounds.y &&
+          y <= bounds.y + bounds.height
+        ) {
+          const tile =
+            grid.tileMap.get(createTileKey(bounds.item.tileX, bounds.item.tileY)) ?? null;
+          itemHit = { item: bounds.item, tile };
+          break;
+        }
+      }
+
+      const pointerTile = findTileAtPoint(grid, x, y);
+      const occupantTile = occupantHit?.tile ?? null;
+      const itemTile = itemHit?.tile ?? null;
+      const fallbackTile = pointerTile ?? itemTile ?? occupantTile;
+      const focusedItemId = itemHit?.item.id ?? null;
+
+      if (occupantHit && onOccupantContextMenu) {
+        const occupantItems = getTileItems(occupantTile);
+        const occupantTileForMenu = occupantTile ?? fallbackTile;
+        if (!occupantTileForMenu) {
+          return;
+        }
+        const occupantFocused =
+          focusedItemId && occupantItems.some((candidate) => candidate.id === focusedItemId)
+            ? focusedItemId
+            : null;
+        onOccupantContextMenu({
+          occupant: occupantHit.occupant,
+          tile: occupantTileForMenu,
+          items: occupantItems,
+          focusedItemId: occupantFocused,
+          clientX: event.clientX,
+          clientY: event.clientY,
+        });
         return;
       }
 
-      const itemsOnTile = itemsRef.current.filter(
-        (item) => item.tileX === tile.gridX && item.tileY === tile.gridY,
-      );
-
-      if (itemsOnTile.length > 0 && onItemContextMenu) {
-        for (let index = itemDrawOrderRef.current.length - 1; index >= 0; index -= 1) {
-          const id = itemDrawOrderRef.current[index];
-          if (!id) {
-            continue;
-          }
-          const bounds = itemBoundsRef.current.get(id);
-          if (
-            bounds &&
-            x >= bounds.x &&
-            x <= bounds.x + bounds.width &&
-            y >= bounds.y &&
-            y <= bounds.y + bounds.height
-          ) {
-            onItemContextMenu({
-              tile,
-              item: bounds.item,
-              items: itemsOnTile,
-              clientX: event.clientX,
-              clientY: event.clientY,
-            });
-            return;
-          }
-        }
+      if (itemHit && itemTile && onItemContextMenu) {
+        const tileItems = getTileItems(itemTile);
+        onItemContextMenu({
+          tile: itemTile,
+          item: itemHit.item,
+          items: tileItems,
+          focusedItemId: tileItems.some((candidate) => candidate.id === focusedItemId)
+            ? focusedItemId
+            : null,
+          clientX: event.clientX,
+          clientY: event.clientY,
+        });
+        return;
       }
 
-      if (onTileContextMenu) {
+      const resolvedTile = fallbackTile;
+      if (resolvedTile && onTileContextMenu) {
+        const tileItems = getTileItems(resolvedTile);
         onTileContextMenu({
-          tile,
-          items: itemsOnTile,
+          tile: resolvedTile,
+          items: tileItems,
+          focusedItemId: tileItems.some((candidate) => candidate.id === focusedItemId)
+            ? focusedItemId
+            : null,
           clientX: event.clientX,
           clientY: event.clientY,
         });
