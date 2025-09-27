@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2025-09-27T11:32:11.036Z",
+  "generatedAt": "2025-09-27T11:42:42.987Z",
   "count": 50,
   "files": [
     {
@@ -218,19 +218,6 @@
       }
     },
     {
-      "path": "packages/schemas/src/index.ts",
-      "size": 351,
-      "checksum": "b96f0dfc1d4250e8ae603d6bfe0f1627c7d9ac66c87ffb8ec1b30633cf36e4e4",
-      "tags": [],
-      "imports": [],
-      "namedExports": [],
-      "symbols": {
-        "functions": [],
-        "classes": [],
-        "methods": []
-      }
-    },
-    {
       "path": "packages/server/src/config.ts",
       "size": 3425,
       "checksum": "ca7c32fb97b517186b50513e923245a21d39564d5a16dfa8d45b45148cd0238c",
@@ -373,6 +360,19 @@
             "signature": "async ("
           }
         ],
+        "classes": [],
+        "methods": []
+      }
+    },
+    {
+      "path": "packages/schemas/src/index.ts",
+      "size": 351,
+      "checksum": "b96f0dfc1d4250e8ae603d6bfe0f1627c7d9ac66c87ffb8ec1b30633cf36e4e4",
+      "tags": [],
+      "imports": [],
+      "namedExports": [],
+      "symbols": {
+        "functions": [],
         "classes": [],
         "methods": []
       }
@@ -1031,187 +1031,6 @@
             "signature": "() =>"
           }
         ],
-        "classes": [],
-        "methods": []
-      }
-    },
-    {
-      "path": "packages/schemas/src/openapi/auth.ts",
-      "size": 3069,
-      "checksum": "ff4b1f9e89ae2a70dac7beb2133baaf2fc675475867e7938f8d4aac84af8d447",
-      "tags": [],
-      "imports": [
-        "openapi-types"
-      ],
-      "namedExports": [],
-      "symbols": {
-        "functions": [],
-        "classes": [],
-        "methods": []
-      }
-    },
-    {
-      "path": "packages/schemas/src/rest/occupants.ts",
-      "size": 3433,
-      "checksum": "d5a66860f1d0653cfca70aad2ee36bfd5c4a221d857d1491b7fb1c89a5aedd52",
-      "tags": [],
-      "imports": [
-        "zod"
-      ],
-      "namedExports": [],
-      "symbols": {
-        "functions": [],
-        "classes": [],
-        "methods": []
-      }
-    },
-    {
-      "path": "packages/schemas/src/ws/admin.ts",
-      "size": 1872,
-      "checksum": "2a7d8fbd6e9c3ba61525ca5649676d9885094121cc38e6603d7693e3b11608f9",
-      "tags": [],
-      "imports": [
-        "zod"
-      ],
-      "namedExports": [],
-      "symbols": {
-        "functions": [],
-        "classes": [],
-        "methods": []
-      }
-    },
-    {
-      "path": "packages/schemas/src/ws/auth.ts",
-      "size": 463,
-      "checksum": "01f7434830f74eeb8bcfdceeff5b8d16032ad407239e4741ea6ba4d9e5e313eb",
-      "tags": [],
-      "imports": [
-        "zod"
-      ],
-      "namedExports": [],
-      "symbols": {
-        "functions": [],
-        "classes": [],
-        "methods": []
-      }
-    },
-    {
-      "path": "packages/schemas/src/ws/chat.ts",
-      "size": 3213,
-      "checksum": "fa80b0dcebbfb9204f426bec17579e3445bb4f94ba7d23dc61b9910ffc99bc41",
-      "tags": [],
-      "imports": [
-        "zod",
-        "./envelope.js"
-      ],
-      "namedExports": [],
-      "symbols": {
-        "functions": [],
-        "classes": [],
-        "methods": []
-      }
-    },
-    {
-      "path": "packages/schemas/src/ws/envelope.ts",
-      "size": 639,
-      "checksum": "297a16ea2a24c7aaed6aa072ce16a0c72f4ff9925141b869f52311403bd2f872",
-      "tags": [],
-      "imports": [
-        "zod"
-      ],
-      "namedExports": [
-        "buildEnvelopeSchema"
-      ],
-      "symbols": {
-        "functions": [
-          {
-            "name": "buildEnvelopeSchema",
-            "line": 17,
-            "exported": true,
-            "signature": "<Schema extends z.ZodTypeAny>(dataSchema: Schema) => messageEnvelopeSchema.extend("
-          }
-        ],
-        "classes": [],
-        "methods": []
-      }
-    },
-    {
-      "path": "packages/schemas/src/ws/items.ts",
-      "size": 2210,
-      "checksum": "000b6391e19fd49166c6385be124b6b61b8313a37fb53767ca380f14651289c1",
-      "tags": [],
-      "imports": [
-        "zod",
-        "./room.js"
-      ],
-      "namedExports": [
-        "roomItemSchema"
-      ],
-      "symbols": {
-        "functions": [],
-        "classes": [],
-        "methods": []
-      }
-    },
-    {
-      "path": "packages/schemas/src/ws/move.ts",
-      "size": 2708,
-      "checksum": "b82f541a9640b48f4387e748ea6472c4140dae79a592b2be57e30f2f9a278e51",
-      "tags": [],
-      "imports": [
-        "zod",
-        "./envelope.js"
-      ],
-      "namedExports": [],
-      "symbols": {
-        "functions": [],
-        "classes": [],
-        "methods": []
-      }
-    },
-    {
-      "path": "packages/schemas/src/ws/room.ts",
-      "size": 2377,
-      "checksum": "6a0a6a7b3dd77beb0950dcbc556d20511ed5cfb32df0969bb8b02739fcbac665",
-      "tags": [],
-      "imports": [
-        "zod",
-        "./admin.js"
-      ],
-      "namedExports": [],
-      "symbols": {
-        "functions": [],
-        "classes": [],
-        "methods": []
-      }
-    },
-    {
-      "path": "packages/schemas/src/ws/social.ts",
-      "size": 1156,
-      "checksum": "df438462f948428d281837ca92b9bfe3631776bb36597f936d563c259ce13ba9",
-      "tags": [],
-      "imports": [
-        "zod"
-      ],
-      "namedExports": [],
-      "symbols": {
-        "functions": [],
-        "classes": [],
-        "methods": []
-      }
-    },
-    {
-      "path": "packages/schemas/src/ws/trade.ts",
-      "size": 444,
-      "checksum": "8c6317e17c6fdeb2b73f50bc1a0a3cff0791d0632022505bb8ab7aa9641fca15",
-      "tags": [],
-      "imports": [
-        "zod",
-        "../rest/occupants.js"
-      ],
-      "namedExports": [],
-      "symbols": {
-        "functions": [],
         "classes": [],
         "methods": []
       }
@@ -2603,6 +2422,187 @@
             "signature": "async (): Promise<void> =>"
           }
         ],
+        "classes": [],
+        "methods": []
+      }
+    },
+    {
+      "path": "packages/schemas/src/openapi/auth.ts",
+      "size": 3069,
+      "checksum": "ff4b1f9e89ae2a70dac7beb2133baaf2fc675475867e7938f8d4aac84af8d447",
+      "tags": [],
+      "imports": [
+        "openapi-types"
+      ],
+      "namedExports": [],
+      "symbols": {
+        "functions": [],
+        "classes": [],
+        "methods": []
+      }
+    },
+    {
+      "path": "packages/schemas/src/rest/occupants.ts",
+      "size": 3433,
+      "checksum": "d5a66860f1d0653cfca70aad2ee36bfd5c4a221d857d1491b7fb1c89a5aedd52",
+      "tags": [],
+      "imports": [
+        "zod"
+      ],
+      "namedExports": [],
+      "symbols": {
+        "functions": [],
+        "classes": [],
+        "methods": []
+      }
+    },
+    {
+      "path": "packages/schemas/src/ws/admin.ts",
+      "size": 1872,
+      "checksum": "2a7d8fbd6e9c3ba61525ca5649676d9885094121cc38e6603d7693e3b11608f9",
+      "tags": [],
+      "imports": [
+        "zod"
+      ],
+      "namedExports": [],
+      "symbols": {
+        "functions": [],
+        "classes": [],
+        "methods": []
+      }
+    },
+    {
+      "path": "packages/schemas/src/ws/auth.ts",
+      "size": 463,
+      "checksum": "01f7434830f74eeb8bcfdceeff5b8d16032ad407239e4741ea6ba4d9e5e313eb",
+      "tags": [],
+      "imports": [
+        "zod"
+      ],
+      "namedExports": [],
+      "symbols": {
+        "functions": [],
+        "classes": [],
+        "methods": []
+      }
+    },
+    {
+      "path": "packages/schemas/src/ws/chat.ts",
+      "size": 3213,
+      "checksum": "fa80b0dcebbfb9204f426bec17579e3445bb4f94ba7d23dc61b9910ffc99bc41",
+      "tags": [],
+      "imports": [
+        "zod",
+        "./envelope.js"
+      ],
+      "namedExports": [],
+      "symbols": {
+        "functions": [],
+        "classes": [],
+        "methods": []
+      }
+    },
+    {
+      "path": "packages/schemas/src/ws/envelope.ts",
+      "size": 639,
+      "checksum": "297a16ea2a24c7aaed6aa072ce16a0c72f4ff9925141b869f52311403bd2f872",
+      "tags": [],
+      "imports": [
+        "zod"
+      ],
+      "namedExports": [
+        "buildEnvelopeSchema"
+      ],
+      "symbols": {
+        "functions": [
+          {
+            "name": "buildEnvelopeSchema",
+            "line": 17,
+            "exported": true,
+            "signature": "<Schema extends z.ZodTypeAny>(dataSchema: Schema) => messageEnvelopeSchema.extend("
+          }
+        ],
+        "classes": [],
+        "methods": []
+      }
+    },
+    {
+      "path": "packages/schemas/src/ws/items.ts",
+      "size": 2210,
+      "checksum": "000b6391e19fd49166c6385be124b6b61b8313a37fb53767ca380f14651289c1",
+      "tags": [],
+      "imports": [
+        "zod",
+        "./room.js"
+      ],
+      "namedExports": [
+        "roomItemSchema"
+      ],
+      "symbols": {
+        "functions": [],
+        "classes": [],
+        "methods": []
+      }
+    },
+    {
+      "path": "packages/schemas/src/ws/move.ts",
+      "size": 2708,
+      "checksum": "b82f541a9640b48f4387e748ea6472c4140dae79a592b2be57e30f2f9a278e51",
+      "tags": [],
+      "imports": [
+        "zod",
+        "./envelope.js"
+      ],
+      "namedExports": [],
+      "symbols": {
+        "functions": [],
+        "classes": [],
+        "methods": []
+      }
+    },
+    {
+      "path": "packages/schemas/src/ws/room.ts",
+      "size": 2377,
+      "checksum": "6a0a6a7b3dd77beb0950dcbc556d20511ed5cfb32df0969bb8b02739fcbac665",
+      "tags": [],
+      "imports": [
+        "zod",
+        "./admin.js"
+      ],
+      "namedExports": [],
+      "symbols": {
+        "functions": [],
+        "classes": [],
+        "methods": []
+      }
+    },
+    {
+      "path": "packages/schemas/src/ws/social.ts",
+      "size": 1156,
+      "checksum": "df438462f948428d281837ca92b9bfe3631776bb36597f936d563c259ce13ba9",
+      "tags": [],
+      "imports": [
+        "zod"
+      ],
+      "namedExports": [],
+      "symbols": {
+        "functions": [],
+        "classes": [],
+        "methods": []
+      }
+    },
+    {
+      "path": "packages/schemas/src/ws/trade.ts",
+      "size": 444,
+      "checksum": "8c6317e17c6fdeb2b73f50bc1a0a3cff0791d0632022505bb8ab7aa9641fca15",
+      "tags": [],
+      "imports": [
+        "zod",
+        "../rest/occupants.js"
+      ],
+      "namedExports": [],
+      "symbols": {
+        "functions": [],
         "classes": [],
         "methods": []
       }
