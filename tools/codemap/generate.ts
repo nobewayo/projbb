@@ -2,13 +2,25 @@
 import { globby } from 'globby';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as crypto from 'crypto';
+import ts from 'typescript';
+
+type FunctionSym = { name: string; line: number; exported: boolean; signature?: string };
+type ClassSym = { name: string; line: number; exported: boolean };
+type MethodSym = { name: string; line: number; ofClass?: string };
 
 type FileEntry = {
   path: string;
   size: number;
-  exports: string[];
+  checksum: string;
+  tags: string[];
   imports: string[];
-  symbols: { name: string; kind: 'function'|'class'|'method'; line: number; exported: boolean }[];
+  namedExports: string[];
+  symbols: {
+    functions: FunctionSym[];
+    classes: ClassSym[];
+    methods: MethodSym[];
+  };
 };
 
 const rcPath = path.resolve('.codemaprc.json');
@@ -21,49 +33,150 @@ const rc = fs.existsSync(rcPath) ? JSON.parse(fs.readFileSync(rcPath, 'utf8')) :
 };
 
 const readFile = (p:string) => fs.readFileSync(p, 'utf8');
+const sha256 = (s:string) => crypto.createHash('sha256').update(s).digest('hex');
 
-function parseSymbols(src: string): FileEntry['symbols'] {
-  const out: FileEntry['symbols'] = [];
-  const lines = src.split(/\r?\n/);
-  const push = (name:string, kind:any, line:number, exported:boolean)=>out.push({name, kind, line: line+1, exported});
-  lines.forEach((line, i) => {
-    const fn = line.match(/^(export\s+)?function\s+([A-Za-z0-9_]+)/);
-    if (fn) push(fn[2], 'function', i, !!fn[1]);
-    const cls = line.match(/^(export\s+)?class\s+([A-Za-z0-9_]+)/);
-    if (cls) push(cls[2], 'class', i, !!cls[1]);
-    const mth = line.match(/^\s*([A-Za-z0-9_]+)\s*\(([^)]*)\)\s*\{/);
-    if (mth && !line.includes('function') && !line.includes('class')) push(mth[1], 'method', i, false);
-  });
-  return out;
+function parseHeaderTags(src: string): { tags: string[] } {
+  const tags: string[] = [];
+  const lines = src.split(/\r?\n/).slice(0, 50);
+  for (const ln of lines) {
+    const t = ln.match(/@tags:\s*(.+)/);
+    if (t) tags.push(...t[1].split(',').map(s=>s.trim()).filter(Boolean));
+  }
+  return { tags: Array.from(new Set(tags)) };
 }
 
-function parseImports(src:string): string[] {
-  const set = new Set<string>();
-  const re = /import\s+(?:.+?\s+from\s+)?['\"]([^'\"]+)['\"]/g;
-  let m; while ((m = re.exec(src))) set.add(m[1]);
-  return [...set];
+function getScriptKind(file: string): ts.ScriptKind {
+  if (file.endsWith('.tsx')) return ts.ScriptKind.TSX;
+  if (file.endsWith('.ts')) return ts.ScriptKind.TS;
+  if (file.endsWith('.jsx')) return ts.ScriptKind.JSX;
+  return ts.ScriptKind.JS;
 }
-function parseExports(src:string): string[] {
-  const set = new Set<string>();
-  const re = /export\s+(?:const|function|class|type|interface|enum)\s+([A-Za-z0-9_]+)/g;
-  let m; while ((m = re.exec(src))) set.add(m[1]);
-  return [...set];
+
+function hasExportModifier(n: ts.Node): boolean {
+  return !!(n as any).modifiers?.some((m: ts.Modifier) => m.kind === ts.SyntaxKind.ExportKeyword);
+}
+
+function getLine(sf: ts.SourceFile, node: ts.Node): number {
+  return sf.getLineAndCharacterOfPosition(node.getStart(sf)).line + 1;
+}
+
+function getSignature(sf: ts.SourceFile, node: ts.FunctionLikeDeclarationBase): string | undefined {
+  try {
+    const text = node.getText(sf);
+    const brace = text.indexOf('{');
+    return (brace > 0 ? text.slice(0, brace) : text).replace(/\s+/g, ' ').trim();
+  } catch { return undefined; }
+}
+
+function collect(file: string, src: string): FileEntry {
+  const sf = ts.createSourceFile(file, src, ts.ScriptTarget.Latest, true, getScriptKind(file));
+
+  const imports = new Set<string>();
+  const namedExports = new Set<string>();
+  const functions: FunctionSym[] = [];
+  const classes: ClassSym[] = [];
+  const methods: MethodSym[] = [];
+
+  function visit(node: ts.Node, currentClass?: string) {
+    // Imports
+    if (ts.isImportDeclaration(node) && node.moduleSpecifier) {
+      const mod = (node.moduleSpecifier as ts.StringLiteral).text;
+      if (mod) imports.add(mod);
+    }
+
+    // Export declarations like: export { A, B } from './x'
+    if (ts.isExportDeclaration(node) && node.exportClause && ts.isNamedExports(node.exportClause)) {
+      for (const e of node.exportClause.elements) {
+        namedExports.add(e.name.text);
+      }
+    }
+
+    // Function declarations
+    if (ts.isFunctionDeclaration(node) && node.name) {
+      functions.push({
+        name: node.name.text,
+        line: getLine(sf, node),
+        exported: hasExportModifier(node),
+        signature: getSignature(sf, node)
+      });
+    }
+
+    // Variable statements with function/arrow initializers
+    if (ts.isVariableStatement(node)) {
+      const isExported = hasExportModifier(node);
+      for (const decl of node.declarationList.declarations) {
+        if (ts.isIdentifier(decl.name) and decl.initializer and
+           (ts.isFunctionExpression(decl.initializer) or ts.isArrowFunction(decl.initializer))) {
+          functions.push({
+            name: decl.name.text,
+            line: getLine(sf, decl),
+            exported: isExported,
+            signature: getSignature(sf, decl.initializer as any)
+          });
+        }
+      }
+    }
+
+    // Class declarations
+    if (ts.isClassDeclaration(node) and node.name) {
+      classes.push({
+        name: node.name.text,
+        line: getLine(sf, node),
+        exported: hasExportModifier(node)
+      });
+      // Visit members for methods
+      for (const m of node.members) {
+        if (ts.isMethodDeclaration(m) and m.name and ts.isIdentifier(m.name)) {
+          methods.push({
+            name: m.name.text,
+            line: getLine(sf, m),
+            ofClass: node.name.text
+          });
+        }
+        if (ts.isConstructorDeclaration(m)) {
+          methods.push({
+            name: 'constructor',
+            line: getLine(sf, m),
+            ofClass: node.name.text
+          });
+        }
+      }
+    }
+
+    ts.forEachChild(node, n => visit(n, currentClass));
+  }
+
+  visit(sf);
+
+  // Also treat exported names as namedExports
+  for (const f of functions) if (f.exported) namedExports.add(f.name);
+  for (const c of classes) if (c.exported) namedExports.add(c.name);
+
+  const { tags } = parseHeaderTags(src);
+
+  return {
+    path: file,
+    size: Buffer.byteLength(src),
+    checksum: sha256(src),
+    tags,
+    imports: Array.from(imports),
+    namedExports: Array.from(namedExports),
+    symbols: { functions, classes, methods }
+  };
 }
 
 async function main() {
   const files = await globby(rc.include, { ignore: rc.exclude, gitignore: true });
-  const entries: FileEntry[] = files.map((p) => {
-    const content = readFile(p);
-    return {
-      path: p,
-      size: Buffer.byteLength(content),
-      imports: parseImports(content),
-      exports: parseExports(content),
-      symbols: parseSymbols(content),
-    };
-  });
+  const entries: FileEntry[] = [];
+  for (const p of files) {
+    try {
+      const content = readFile(p);
+      entries.push(collect(p, content));
+    } catch {}
+  }
 
   fs.writeFileSync('codemap.json', JSON.stringify({ generatedAt: new Date().toISOString(), count: entries.length, files: entries }, null, 2));
+
   const byDir = new Map<string, FileEntry[]>();
   for (const e of entries) {
     const dir = path.dirname(e.path);
@@ -74,12 +187,13 @@ async function main() {
   for (const [dir, list] of [...byDir.entries()].sort()) {
     md += `## ${dir}\n\n`;
     for (const f of list) {
-      const ex = f.exports.length ? ` — exports: ${f.exports.join(', ')}` : '';
-      md += `- ${f.path}${ex}\n`;
+      const ex = f.namedExports.length ? ` — exports: ${f.namedExports.join(', ')}` : '';
+      md += `- ${f.path}${ex}\n`
     }
     md += '\n';
   }
   fs.writeFileSync('CODEMAP.md', md);
   console.log(`Wrote codemap.json and CODEMAP.md for ${entries.length} files.`);
 }
+
 main().catch((e)=>{ console.error(e); process.exit(1); });
