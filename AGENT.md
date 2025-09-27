@@ -9,6 +9,7 @@ _Last updated: 2025-09-27T13:20:34Z_
 - Commit only if there are changes (no empty commits).
 - Pre-commit runs `pnpm codemap` and `pnpm featuremap` and stages outputs automatically.
 - Keep changes small and shippable; never edit CI or templates unless asked.
+- Until a translation system exists, write every user-facing string in English.
 
 ### Git sanity
 - Never assume a remote. **Do not** create or modify remotes unless asked.
@@ -316,11 +317,11 @@ When implementing, follow these rules:
 - Social moderation state is persisted server side: mute or report actions flow through `@bitby/server` to Postgres, rehydrate on connect, and broadcast live updates so muted occupants disappear from the chat log while report history surfaces in the profile panel.
 - The React client renders seeded room items beneath avatars, tracks per item hit boxes, routes selections into the right panel item info view, and overlays realtime typing previews plus authoritative chat bubbles on the canvas while the chat composer listens globally (type anywhere, Enter to send, Esc to cancel). The admin quick toggles and movement gating stay authoritative.
 - Profile and inventory UI chrome uses dedicated `ProfilePanel` and `InventoryCard` components. The trade lifecycle banner flows through backend acknowledgements (accept, decline or cancel, complete). A reusable action toast hook powers optimistic feedback.
-- Right click context menus surface tile, item, and avatar actions per spec. `Saml Op` is gated to same tile, non `noPickup` squares. Avatar actions call the authoritative profile, trade, mute, and report REST flows with server persistence and gating. The occupant menu stacks tile inventory beneath player actions so items remain pickable even when avatars overlap larger sprites. The popover footprint is trimmed by roughly 75 percent per UX feedback. Sprite aware hit tests ensure right clicking oversized items still selects them even when hovering the neighbouring tile. Self targeted avatar menus hide mute and report affordances. The trade action handler hard blocks self targeting requests so the server never sees a trade with self payload even if the menu renders before the local occupant ID hydrates.
+- Right click context menus surface tile, item, and avatar actions per spec. `Pick up` is gated to same tile, non `noPickup` squares. Avatar actions call the authoritative profile, trade, mute, and report REST flows with server persistence and gating. The occupant menu stacks tile inventory beneath player actions so items remain pickable even when avatars overlap larger sprites. The popover footprint is trimmed by roughly 75 percent per UX feedback. Sprite aware hit tests ensure right clicking oversized items still selects them even when hovering the neighbouring tile. Self targeted avatar menus hide mute and report affordances. The trade action handler hard blocks self targeting requests so the server never sees a trade with self payload even if the menu renders before the local occupant ID hydrates.
 - REST helpers on the client normalise raw response text before schema validation so stray whitespace or HTML injected by proxies no longer triggers the “Malformed response payload” error when opening occupant profiles.
 - Left clicking items falls through to tile movement. The item detail panel only opens from the right click **Info** action so selection stays scoped to the authoritative context menu flow.
 - The admin quick menu drives authoritative REST endpoints for grid, hover, and move affordances, tile lock or noPickup flags, latency trace requests, and the plant spawner. Actions persist overrides in Postgres (`room_admin_state` or `room_tile_flag`) while `/admin/rooms/:roomId/items/plant` inserts an Atrium Plant on the local tile, increments `roomSeq`, and fans out `room:item_added` via Redis so every connected client renders the new sprite immediately.
-- The “Saml Op” button emits real `item:pickup` envelopes. The server validates tile or noPickup rules, persists the transfer to Postgres, increments `roomSeq`, broadcasts `room:item_removed`, and the client performs optimistic removal with pending or success or error copy while restoring items on authoritative rejection.
+- The “Pick up” button emits real `item:pickup` envelopes. The server validates tile or noPickup rules, persists the transfer to Postgres, increments `roomSeq`, broadcasts `room:item_removed`, and the client performs optimistic removal with pending or success or error copy while restoring items on authoritative rejection.
 - The backpack or right panel inventory view hydrates from authoritative inventory snapshots, reflects item pickups immediately after server acknowledgement, and opens via the bottom dock **Backpack** toggle, which retitles the panel and reveals the inventory beneath the divider while leaving the idle state text free.
 - The Fastify server boots Postgres migrations and seeds, validates `auth`, `move`, and `chat` envelopes, persists chat history to Postgres, relays cross instance chat through Redis pub or sub, persists per user chat drawer preferences, and exposes `/healthz`, `/readyz`, and `/metrics` endpoints instrumented with Prometheus counters.
 - `@bitby/schemas` publishes JSON Schemas for `auth`, `move`, and `chat` plus an OpenAPI document for `/auth/login`, keeping both tiers on a single contract for realtime and REST payloads. Shared schemas include the social payload contract consumed by both the realtime server and client mute or report pipeline.
@@ -466,7 +467,7 @@ sy >= originY && (sy + tileH) <= (originY + gridH)
 
 **Right-click**
 - **Grid**: show **only items** on that tile.  
-  - Actions per item: **Info** (always) → panel; **Saml Op** only if user **stands** on that tile and tile not `noPickup`.  
+  - Actions per item: **Info** (always) → panel; **Pick up** only if user **stands** on that tile and tile not `noPickup`.  
 - **Player**: right-click avatar → player menu (profile/actions).  
 - Always `preventDefault()`; long-press on touch.
 
@@ -932,7 +933,7 @@ CREATE TABLE audit_log (
 
 **Components**
 - Buttons: Primary (filled), Ghost (outlined); min hit 40×40.  
-- Context menu: z-index high; title “On this tile”; Info/Saml Op inline; click-through not allowed while open.  
+- Context menu: z-index high; title “On this tile”; Info/Pick up inline; click-through not allowed while open.  
 - Primary menu bar: fixed to the stage bottom, spans canvas + panel, cannot collapse, and keeps only the bottom-left corner round while the remaining corners stay square.
 - A11y: focus ring 2px, contrast AA+, keyboardable; `Esc` closes menus; respect `prefers-reduced-motion`.  
 - Visual stability test: switching theme must **not** alter any canvas pixels (checksum render).
@@ -1265,7 +1266,7 @@ ads:
 
 ## A.6 Context Menus
 
-- **Grid right-click**: shows **items only on that tile**. For each item: name + buttons [**Info**] and [**Saml Op**] (pickup only if user stands on that tile and tile not `noPickup`).  
+- **Grid right-click**: shows **items only on that tile**. For each item: name + buttons [**Info**] and [**Pick up**] (pickup only if user stands on that tile and tile not `noPickup`).  
 - **Player right-click**: shows actions (Profile, Trade, Mute, Report... per role/permissions).  
 - Max width 320px; keyboard accessible; escape closes; clicks outside close; menu never scrolls canvas.
 
@@ -1316,15 +1317,15 @@ ads:
 
 ## A.14 Error & Empty States
 
-- **Network lost**: **blocking overlay** covering the stage; disables all interactions until WS reconnect + re-auth + room resync complete. Show spinner + “Forbinder igen...” and backoff status; optional “Genindlæs” button remains within overlay (still blocks gameplay).  
+- **Network lost**: **blocking overlay** covering the stage; disables all interactions until WS reconnect + re-auth + room resync complete. Show spinner + “Reconnecting...” and backoff status; optional “Reload” button remains within overlay (still blocks gameplay).  
 - **Asset missing**: show neutral placeholder tile/item; log once per asset per session.
 
 ## A.15 Microcopy
 
-- Teleport: “Vælg et rum” / “Mine rum” / “Offentlige rum”  
-- Pickup success: “Lagt i rygsæk”  
-- Pickup blocked: “Kan ikke samle op her”  
-- Locked tile: “Det felt er låst”
+- Teleport: “Select a room” / “My rooms” / “Public rooms”  
+- Pickup success: “Added to backpack”  
+- Pickup blocked: “Cannot pick up here”  
+- Locked tile: “This tile is locked”
 
 ## A.16 Motion
 

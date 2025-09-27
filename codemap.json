@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2025-09-27T13:37:27.031Z",
-  "count": 50,
+  "generatedAt": "2025-09-27T14:38:55.175Z",
+  "count": 51,
   "files": [
     {
       "path": "packages/client/vite.config.ts",
@@ -70,8 +70,8 @@
     },
     {
       "path": "packages/client/src/App.tsx",
-      "size": 78833,
-      "checksum": "8381d885e00a98b96e6a5b169d0b8f21535a102ef2cc878d60f58550c1294892",
+      "size": 83818,
+      "checksum": "f22e7d4a58e2aa6fa9e8a6f9430dcfd3ac85d35404733ec0bdb01d65f9d5a891",
       "tags": [
         "ui",
         "realtime",
@@ -95,103 +95,103 @@
         "functions": [
           {
             "name": "adjustPosition",
-            "line": 165,
+            "line": 173,
             "exported": false,
             "signature": "(): void =>"
           },
           {
             "name": "renderTileSection",
-            "line": 249,
+            "line": 257,
             "exported": false,
-            "signature": "( tile: GridTile, items: CanvasItem[], focusedItemId: string | null, ): JSX.Element => ( <section className=\"context-menu__section\" aria-label=\"Tile items\"> <header className=\"context-menu__header\"> <div> <span className=\"context-menu__title\">Felt ("
+            "signature": "( tile: GridTile, items: CanvasItem[], focusedItemId: string | null, ): JSX.Element => ( <section className=\"context-menu__section\" aria-label=\"Tile items\"> <header className=\"context-menu__header\"> <div> <span className=\"context-menu__title\">Tile ("
           },
           {
             "name": "renderTileMenu",
-            "line": 312,
+            "line": 320,
             "exported": false,
             "signature": "(payload: TileContextMenuState): JSX.Element => renderTileSection(payload.tile, payload.items, payload.focusedItemId)"
           },
           {
             "name": "renderOccupantMenu",
-            "line": 315,
+            "line": 323,
             "exported": false,
             "signature": "(payload: OccupantContextMenuState): JSX.Element =>"
           },
           {
             "name": "App",
-            "line": 486,
+            "line": 494,
             "exported": false,
             "signature": "(): JSX.Element =>"
           },
           {
             "name": "isEditableElement",
-            "line": 733,
+            "line": 817,
             "exported": false,
             "signature": "(element: Element | null): boolean =>"
           },
           {
             "name": "commitDraft",
-            "line": 746,
+            "line": 830,
             "exported": false,
             "signature": "(next: string) =>"
           },
           {
             "name": "handleGlobalKeyDown",
-            "line": 756,
+            "line": 840,
             "exported": false,
             "signature": "(event: KeyboardEvent): void =>"
           },
           {
             "name": "buildSlots",
-            "line": 970,
+            "line": 1122,
             "exported": false,
             "signature": "(userId: string | null) =>"
           },
           {
             "name": "handleSlotChange",
-            "line": 987,
+            "line": 1139,
             "exported": false,
             "signature": "(slotIndex: number, value: string) =>"
           },
           {
             "name": "handleSlotClear",
-            "line": 1011,
+            "line": 1163,
             "exported": false,
             "signature": "(slotIndex: number) =>"
           },
           {
             "name": "handleReadinessToggle",
-            "line": 1034,
+            "line": 1186,
             "exported": false,
             "signature": "(next: boolean) =>"
           },
           {
             "name": "parseTimestamp",
-            "line": 1234,
+            "line": 1390,
             "exported": false,
             "signature": "(value?: string | null): number =>"
           },
           {
             "name": "handlePointerDown",
-            "line": 1398,
+            "line": 1554,
             "exported": false,
             "signature": "(event: PointerEvent): void =>"
           },
           {
             "name": "handleKeyDown",
-            "line": 1417,
+            "line": 1573,
             "exported": false,
             "signature": "(event: KeyboardEvent): void =>"
           },
           {
             "name": "handleScroll",
-            "line": 1440,
+            "line": 1596,
             "exported": false,
             "signature": "(): void =>"
           },
           {
             "name": "handleMenuButtonClick",
-            "line": 2055,
+            "line": 2211,
             "exported": false,
             "signature": "(label: string): void =>"
           }
@@ -760,9 +760,51 @@
       }
     },
     {
+      "path": "packages/client/src/ws/socialReducers.ts",
+      "size": 2704,
+      "checksum": "ec0787b0f99a3d26fd921d06834f0d9b9cf78bd8c96e5a251d7feee76db5d5fb",
+      "tags": [
+        "websocket",
+        "state",
+        "social"
+      ],
+      "imports": [
+        "@bitby/schemas"
+      ],
+      "namedExports": [
+        "filterChatLogByMuted",
+        "reduceSocialMuteBroadcast",
+        "reduceSocialReportBroadcast"
+      ],
+      "symbols": {
+        "functions": [
+          {
+            "name": "filterChatLogByMuted",
+            "line": 13,
+            "exported": true,
+            "signature": "( log: ChatMessageBroadcast[], mutedIds: ReadonlySet<string>, maxEntries: number = 200, ): ChatMessageBroadcast[] => log .filter((entry) => !entry.userId || !mutedIds.has(entry.userId)) .slice(-maxEntries)"
+          },
+          {
+            "name": "reduceSocialMuteBroadcast",
+            "line": 39,
+            "exported": true,
+            "signature": "("
+          },
+          {
+            "name": "reduceSocialReportBroadcast",
+            "line": 77,
+            "exported": true,
+            "signature": "("
+          }
+        ],
+        "classes": [],
+        "methods": []
+      }
+    },
+    {
       "path": "packages/client/src/ws/useRealtimeConnection.ts",
-      "size": 75407,
-      "checksum": "f0a9d6a777b36f4e41e333b5fce7a9b157ec263a0291bdc9e8d83b0d2ac804d7",
+      "size": 75982,
+      "checksum": "cc2cd8f9bbf516496c4e22c6b931198ecf50833f2643d78b8fe282a858b6bfd5",
       "tags": [
         "websocket",
         "state",
@@ -771,7 +813,8 @@
       "imports": [
         "react",
         "socket.io-client",
-        "@bitby/schemas"
+        "@bitby/schemas",
+        "./socialReducers"
       ],
       "namedExports": [
         "useRealtimeConnection"
@@ -780,253 +823,247 @@
         "functions": [
           {
             "name": "sortRoomItems",
-            "line": 73,
+            "line": 79,
             "exported": false,
             "signature": "(items: Iterable<RoomItem>): RoomItem[] => Array.from(items).sort((a, b) =>"
           },
           {
             "name": "sortInventoryItems",
-            "line": 81,
+            "line": 87,
             "exported": false,
             "signature": "(items: Iterable<InventoryItem>): InventoryItem[] => Array.from(items).sort((a, b) =>"
           },
           {
             "name": "isSessionUser",
-            "line": 111,
+            "line": 117,
             "exported": false,
             "signature": "(value: unknown): value is SessionUser =>"
           },
           {
             "name": "isSessionRoom",
-            "line": 126,
+            "line": 132,
             "exported": false,
             "signature": "(value: unknown): value is SessionRoom =>"
           },
           {
             "name": "cloneOccupant",
-            "line": 259,
+            "line": 263,
             "exported": false,
             "signature": "(occupant: RoomOccupant): RoomOccupant => ("
           },
           {
             "name": "sortOccupants",
-            "line": 265,
+            "line": 269,
             "exported": false,
             "signature": "(map: Map<string, RoomOccupant>): RoomOccupant[] => Array.from(map.values()) .map((occupant) => cloneOccupant(occupant)) .sort((a, b) =>"
           },
           {
             "name": "buildEnvelope",
-            "line": 276,
+            "line": 280,
             "exported": false,
             "signature": "( seq: number, op: string, data: Record<string, unknown> ="
           },
           {
             "name": "normaliseSocketProtocol",
-            "line": 292,
+            "line": 296,
             "exported": false,
             "signature": "(protocol: string): string =>"
           },
           {
             "name": "resolveSocketEndpoint",
-            "line": 303,
+            "line": 307,
             "exported": false,
             "signature": "(): SocketEndpoint =>"
           },
           {
             "name": "resolveHttpBaseUrl",
-            "line": 329,
+            "line": 333,
             "exported": false,
             "signature": "(): string =>"
           },
           {
             "name": "getExplicitToken",
-            "line": 344,
+            "line": 348,
             "exported": false,
             "signature": "(): string | null =>"
           },
           {
             "name": "getDevCredentials",
-            "line": 349,
+            "line": 353,
             "exported": false,
             "signature": "():"
           },
           {
             "name": "getLatestPendingTarget",
-            "line": 354,
+            "line": 358,
             "exported": false,
             "signature": "( pendingMoves: Map<number,"
           },
           {
             "name": "normaliseTypingPreview",
-            "line": 364,
+            "line": 368,
             "exported": false,
             "signature": "(input: string | null | undefined): string | null =>"
           },
           {
             "name": "snapshotTypingIndicators",
-            "line": 375,
+            "line": 379,
             "exported": false,
             "signature": "( source: Map<string, TypingIndicatorInternal>, ): TypingIndicatorView[] => Array.from(source.entries()).map(([userId, indicator]) => ("
           },
           {
             "name": "snapshotChatBubbles",
-            "line": 384,
+            "line": 388,
             "exported": false,
             "signature": "( source: Map<string, ChatBubbleInternal>, ): ChatBubbleView[] => Array.from(source.entries()).map(([userId, bubble]) => ("
           },
           {
             "name": "useRealtimeConnection",
-            "line": 394,
+            "line": 398,
             "exported": true,
             "signature": "(): RealtimeConnectionState =>"
           },
           {
             "name": "clearPingTimer",
-            "line": 455,
+            "line": 460,
             "exported": false,
             "signature": "() =>"
           },
           {
             "name": "clearCountdownTimer",
-            "line": 462,
+            "line": 467,
             "exported": false,
             "signature": "() =>"
           },
           {
             "name": "clearTypingCleanupTimer",
-            "line": 469,
+            "line": 474,
             "exported": false,
             "signature": "() =>"
           },
           {
             "name": "clearBubbleCleanupTimer",
-            "line": 476,
+            "line": 481,
             "exported": false,
             "signature": "() =>"
           },
           {
             "name": "abortLogin",
-            "line": 483,
+            "line": 488,
             "exported": false,
             "signature": "() =>"
           },
           {
             "name": "clearActiveSocket",
-            "line": 491,
+            "line": 496,
             "exported": false,
             "signature": "() =>"
           },
           {
             "name": "startPingTimer",
-            "line": 514,
+            "line": 519,
             "exported": false,
             "signature": "(intervalMs: number) =>"
           },
           {
             "name": "updateState",
-            "line": 530,
+            "line": 535,
             "exported": false,
             "signature": "(partial: Partial<InternalConnectionState>) =>"
           },
           {
             "name": "requestAuthToken",
-            "line": 553,
+            "line": 558,
             "exported": false,
             "signature": "async (): Promise<string> =>"
           },
           {
             "name": "scheduleReconnect",
-            "line": 648,
+            "line": 653,
             "exported": false,
             "signature": "() =>"
           },
           {
-            "name": "filterChatLogByMuted",
-            "line": 708,
-            "exported": false,
-            "signature": "( log: ChatMessageBroadcast[], mutedIds: Set<string>, ): ChatMessageBroadcast[] => log .filter((entry) => !entry.userId || !mutedIds.has(entry.userId)) .slice(-200)"
-          },
-          {
             "name": "appendChatMessage",
-            "line": 716,
+            "line": 713,
             "exported": false,
             "signature": "(message: ChatMessageBroadcast) =>"
           },
           {
             "name": "publishTypingIndicators",
-            "line": 735,
+            "line": 732,
             "exported": false,
             "signature": "() =>"
           },
           {
             "name": "pruneTypingIndicators",
-            "line": 739,
+            "line": 736,
             "exported": false,
             "signature": "(now: number = Date.now()): void =>"
           },
           {
             "name": "scheduleTypingCleanup",
-            "line": 752,
+            "line": 749,
             "exported": false,
             "signature": "() =>"
           },
           {
             "name": "upsertTypingIndicator",
-            "line": 763,
+            "line": 760,
             "exported": false,
             "signature": "( userId: string, preview: string | null, expiresAt?: number, ): void =>"
           },
           {
             "name": "removeTypingIndicator",
-            "line": 780,
+            "line": 777,
             "exported": false,
             "signature": "(userId: string): void =>"
           },
           {
             "name": "publishChatBubbles",
-            "line": 789,
+            "line": 786,
             "exported": false,
             "signature": "() =>"
           },
           {
             "name": "pruneChatBubbles",
-            "line": 793,
+            "line": 790,
             "exported": false,
             "signature": "(now: number = Date.now()): void =>"
           },
           {
             "name": "scheduleBubbleCleanup",
-            "line": 806,
+            "line": 803,
             "exported": false,
             "signature": "() =>"
           },
           {
             "name": "upsertChatBubble",
-            "line": 817,
+            "line": 814,
             "exported": false,
             "signature": "(userId: string, messageId: string, body: string): void =>"
           },
           {
             "name": "removeChatBubble",
-            "line": 827,
+            "line": 824,
             "exported": false,
             "signature": "(userId: string): void =>"
           },
           {
             "name": "handleEnvelope",
-            "line": 836,
+            "line": 833,
             "exported": false,
             "signature": "(envelope: MessageEnvelope) =>"
           },
           {
             "name": "connect",
-            "line": 1502,
+            "line": 1508,
             "exported": false,
             "signature": "async () =>"
           },
           {
             "name": "detachListeners",
-            "line": 1559,
+            "line": 1565,
             "exported": false,
             "signature": "() =>"
           }
@@ -2138,8 +2175,8 @@
     },
     {
       "path": "packages/server/src/ws/connection.ts",
-      "size": 58004,
-      "checksum": "b9c63b7bd09c1925367b90f6d3e31e8bf4d534322be5e1dd234dbc1f2196638b",
+      "size": 57970,
+      "checksum": "f5cdde21078f6b729c1ed85654edadacbc05f1579bebde721ce5157a8d192caa",
       "tags": [],
       "imports": [
         "node:crypto",

@@ -1535,31 +1535,31 @@ export const createRealtimeServer = async ({
 
     const parsed = itemPickupRequestDataSchema.safeParse(envelope.data);
     if (!parsed.success) {
-      sendError('validation_failed', 'Ugyldig anmodning om pickup.', candidateItemId);
+      sendError('validation_failed', 'Invalid pickup request.', candidateItemId);
       return;
     }
 
     const itemId = parsed.data.itemId;
     const occupant = developmentRoomState.occupants.get(user.id);
     if (!occupant) {
-      sendError('not_in_room', 'Du er ikke registreret i dette rum.', itemId);
+      sendError('not_in_room', 'You are not registered in this room.', itemId);
       return;
     }
 
     const item = developmentRoomState.items.get(itemId);
     if (!item) {
-      sendError('not_found', 'Genstanden findes ikke længere.', itemId);
+      sendError('not_found', 'The item no longer exists.', itemId);
       return;
     }
 
     if (occupant.position.x !== item.tileX || occupant.position.y !== item.tileY) {
-      sendError('not_on_tile', 'Stil dig på feltet for at samle op.', itemId);
+      sendError('not_on_tile', 'Stand on the tile to pick up.', itemId);
       return;
     }
 
     const tile = developmentRoomState.tileIndex.get(createTileKey(item.tileX, item.tileY));
     if (tile?.noPickup) {
-      sendError('tile_blocked', 'Kan ikke samle op her.', itemId);
+      sendError('tile_blocked', 'Cannot pick up here.', itemId);
       return;
     }
 
@@ -1572,7 +1572,7 @@ export const createRealtimeServer = async ({
       });
     } catch (error) {
       logger.error({ err: error }, 'Failed to persist item pickup');
-      sendError('persist_failed', 'Kunne ikke gemme din genstand. Prøv igen.', itemId);
+      sendError('persist_failed', 'Could not save your item. Try again.', itemId);
       return;
     }
 
@@ -1583,10 +1583,10 @@ export const createRealtimeServer = async ({
 
       const message =
         result.reason === 'already_picked_up'
-          ? 'Genstanden er allerede samlet op.'
+          ? 'The item has already been picked up.'
           : result.reason === 'not_found'
-            ? 'Genstanden findes ikke længere.'
-            : 'Kunne ikke gemme din genstand. Prøv igen.';
+            ? 'The item no longer exists.'
+            : 'Could not save your item. Try again.';
 
       const code =
         result.reason === 'already_picked_up'
