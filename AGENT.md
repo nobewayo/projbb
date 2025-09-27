@@ -1,3 +1,4 @@
+
 # AGENT for projbb — Golden Rules Edition
 
 ## 0) Golden Rules (every session)
@@ -151,7 +152,7 @@ This is the first place the next agent looks to know what to do.
 4. **Chat (canvas bubble and panel log)**
    - Typing preview bubble follows the avatar. Commit on send. Permanent log in the right panel.
 5. **Items (place or pickup)**
-   - Click through to items. Pickups only on the same tile and not on `noPickup` tiles. Clamp bottom to tile base.
+   - Click through to items. Pickups only on the same tile and not on `noPickup` tiles. Clamp bottom to tile base by default, admin can make offsets.
 6. **Catalog Boot and Deltas**
    - Full catalog plus HMAC on join. Apply deltas. Enforce version thresholds. Use signed caches.
 7. **Wear and Paper Doll**
@@ -376,7 +377,7 @@ sy >= originY && (sy + tileH) <= (originY + gridH)
 
 **Primary menu bar**
 - Permanently attached beneath the playfield, matching the canvas width exactly with only the bottom-left corner rounded so it nests into the stage radius while all other corners stay square. Buttons stay compact (~36px tall) and auto-resize to evenly fill the available width regardless of button count.
-- Buttons: **Rooms, Shop, Log, Search, Quests, Settings, Admin**.
+- Buttons: **Rooms, Shop, Backpack, Search, Quests, Settings, Admin**.
 - Menu cannot be collapsed or hidden; it remains fixed to the stage bottom.
 
 **Top status bar**
@@ -387,7 +388,7 @@ sy >= originY && (sy + tileH) <= (originY + gridH)
 - A pill-shaped, button-only admin quick menu sits just below the bottom dock (outside the main stage container) with a nearly flush **2px** gap separating the two. It only appears when the bottom-bar **Admin** button is active, lists quick actions (e.g., reload room, toggle grid, latency trace), rests on its own layer so no surrounding layout shifts when toggled, and will later gate to admin accounts. During development builds it spawns visible by default so screenshots/demos always capture the admin affordances.
 
 **Input precedence**
-1) **Left-click item** (painted rect/alpha) → open **Item Info** in panel.  
+1) **Left-click item** does **not** consume; preserve **click-through**.
 2) **Left-click avatar** does **not** consume; preserve **click-through**.  
 3) **Left-click tile** → **move** (optimistic; server validates).
 
@@ -414,19 +415,32 @@ sy >= originY && (sy + tileH) <= (originY + gridH)
 - Avatar **foot midpoint** at the tile’s bottom center. Slot offsets are relative to this origin.
 
 **Layer order (back → front)**
-1) shadow  
-2) skin_base (masked recolor for skin tone)  
-3) pants  
-4) shoes  
-5) shirt  
-6) beard (default over shirt)  
-7) hair_back  
-8) handheld_back  
-9) jacket (optional)  
-10) handheld_front (multiple allowed; ordered, with **weight** cap)  
-11) hair_front  
-12) glasses  
-13) hat  
+) shadow  
+) misc1
+) skin_base (masked recolor for skin tone)  
+) misc2
+) pants  
+) misc3
+) shoes
+) misc4  
+) shirt  
+) misc5
+) beard (default over shirt)
+) misc6  
+) hair_back  
+) misc7
+) handheld_back  
+) misc8
+) jacket (optional)  
+) misc9
+) hair_front 
+) misc10 
+) glasses
+) misc11  
+) hat  
+) misc12
+) handheld_front (multiple allowed; ordered, with **weight** cap)
+) misc13
 14) UI bubbles (not part of paper-doll)
 
 **Offsets per proto/slot**
@@ -494,18 +508,18 @@ recolor:
 ## 6) Items, Wear & Handhelds
 
 **Items**
-- **Pre-rendered 3D** shipped as **2D sprites** (PNG).  
+- **Pre-rendered 3D** shipped as **2D sprites** (PNG or GIF).  
 - Each item has a **pivot** at its base; bottom edge may **not** render below the tile bottom (clamp or reject).  
 - Optional idle animation via frames.
 
 **Wear slots**
-- `hat, hair, glasses, beard, shirt, pants, shoes, handheld (multi)`.
+- `hat, hair, glasses, beard, shirt, pants, shoes, handheld (multi), misc1, misc2, misc3, misc4, misc5, misc6, misc7, misc8, misc9, misc10, misc11, misc12, misc13 .
 
 **Handhelds with weight**
 ```yaml
 handhelds:
   maxWeight: 10
-  perUserEquipLimit: 5
+  perUserEquipLimit: 10
   duplicatePolicy: "uniqueProto"  # or "allow"
 ```
 - Each handheld proto defines `weight` (1-10). Sum ≤ maxWeight; only one per exact proto unless policy allows duplicates.
@@ -589,7 +603,7 @@ handhelds:
 - Rate limits (per IP): `/auth/login` ≤ 5/min; `/catalog` ≤ 30/min; uploads ≤ 10/min.
 
 **WS**
-- Per-user (progressive penalties): move ≤ **12/s**, chat ≤ **6/s**, typing ≤ **6/s**, item ≤ **3/s**, join/teleport ≤ **2/min**.  
+- Per-user (progressive penalties): move ≤ **12/s**, chat ≤ **6/s**, typing ≤ **6/s**, item ≤ **6/s**, join/teleport ≤ **30/min**.  
 - Per-IP connection cap: **20**.  
 - Progressive penalties: warn → slow mode → temp kick → ban.
 
@@ -782,14 +796,15 @@ CREATE TABLE audit_log (
 - Room editor: lock tiles, set `noPickup`, tile links (URL/room), background, layout consts.  
 - Offsets editor: slot offsets saved to proto (applies to everyone).  
 - Catalog editor: create once (e.g., “Green Plant”) → instances uniform.  
-- Users: roles, coins, grant/spawn items, move, kick/ban, audit.  
-- Bots: click actions to open panel URL, give items, check inventory, run quests.  
+- Users: roles, coins, grant/spawn items, move, kick/ban, audit.
+- Bots: click actions to open panel URL, give items, check inventory, run quests. Scriptable chatting, moving, teleporting, dropping items etc. 
 - Users can buy **private rooms** for **100 coins**; Teleport shows public + owned rooms.
 
 **Bots**
 - Server-side entities (`bot` table), rendered as clickable sprites or NPC items.  
 - Actions: `openPanelUrl(url)`, `giveItem(protoId,count,ifHasNot?)`, `checkInventory(protoId)`, `startQuest/advanceQuest`.  
 - Quest state: `user_quest_state(user_id, quest_id, step, vars jsonb)`.
+- Scriptable (Move around, change rooms, drop items, chat etc.)
 
 **Plugins** (security & resource limits)
 - Runtime: **isolated-vm** in **Worker Threads**.  
@@ -807,7 +822,7 @@ CREATE TABLE audit_log (
 ## 15) Assets & CDN (Sprite Specifics)
 
 - Sprite sheets (1× / 2×) + JSON maps; names include **SHA-256** content hash; immutable caching.  
-- **Rooms**: pre-rendered 3D backgrounds (large PNG/JPG).  
+- **Rooms**: per-room layered pre-rendered 3D backgrounds (large PNG/JPG).  
 - **Avatars**: per-slot layers and/or **sprite-pack frames** (idle/blink/gesture).  
 - **Items**: single-view sprites + optional frames.
 
@@ -824,7 +839,7 @@ CREATE TABLE audit_log (
 ```
 
 **Preload & fallback**
-- **Critical-first**: room background, visible item sprites, visible users’ layers; then warm cache for nearby rooms/common items.  
+- **Critical-first**: room background, room background layers, visible item sprites, visible users’ layers; then warm cache for nearby rooms/common items.  
 - Retry: 3 attempts (100/500/2000ms); fallback `/assets/missing.png`.  
 - If a critical layer fails: render base skin + label; mark **degraded**; metric + retry.  
 - Load **2×** sheets if `devicePixelRatio ≥ 1.5`.
@@ -1084,7 +1099,7 @@ maintenance:
 
 - Users with **1,000,000 coins**: `test` (owner), `test2` (moderator), `test3` (vip), `test4` (user).  
 - At least one public room; private rooms purchasable for **100 coins**.  
-- Starter items (e.g., couch, coin pile) and a bot that opens a right-panel page & grants an item.
+- Starter items (e.g., couch, plant) and a bot with a scripted sequence so it talks, right clicking on the bot should grant the user the options to view it's profile in the right panel & grants an item an optional mission.
 
 ---
 
@@ -1173,13 +1188,13 @@ ads:
 
 - Header with title and optional subtitle/breadcrumb.  
 - **Sections**: Profile / Item Info / Chat Log (panel width locked at 500px; chat log keeps its footprint even when collapsed).
-- Chat log hides native scrollbars, surfaces a **“Back to top”** affordance only after scrolling, lays alternating rows flush beneath the header all the way to the drawer base, and reveals timestamps via tooltip after 500 ms hover/focus.
+- Chat log hides native scrollbars, surfaces a **“Back to top”** affordance only after scrolling, lays alternating rows flush beneath the header all the way to the drawer base, and reveals timestamps via tooltip after 500 ms hover/focus. Newest logs are at the top.
 - Item Info replaces panel body; back affordance (chevron) returns to previous view.
 
 ## A.6 Context Menus
 
 - **Grid right-click**: shows **items only on that tile**. For each item: name + buttons [**Info**] and [**Saml Op**] (pickup only if user stands on that tile and tile not `noPickup`).  
-- **Player right-click**: shows actions (View profile, Trade, Mute, Report... per role/permissions).  
+- **Player right-click**: shows actions (Profile, Trade, Mute, Report... per role/permissions).  
 - Max width 320px; keyboard accessible; escape closes; clicks outside close; menu never scrolls canvas.
 
 ## A.7 Chat Bubbles & Typing
