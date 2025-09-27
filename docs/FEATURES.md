@@ -1,6 +1,6 @@
 # FEATURES
 
-_Last updated: 2025-09-27T11:32:13.329Z_
+_Last updated: 2025-09-27T11:42:45.272Z_
 
 This file is generated from the codebase (module tags, routes, exports) to inventory what exists today. Status and notes may need a quick human touch.
 
@@ -313,6 +313,7 @@ This file is generated from the codebase (module tags, routes, exports) to inven
 - `on` `error` — packages/server/src/ws/connection.ts
 
 ### Data models / schemas
+- packages/server/src/ws/connection.ts
 - packages/schemas/src/ws/admin.ts
 - packages/schemas/src/ws/auth.ts
 - packages/schemas/src/ws/chat.ts
@@ -322,7 +323,6 @@ This file is generated from the codebase (module tags, routes, exports) to inven
 - packages/schemas/src/ws/room.ts
 - packages/schemas/src/ws/social.ts
 - packages/schemas/src/ws/trade.ts
-- packages/server/src/ws/connection.ts
 
 ### Notes / TODO
 - 
