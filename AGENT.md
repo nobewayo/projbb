@@ -3,6 +3,12 @@
 ## 1. Purpose and scope
 One source of truth for how to build, test, and review projbb. Follow every requirement in this document while implementing Bitby.
 
+### Pre-work sync (before starting any task)
+- Ensure `origin` exists. If it is missing, run `git remote add origin git@github.com:nobewayo/projbb.git` or fall back to `https://github.com/nobewayo/projbb.git` when SSH is unavailable.
+- `git fetch origin`
+- `git switch main`
+- `git pull --ff-only`
+
 ## 2. Repo map
 - **Workspace:** pnpm monorepo. Root package.json wires shared scripts. `pnpm-workspace.yaml` registers all packages.
 - **Client:** `packages/client` contains the Vite and React front end that renders the deterministic top right anchored grid, socket powered chat, context menus, admin UI, and inventory flows documented below.
@@ -59,13 +65,7 @@ One source of truth for how to build, test, and review projbb. Follow every requ
 - **Branches:** Use lowercase feature prefixes such as `docs/<topic>` or `feat/<area>` that describe the change scope.
 - **Commits:** Follow Conventional Commits, for example `docs: trim README quickstart`. Keep commits focused and include refreshed codemap updates when applicable.
 - **PR body timing:** Do not wait for CI to finish before drafting the PR body. Summaries and testing notes should accompany the first push.
-- **Changed lines helper:** Follow this after-commit flow to generate `.ci/changed-lines.txt` for inline review:
-  1. Edit code.
-  2. `pnpm codemap`
-  3. `git add -A && git commit -m "<message>"`
-  4. `tools/ci/diff-lines.sh origin/main > .ci/changed-lines.txt`
-  5. `git add .ci/changed-lines.txt && git commit --amend --no-edit` (or push a follow-up commit)
-  6. Push.
+- **Changed lines helper:** Always run the diff-lines script **after committing** your changes to produce `.ci/changed-lines.txt` for inline review. Preferred call: `tools/ci/diff-lines.sh auto --out .ci/changed-lines.txt`. Amend the commit (or add a follow-up) with the refreshed file before pushing.
 - **Template checklist:** Confirm codemap updated, tests run or justified, docs aligned with Master Spec guidance merged into this AGENT, and Smoke artifact linked. Reference relevant sections when you mark checklist items.
 
 ## 7. Security and performance rules

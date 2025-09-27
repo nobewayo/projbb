@@ -1,6 +1,8 @@
 <!-- @module: ci -->
 <!-- @tags: pr-template -->
-- [ ] Ran `pnpm codemap` and committed the updated map
-- [ ] After committing, ran `tools/ci/diff-lines.sh origin/main > .ci/changed-lines.txt`
-- [ ] CI "Codemap" is green
-- [ ] CI "Smoke" uploaded the client screenshot, see Actions → Artifacts
+- [ ] Generated `.ci/changed-lines.txt` with: `tools/ci/diff-lines.sh auto --out .ci/changed-lines.txt`
+- [ ] Ran `pnpm codemap` and committed `codemap.json` and `CODEMAP.md`
+- [ ] Branch is up to date with main
+- [ ] All required checks are green (Codemap, Smoke, Pre-Cutover)
+- [ ] Linked Smoke screenshot artifact (or noted N/A)
+- [ ] If behavior changed: added an entry to `docs/DECISIONS.md` (Spec delta)
