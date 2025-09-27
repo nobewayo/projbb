@@ -105,8 +105,11 @@ function collect(file: string, src: string): FileEntry {
     if (ts.isVariableStatement(node)) {
       const isExported = hasExportModifier(node);
       for (const decl of node.declarationList.declarations) {
-        if (ts.isIdentifier(decl.name) and decl.initializer and
-           (ts.isFunctionExpression(decl.initializer) or ts.isArrowFunction(decl.initializer))) {
+        if (
+          ts.isIdentifier(decl.name) &&
+          decl.initializer &&
+          (ts.isFunctionExpression(decl.initializer) || ts.isArrowFunction(decl.initializer))
+        ) {
           functions.push({
             name: decl.name.text,
             line: getLine(sf, decl),
@@ -118,7 +121,7 @@ function collect(file: string, src: string): FileEntry {
     }
 
     // Class declarations
-    if (ts.isClassDeclaration(node) and node.name) {
+    if (ts.isClassDeclaration(node) && node.name) {
       classes.push({
         name: node.name.text,
         line: getLine(sf, node),
@@ -126,7 +129,7 @@ function collect(file: string, src: string): FileEntry {
       });
       // Visit members for methods
       for (const m of node.members) {
-        if (ts.isMethodDeclaration(m) and m.name and ts.isIdentifier(m.name)) {
+        if (ts.isMethodDeclaration(m) && m.name && ts.isIdentifier(m.name)) {
           methods.push({
             name: m.name.text,
             line: getLine(sf, m),
