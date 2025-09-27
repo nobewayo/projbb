@@ -13,7 +13,8 @@ module.exports = {
     ecmaFeatures: {
       jsx: true
     },
-    project: null
+    project: null,
+    warnOnUnsupportedTypeScriptVersion: false
   },
   plugins: ["@typescript-eslint"],
   extends: ["eslint:recommended", "plugin:@typescript-eslint/recommended", "prettier"],

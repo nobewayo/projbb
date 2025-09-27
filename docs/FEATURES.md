@@ -1,6 +1,6 @@
 # FEATURES
 
-_Last updated: 2025-09-27T12:17:23.148Z_
+_Last updated: 2025-09-27T13:37:29.401Z_
 
 This file is generated from the codebase (module tags, routes, exports) to inventory what exists today. Status and notes may need a quick human touch.
 
