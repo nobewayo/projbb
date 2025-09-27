@@ -16,8 +16,6 @@ import GridCanvas, { type CanvasItem, type CanvasOccupant } from './canvas/GridC
 import './styles.css';
 import {
   useRealtimeConnection,
-  type OccupantProfileSummary,
-  type TradeSessionBootstrap,
   type TradeLifecycleAcknowledgement,
 } from './ws/useRealtimeConnection';
 import type { GridTile } from './canvas/types';
