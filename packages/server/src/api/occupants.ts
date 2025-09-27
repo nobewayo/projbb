@@ -1,3 +1,6 @@
+// @module: server-occupants-api
+// @tags: fastify, rooms, http
+
 import type { FastifyPluginCallback, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { decodeToken } from '../auth/jwt.js';

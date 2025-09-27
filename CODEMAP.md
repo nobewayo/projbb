@@ -1,6 +1,6 @@
 # CODEMAP
 
-Generated at: 2025-09-26T22:44:55.516Z
+Generated at: 2025-09-27T00:18:07.701Z
 
 ## Module: Uncategorized
 
@@ -75,48 +75,6 @@ Generated at: 2025-09-26T22:44:55.516Z
       - async const startContainerStack = (): Promise<TestStack> =>
     - startTestStack (line 138) [exported]
       - async const startTestStack = (): Promise<TestStack> =>
-
-- **packages/server/src/api/admin.ts**
-  - Exports: adminRoutes
-  - Imports: ../auth/http.js, ../auth/jwt.js, ../auth/types.js, ../config.js, ../db/admin.js, ../db/audit.js, ../db/items.js, ../db/rooms.js, ../ws/connection.js, fastify, node:crypto, zod
-  - Functions:
-    - isTileInBounds (line 69)
-      - const isTileInBounds = (x: number, y: number): boolean =>
-    - adminRoutes (line 78) [exported]
-      - const adminRoutes = (app, options, done) =>
-    - requireAdmin (line 87)
-      - async const requireAdmin = (request: FastifyRequest, reply: FastifyReply): Promise<AuthenticatedUser | null> =>
-
-- **packages/server/src/api/auth.ts**
-  - Exports: authRoutes
-  - Imports: ../auth/jwt.js, ../auth/store.js, ../config.js, fastify, zod
-  - Functions:
-    - authRoutes (line 17) [exported]
-      - async const authRoutes = (app: FastifyInstance, options: AuthPluginOptions): Promise<void> =>
-
-- **packages/server/src/api/occupants.ts**
-  - Exports: occupantRoutes
-  - Imports: ../auth/http.js, ../auth/jwt.js, ../config.js, ../db/items.js, ../db/rooms.js, ../db/social.js, ../ws/connection.js, fastify, zod
-  - Functions:
-    - occupantRoutes (line 62) [exported]
-      - const occupantRoutes = (app, options, done) =>
-    - requireAuth (line 69)
-      - const requireAuth = (request: FastifyRequest): { userId: string } | null =>
-    - resolveOccupantContext (line 84)
-      - async const resolveOccupantContext = (roomId: string, occupantId: string, requesterId: string) =>
-    - resolveTradeContext (line 107)
-      - async const resolveTradeContext = (roomId: string, tradeId: string, requesterId: string) =>
-    - mapTradeRecord (line 134)
-      - const mapTradeRecord = (trade: TradeSessionRecord) =>
-    - mapTradeProposal (line 150)
-      - const mapTradeProposal = (proposal: TradeProposalRecord) =>
-    - buildNegotiationState (line 163)
-      - async const buildNegotiationState = (tradeId: string) =>
-    - resolveTradeParticipant (line 171)
-      - async const resolveTradeParticipant = (params: {
-    trade: TradeSessionRecord;
-    requesterId: string;
-  }) =>
 
 - **packages/server/src/auth/http.ts**
   - Exports: extractBearerToken
@@ -330,6 +288,39 @@ Generated at: 2025-09-26T22:44:55.516Z
     tileY: number;
     id?: string;
   }): Promise<RoomItemRecord> =>
+
+- **packages/server/src/db/migrations.ts**
+  - Exports: runMigrations
+  - Imports: ./social.js, pg
+  - Functions:
+    - escapeSqlString (line 68)
+      - const escapeSqlString = (value: string): string =>
+    - ensureMigrationTable (line 308)
+      - async const ensureMigrationTable = (pool: Pool): Promise<void> =>
+    - hasMigrationRun (line 317)
+      - async const hasMigrationRun = (client: PoolClient, id: string): Promise<boolean> =>
+    - recordMigration (line 325)
+      - async const recordMigration = (client: PoolClient, id: string): Promise<void> =>
+    - runMigrations (line 332) [exported]
+      - async const runMigrations = (pool: Pool): Promise<void> =>
+
+- **packages/server/src/db/pool.ts**
+  - Exports: createPgPool
+  - Imports: ../config.js, pg
+  - Functions:
+    - createPgPool (line 4) [exported]
+      - const createPgPool = (config: ServerConfig): Pool =>
+
+- **packages/server/src/db/preferences.ts**
+  - Exports: createPreferenceStore
+  - Imports: pg
+  - Functions:
+    - createPreferenceStore (line 16) [exported]
+      - const createPreferenceStore = (pool: Pool): PreferenceStore =>
+    - getChatPreferences (line 17)
+      - async const getChatPreferences = (userId: string): Promise<ChatPreferenceRecord> =>
+    - updateChatShowSystemMessages (line 31)
+      - async const updateChatShowSystemMessages = (userId: string, showSystemMessages: boolean): Promise<ChatPreferenceRecord> =>
 
   - _Output truncated due to markdownMaxPerGroup limit._
 
@@ -579,6 +570,60 @@ Generated at: 2025-09-26T22:44:55.516Z
       - async const connect = () =>
     - detachListeners (line 1536)
       - const detachListeners = () =>
+
+
+## Module: server-admin-api
+
+- **packages/server/src/api/admin.ts**
+  - Tags: fastify, admin, http
+  - Exports: adminRoutes
+  - Imports: ../auth/http.js, ../auth/jwt.js, ../auth/types.js, ../config.js, ../db/admin.js, ../db/audit.js, ../db/items.js, ../db/rooms.js, ../ws/connection.js, fastify, node:crypto, zod
+  - Functions:
+    - isTileInBounds (line 72)
+      - const isTileInBounds = (x: number, y: number): boolean =>
+    - adminRoutes (line 81) [exported]
+      - const adminRoutes = (app, options, done) =>
+    - requireAdmin (line 90)
+      - async const requireAdmin = (request: FastifyRequest, reply: FastifyReply): Promise<AuthenticatedUser | null> =>
+
+
+## Module: server-auth-api
+
+- **packages/server/src/api/auth.ts**
+  - Tags: fastify, auth, http
+  - Exports: authRoutes
+  - Imports: ../auth/jwt.js, ../auth/store.js, ../config.js, fastify, zod
+  - Functions:
+    - authRoutes (line 20) [exported]
+      - async const authRoutes = (app: FastifyInstance, options: AuthPluginOptions): Promise<void> =>
+
+
+## Module: server-occupants-api
+
+- **packages/server/src/api/occupants.ts**
+  - Tags: fastify, rooms, http
+  - Exports: occupantRoutes
+  - Imports: ../auth/http.js, ../auth/jwt.js, ../config.js, ../db/items.js, ../db/rooms.js, ../db/social.js, ../ws/connection.js, fastify, zod
+  - Functions:
+    - occupantRoutes (line 65) [exported]
+      - const occupantRoutes = (app, options, done) =>
+    - requireAuth (line 72)
+      - const requireAuth = (request: FastifyRequest): { userId: string } | null =>
+    - resolveOccupantContext (line 87)
+      - async const resolveOccupantContext = (roomId: string, occupantId: string, requesterId: string) =>
+    - resolveTradeContext (line 110)
+      - async const resolveTradeContext = (roomId: string, tradeId: string, requesterId: string) =>
+    - mapTradeRecord (line 137)
+      - const mapTradeRecord = (trade: TradeSessionRecord) =>
+    - mapTradeProposal (line 153)
+      - const mapTradeProposal = (proposal: TradeProposalRecord) =>
+    - buildNegotiationState (line 166)
+      - async const buildNegotiationState = (tradeId: string) =>
+    - resolveTradeParticipant (line 174)
+      - async const resolveTradeParticipant = (params: {
+    trade: TradeSessionRecord;
+    requesterId: string;
+  }) =>
 
 
 ## Module: ui-feedback
