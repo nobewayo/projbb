@@ -1,5 +1,5 @@
 // tools/codemap/generate.ts
-import { globby } from 'globby';
+import globby from 'globby';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
@@ -77,7 +77,7 @@ function collect(file: string, src: string): FileEntry {
   const classes: ClassSym[] = [];
   const methods: MethodSym[] = [];
 
-  function visit(node: ts.Node, currentClass?: string) {
+  function visit(node: ts.Node) {
     // Imports
     if (ts.isImportDeclaration(node) && node.moduleSpecifier) {
       const mod = (node.moduleSpecifier as ts.StringLiteral).text;
@@ -105,11 +105,8 @@ function collect(file: string, src: string): FileEntry {
     if (ts.isVariableStatement(node)) {
       const isExported = hasExportModifier(node);
       for (const decl of node.declarationList.declarations) {
-        if (
-          ts.isIdentifier(decl.name) &&
-          decl.initializer &&
-          (ts.isFunctionExpression(decl.initializer) || ts.isArrowFunction(decl.initializer))
-        ) {
+        if (ts.isIdentifier(decl.name) && decl.initializer &&
+           (ts.isFunctionExpression(decl.initializer) || ts.isArrowFunction(decl.initializer))) {
           functions.push({
             name: decl.name.text,
             line: getLine(sf, decl),
@@ -146,7 +143,7 @@ function collect(file: string, src: string): FileEntry {
       }
     }
 
-    ts.forEachChild(node, n => visit(n, currentClass));
+    ts.forEachChild(node, visit);
   }
 
   visit(sf);

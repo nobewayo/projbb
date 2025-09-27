@@ -1,9 +1,10 @@
 // tools/featuremap/generate.ts
+import globby from 'globby';
 import * as fs from 'fs';
 import * as path from 'path';
-import { globby } from 'globby';
 
 type CMFile = { path: string; exports?: string[]; };
+
 type ModuleInfo = {
   name: string;
   files: string[];
@@ -44,13 +45,13 @@ function deriveModuleFromPath(p:string): string {
 }
 
 function collectRoutes(src: string, file: string) {
-  const out: { verb: string; route: string; file: string }[] = [];
+  const routes: { verb: string; route: string; file: string }[] = [];
   const re1 = /\b(app|router)\.(get|post|put|patch|delete|options|head)\(\s*['"`]([^'"`]+)['"`]/g;
   const re2 = /\bcreateRoute\(\s*['"`]([^'"`]+)['"`]\s*,\s*['"`](GET|POST|PUT|PATCH|DELETE|OPTIONS|HEAD)['"`]/gi;
   let m: RegExpExecArray | null;
-  while ((m = re1.exec(src))) out.push({ verb: m[2].toUpperCase(), route: m[3], file });
-  while ((m = re2.exec(src))) out.push({ verb: m[2].toUpperCase(), route: m[1], file });
-  return out;
+  while ((m = re1.exec(src))) routes.push({ verb: m[2].toUpperCase(), route: m[3], file });
+  while ((m = re2.exec(src))) routes.push({ verb: m[2].toUpperCase(), route: m[1], file });
+  return routes;
 }
 
 function collectWs(src: string, file: string) {
@@ -73,7 +74,6 @@ async function main() {
   const codemapPath = path.resolve('codemap.json');
   let files: string[] = [];
   let exportsByFile = new Map<string, string[]>();
-
   if (exists(codemapPath)) {
     const cm = tryReadJSON(codemapPath);
     if (cm && Array.isArray(cm.files)) {
@@ -83,7 +83,6 @@ async function main() {
       }
     }
   }
-
   if (!files.length) {
     const rcPath = path.resolve('.codemaprc.json');
     const rc = exists(rcPath) ? JSON.parse(read(rcPath)) : {
