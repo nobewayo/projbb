@@ -1,3 +1,5 @@
+// @module: shared-rest-auth
+// @tags: openapi, auth, http
 import type { OpenAPIV3_1 } from 'openapi-types';
 
 export const authLoginOpenApiDocument: OpenAPIV3_1.Document = {

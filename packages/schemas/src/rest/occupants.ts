@@ -1,3 +1,5 @@
+// @module: shared-rest-occupants
+// @tags: rest, occupants, zod
 import { z } from 'zod';
 
 export const occupantProfileSchema = z.object({

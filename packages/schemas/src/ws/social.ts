@@ -1,3 +1,5 @@
+// @module: shared-ws-social
+// @tags: websocket, social, schema
 import { z } from 'zod';
 
 export const socialMuteRecordSchema = z.object({

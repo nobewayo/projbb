@@ -1,3 +1,5 @@
+// @module: shared-ws-auth
+// @tags: websocket, auth, schema
 import { z } from 'zod';
 
 export const authRequestDataSchema = z.object({

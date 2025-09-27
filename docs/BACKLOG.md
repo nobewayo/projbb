@@ -6,7 +6,7 @@
 - Build the scripted Green pre-cutover health check runner that calls `/healthz`, `/readyz`, `/metrics`, the synthetic WS handshake, and DB or Redis probes so we can gate cutovers per section 8 of the AGENT.
 
 ## Quick wins
-- Annotate the remaining client hot-path files (`packages/client/src/canvas/GridCanvas.tsx`, `packages/client/src/ws/useRealtimeConnection.ts`, `packages/client/src/components/InventoryCard.tsx`, `packages/client/src/components/ProfilePanel.tsx`, `packages/client/src/hooks/useActionToast.ts`) with `@module` and `@tags` headers to improve codemap surfacing.
+- Annotate the shared schema websocket, REST, and OpenAPI contracts (for example `packages/schemas/src/ws/*.ts` and `packages/schemas/src/rest/*.ts`) with `@module` and `@tags` headers so codemap surfaces the realtime and HTTP payload definitions under the correct domains.
 - Document the Smoke workflow's screenshot artifact location in README so contributors can link it from PR discussions without digging through Actions runs.
 - Capture a lightweight readiness unit test that exercises `markNotReady` when downstream dependencies disconnect so we avoid regressions while hardening the controller.
 

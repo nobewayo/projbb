@@ -1,3 +1,5 @@
+// @module: shared-ws-envelope
+// @tags: websocket, schema, helpers
 import { z } from 'zod';
 
 export type MessageEnvelope<Data = Record<string, unknown>> = {

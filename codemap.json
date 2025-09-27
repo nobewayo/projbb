@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2025-09-26T22:44:55.516Z",
+  "generatedAt": "2025-09-27T00:27:13.004Z",
   "options": {
     "fast": false
   },
@@ -884,9 +884,13 @@
     },
     {
       "path": "packages/schemas/src/index.ts",
-      "size": 351,
-      "checksum": "b96f0dfc1d4250e8ae603d6bfe0f1627c7d9ac66c87ffb8ec1b30633cf36e4e4",
-      "tags": [],
+      "size": 410,
+      "checksum": "a44102481e6a5f2cbb6af6d5306048d5b546e955b1b00226494cfbcb6b1d7225",
+      "module": "shared-schemas-root",
+      "tags": [
+        "schemas",
+        "exports"
+      ],
       "imports": [],
       "namedExports": [
         "*"
@@ -899,9 +903,14 @@
     },
     {
       "path": "packages/schemas/src/openapi/auth.ts",
-      "size": 3069,
-      "checksum": "ff4b1f9e89ae2a70dac7beb2133baaf2fc675475867e7938f8d4aac84af8d447",
-      "tags": [],
+      "size": 3128,
+      "checksum": "8fa053e3bdafce9063b7f0e048628aee239124da27325b98121b20713fd2414d",
+      "module": "shared-rest-auth",
+      "tags": [
+        "openapi",
+        "auth",
+        "http"
+      ],
       "imports": [
         "openapi-types"
       ],
@@ -914,9 +923,14 @@
     },
     {
       "path": "packages/schemas/src/rest/occupants.ts",
-      "size": 3433,
-      "checksum": "d5a66860f1d0653cfca70aad2ee36bfd5c4a221d857d1491b7fb1c89a5aedd52",
-      "tags": [],
+      "size": 3498,
+      "checksum": "64d86da80ee0e7f9f460f64ff0bab79db92315f4c296ba2876042c176d6ca68a",
+      "module": "shared-rest-occupants",
+      "tags": [
+        "rest",
+        "occupants",
+        "zod"
+      ],
       "imports": [
         "zod"
       ],
@@ -929,9 +943,14 @@
     },
     {
       "path": "packages/schemas/src/ws/admin.ts",
-      "size": 1872,
-      "checksum": "2a7d8fbd6e9c3ba61525ca5649676d9885094121cc38e6603d7693e3b11608f9",
-      "tags": [],
+      "size": 1935,
+      "checksum": "512ec5d3a45d351f8d01eee3d55c384d387ea00754cb936ccc77b3d3178d0283",
+      "module": "shared-ws-admin",
+      "tags": [
+        "websocket",
+        "admin",
+        "schema"
+      ],
       "imports": [
         "zod"
       ],
@@ -944,9 +963,14 @@
     },
     {
       "path": "packages/schemas/src/ws/auth.ts",
-      "size": 463,
-      "checksum": "01f7434830f74eeb8bcfdceeff5b8d16032ad407239e4741ea6ba4d9e5e313eb",
-      "tags": [],
+      "size": 524,
+      "checksum": "588864aa52dcf04e1483179e0d07b880f3976986566f4764ca1078fd4af54701",
+      "module": "shared-ws-auth",
+      "tags": [
+        "websocket",
+        "auth",
+        "schema"
+      ],
       "imports": [
         "zod"
       ],
@@ -959,9 +983,14 @@
     },
     {
       "path": "packages/schemas/src/ws/chat.ts",
-      "size": 3213,
-      "checksum": "fa80b0dcebbfb9204f426bec17579e3445bb4f94ba7d23dc61b9910ffc99bc41",
-      "tags": [],
+      "size": 3274,
+      "checksum": "f4bd531966ed5180bb7a6d13d33977032846e2b26704e680fa63e2afe44e860e",
+      "module": "shared-ws-chat",
+      "tags": [
+        "websocket",
+        "chat",
+        "schema"
+      ],
       "imports": [
         "./envelope.js",
         "zod"
@@ -975,9 +1004,14 @@
     },
     {
       "path": "packages/schemas/src/ws/envelope.ts",
-      "size": 639,
-      "checksum": "297a16ea2a24c7aaed6aa072ce16a0c72f4ff9925141b869f52311403bd2f872",
-      "tags": [],
+      "size": 707,
+      "checksum": "82379efbf73558498610d3c115dc3d2837863d63f45c91a86debbe91d1da84f7",
+      "module": "shared-ws-envelope",
+      "tags": [
+        "websocket",
+        "schema",
+        "helpers"
+      ],
       "imports": [
         "zod"
       ],
@@ -988,7 +1022,7 @@
         "functions": [
           {
             "name": "buildEnvelopeSchema",
-            "line": 17,
+            "line": 19,
             "exported": true,
             "signature": "const buildEnvelopeSchema = (dataSchema: Schema) =>"
           }
@@ -999,9 +1033,14 @@
     },
     {
       "path": "packages/schemas/src/ws/items.ts",
-      "size": 2210,
-      "checksum": "000b6391e19fd49166c6385be124b6b61b8313a37fb53767ca380f14651289c1",
-      "tags": [],
+      "size": 2273,
+      "checksum": "75e6ab56b54a3aa7331d27a5022a9140ceffd082809d1fc048dd1c39c0c436f5",
+      "module": "shared-ws-items",
+      "tags": [
+        "websocket",
+        "items",
+        "schema"
+      ],
       "imports": [
         "./room.js",
         "zod"
@@ -1017,9 +1056,14 @@
     },
     {
       "path": "packages/schemas/src/ws/move.ts",
-      "size": 2708,
-      "checksum": "b82f541a9640b48f4387e748ea6472c4140dae79a592b2be57e30f2f9a278e51",
-      "tags": [],
+      "size": 2773,
+      "checksum": "f393f077f0e9102195eac3f2936a5e4d9a3a5ee88dc28ce000e0abb011b10690",
+      "module": "shared-ws-move",
+      "tags": [
+        "websocket",
+        "movement",
+        "schema"
+      ],
       "imports": [
         "./envelope.js",
         "zod"
@@ -1033,9 +1077,14 @@
     },
     {
       "path": "packages/schemas/src/ws/room.ts",
-      "size": 2377,
-      "checksum": "6a0a6a7b3dd77beb0950dcbc556d20511ed5cfb32df0969bb8b02739fcbac665",
-      "tags": [],
+      "size": 2438,
+      "checksum": "2a73e88e8f9854bbaf2c746affd037f77089d873315a0df215006178beacda0e",
+      "module": "shared-ws-room",
+      "tags": [
+        "websocket",
+        "room",
+        "schema"
+      ],
       "imports": [
         "./admin.js",
         "zod"
@@ -1049,9 +1098,14 @@
     },
     {
       "path": "packages/schemas/src/ws/social.ts",
-      "size": 1156,
-      "checksum": "df438462f948428d281837ca92b9bfe3631776bb36597f936d563c259ce13ba9",
-      "tags": [],
+      "size": 1221,
+      "checksum": "211dbed2dd9ea4286597f7e7ae98b541e279cfc4050969ecad80c8f01ce1c396",
+      "module": "shared-ws-social",
+      "tags": [
+        "websocket",
+        "social",
+        "schema"
+      ],
       "imports": [
         "zod"
       ],
@@ -1064,9 +1118,14 @@
     },
     {
       "path": "packages/schemas/src/ws/trade.ts",
-      "size": 444,
-      "checksum": "8c6317e17c6fdeb2b73f50bc1a0a3cff0791d0632022505bb8ab7aa9641fca15",
-      "tags": [],
+      "size": 507,
+      "checksum": "d453c8eaf904d1c4f1414fdd3e032d04bea4991fdbd0e0b5a8f2751ba436fa7f",
+      "module": "shared-ws-trade",
+      "tags": [
+        "websocket",
+        "trade",
+        "schema"
+      ],
       "imports": [
         "../rest/occupants.js",
         "zod"
@@ -1131,9 +1190,14 @@
     },
     {
       "path": "packages/server/src/api/admin.ts",
-      "size": 11348,
-      "checksum": "6425998b3cf08964f9afbcc582cbb6135ae069a604586666d32f7c2eda884eaf",
-      "tags": [],
+      "size": 11409,
+      "checksum": "a9a56cb810cd4853887da32ab1591451034d82e0172d17b117db68c9576894bc",
+      "module": "server-admin-api",
+      "tags": [
+        "fastify",
+        "admin",
+        "http"
+      ],
       "imports": [
         "../auth/http.js",
         "../auth/jwt.js",
@@ -1155,19 +1219,19 @@
         "functions": [
           {
             "name": "isTileInBounds",
-            "line": 69,
+            "line": 72,
             "exported": false,
             "signature": "const isTileInBounds = (x: number, y: number): boolean =>"
           },
           {
             "name": "adminRoutes",
-            "line": 78,
+            "line": 81,
             "exported": true,
             "signature": "const adminRoutes = (app, options, done) =>"
           },
           {
             "name": "requireAdmin",
-            "line": 87,
+            "line": 90,
             "exported": false,
             "signature": "async const requireAdmin = (request: FastifyRequest, reply: FastifyReply): Promise<AuthenticatedUser | null> =>"
           }
@@ -1178,9 +1242,14 @@
     },
     {
       "path": "packages/server/src/api/auth.ts",
-      "size": 1662,
-      "checksum": "1f9b006c8871e0a57c933d20bfbe6133e3449fc295c44d1d13e366afd427395c",
-      "tags": [],
+      "size": 1721,
+      "checksum": "e23488167a02af9e7e1a5743b2c9ac7287154647fa891ddf210cb5e329801b07",
+      "module": "server-auth-api",
+      "tags": [
+        "fastify",
+        "auth",
+        "http"
+      ],
       "imports": [
         "../auth/jwt.js",
         "../auth/store.js",
@@ -1195,7 +1264,7 @@
         "functions": [
           {
             "name": "authRoutes",
-            "line": 17,
+            "line": 20,
             "exported": true,
             "signature": "async const authRoutes = (app: FastifyInstance, options: AuthPluginOptions): Promise<void> =>"
           }
@@ -1206,9 +1275,14 @@
     },
     {
       "path": "packages/server/src/api/occupants.ts",
-      "size": 23751,
-      "checksum": "5aa35a7064f6452b3693689ea5a43faaf73ec04b03ce9093d8b5ed972ae4f5b3",
-      "tags": [],
+      "size": 23816,
+      "checksum": "9cd4a667141f575b98fde0a1ff6b3c9f5e7f6a3511082aa5f6a18ec8a8e78045",
+      "module": "server-occupants-api",
+      "tags": [
+        "fastify",
+        "rooms",
+        "http"
+      ],
       "imports": [
         "../auth/http.js",
         "../auth/jwt.js",
@@ -1227,49 +1301,49 @@
         "functions": [
           {
             "name": "occupantRoutes",
-            "line": 62,
+            "line": 65,
             "exported": true,
             "signature": "const occupantRoutes = (app, options, done) =>"
           },
           {
             "name": "requireAuth",
-            "line": 69,
+            "line": 72,
             "exported": false,
             "signature": "const requireAuth = (request: FastifyRequest): { userId: string } | null =>"
           },
           {
             "name": "resolveOccupantContext",
-            "line": 84,
+            "line": 87,
             "exported": false,
             "signature": "async const resolveOccupantContext = (roomId: string, occupantId: string, requesterId: string) =>"
           },
           {
             "name": "resolveTradeContext",
-            "line": 107,
+            "line": 110,
             "exported": false,
             "signature": "async const resolveTradeContext = (roomId: string, tradeId: string, requesterId: string) =>"
           },
           {
             "name": "mapTradeRecord",
-            "line": 134,
+            "line": 137,
             "exported": false,
             "signature": "const mapTradeRecord = (trade: TradeSessionRecord) =>"
           },
           {
             "name": "mapTradeProposal",
-            "line": 150,
+            "line": 153,
             "exported": false,
             "signature": "const mapTradeProposal = (proposal: TradeProposalRecord) =>"
           },
           {
             "name": "buildNegotiationState",
-            "line": 163,
+            "line": 166,
             "exported": false,
             "signature": "async const buildNegotiationState = (tradeId: string) =>"
           },
           {
             "name": "resolveTradeParticipant",
-            "line": 171,
+            "line": 174,
             "exported": false,
             "signature": "async const resolveTradeParticipant = (params: {\n    trade: TradeSessionRecord;\n    requesterId: string;\n  }) =>"
           }

@@ -1,3 +1,5 @@
+// @module: shared-ws-items
+// @tags: websocket, items, schema
 import { z } from 'zod';
 
 import { roomItemSchema } from './room.js';

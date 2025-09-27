@@ -1,3 +1,5 @@
+// @module: shared-ws-admin
+// @tags: websocket, admin, schema
 import { z } from 'zod';
 export const adminDevAffordanceSchema = z.object({
   gridVisible: z.boolean(),

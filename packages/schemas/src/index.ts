@@ -1,3 +1,5 @@
+// @module: shared-schemas-root
+// @tags: schemas, exports
 export * from './ws/envelope.js';
 export * from './ws/move.js';
 export * from './ws/room.js';

@@ -1,3 +1,5 @@
+// @module: shared-ws-room
+// @tags: websocket, room, schema
 import { z } from 'zod';
 import { adminStateSchema } from './admin.js';
 

@@ -1,3 +1,5 @@
+// @module: shared-ws-chat
+// @tags: websocket, chat, schema
 import { z } from 'zod';
 import { buildEnvelopeSchema } from './envelope.js';
 

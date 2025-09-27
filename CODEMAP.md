@@ -1,6 +1,6 @@
 # CODEMAP
 
-Generated at: 2025-09-26T22:44:55.516Z
+Generated at: 2025-09-27T00:27:13.004Z
 
 ## Module: Uncategorized
 
@@ -20,47 +20,6 @@ Generated at: 2025-09-26T22:44:55.516Z
 - **packages/client/vitest.setup.ts**
   - Imports: @testing-library/jest-dom/vitest
 
-- **packages/schemas/src/index.ts**
-  - Exports: *
-
-- **packages/schemas/src/openapi/auth.ts**
-  - Imports: openapi-types
-
-- **packages/schemas/src/rest/occupants.ts**
-  - Imports: zod
-
-- **packages/schemas/src/ws/admin.ts**
-  - Imports: zod
-
-- **packages/schemas/src/ws/auth.ts**
-  - Imports: zod
-
-- **packages/schemas/src/ws/chat.ts**
-  - Imports: ./envelope.js, zod
-
-- **packages/schemas/src/ws/envelope.ts**
-  - Exports: buildEnvelopeSchema
-  - Imports: zod
-  - Functions:
-    - buildEnvelopeSchema (line 17) [exported]
-      - const buildEnvelopeSchema = (dataSchema: Schema) =>
-
-- **packages/schemas/src/ws/items.ts**
-  - Exports: roomItemSchema
-  - Imports: ./room.js, zod
-
-- **packages/schemas/src/ws/move.ts**
-  - Imports: ./envelope.js, zod
-
-- **packages/schemas/src/ws/room.ts**
-  - Imports: ./admin.js, zod
-
-- **packages/schemas/src/ws/social.ts**
-  - Imports: zod
-
-- **packages/schemas/src/ws/trade.ts**
-  - Imports: ../rest/occupants.js, zod
-
 - **packages/server/src/__tests__/helpers/testStack.ts**
   - Exports: startTestStack
   - Imports: @testcontainers/postgresql, @testcontainers/redis, ioredis, pg
@@ -75,48 +34,6 @@ Generated at: 2025-09-26T22:44:55.516Z
       - async const startContainerStack = (): Promise<TestStack> =>
     - startTestStack (line 138) [exported]
       - async const startTestStack = (): Promise<TestStack> =>
-
-- **packages/server/src/api/admin.ts**
-  - Exports: adminRoutes
-  - Imports: ../auth/http.js, ../auth/jwt.js, ../auth/types.js, ../config.js, ../db/admin.js, ../db/audit.js, ../db/items.js, ../db/rooms.js, ../ws/connection.js, fastify, node:crypto, zod
-  - Functions:
-    - isTileInBounds (line 69)
-      - const isTileInBounds = (x: number, y: number): boolean =>
-    - adminRoutes (line 78) [exported]
-      - const adminRoutes = (app, options, done) =>
-    - requireAdmin (line 87)
-      - async const requireAdmin = (request: FastifyRequest, reply: FastifyReply): Promise<AuthenticatedUser | null> =>
-
-- **packages/server/src/api/auth.ts**
-  - Exports: authRoutes
-  - Imports: ../auth/jwt.js, ../auth/store.js, ../config.js, fastify, zod
-  - Functions:
-    - authRoutes (line 17) [exported]
-      - async const authRoutes = (app: FastifyInstance, options: AuthPluginOptions): Promise<void> =>
-
-- **packages/server/src/api/occupants.ts**
-  - Exports: occupantRoutes
-  - Imports: ../auth/http.js, ../auth/jwt.js, ../config.js, ../db/items.js, ../db/rooms.js, ../db/social.js, ../ws/connection.js, fastify, zod
-  - Functions:
-    - occupantRoutes (line 62) [exported]
-      - const occupantRoutes = (app, options, done) =>
-    - requireAuth (line 69)
-      - const requireAuth = (request: FastifyRequest): { userId: string } | null =>
-    - resolveOccupantContext (line 84)
-      - async const resolveOccupantContext = (roomId: string, occupantId: string, requesterId: string) =>
-    - resolveTradeContext (line 107)
-      - async const resolveTradeContext = (roomId: string, tradeId: string, requesterId: string) =>
-    - mapTradeRecord (line 134)
-      - const mapTradeRecord = (trade: TradeSessionRecord) =>
-    - mapTradeProposal (line 150)
-      - const mapTradeProposal = (proposal: TradeProposalRecord) =>
-    - buildNegotiationState (line 163)
-      - async const buildNegotiationState = (tradeId: string) =>
-    - resolveTradeParticipant (line 171)
-      - async const resolveTradeParticipant = (params: {
-    trade: TradeSessionRecord;
-    requesterId: string;
-  }) =>
 
 - **packages/server/src/auth/http.ts**
   - Exports: extractBearerToken
@@ -330,6 +247,82 @@ Generated at: 2025-09-26T22:44:55.516Z
     tileY: number;
     id?: string;
   }): Promise<RoomItemRecord> =>
+
+- **packages/server/src/db/migrations.ts**
+  - Exports: runMigrations
+  - Imports: ./social.js, pg
+  - Functions:
+    - escapeSqlString (line 68)
+      - const escapeSqlString = (value: string): string =>
+    - ensureMigrationTable (line 308)
+      - async const ensureMigrationTable = (pool: Pool): Promise<void> =>
+    - hasMigrationRun (line 317)
+      - async const hasMigrationRun = (client: PoolClient, id: string): Promise<boolean> =>
+    - recordMigration (line 325)
+      - async const recordMigration = (client: PoolClient, id: string): Promise<void> =>
+    - runMigrations (line 332) [exported]
+      - async const runMigrations = (pool: Pool): Promise<void> =>
+
+- **packages/server/src/db/pool.ts**
+  - Exports: createPgPool
+  - Imports: ../config.js, pg
+  - Functions:
+    - createPgPool (line 4) [exported]
+      - const createPgPool = (config: ServerConfig): Pool =>
+
+- **packages/server/src/db/preferences.ts**
+  - Exports: createPreferenceStore
+  - Imports: pg
+  - Functions:
+    - createPreferenceStore (line 16) [exported]
+      - const createPreferenceStore = (pool: Pool): PreferenceStore =>
+    - getChatPreferences (line 17)
+      - async const getChatPreferences = (userId: string): Promise<ChatPreferenceRecord> =>
+    - updateChatShowSystemMessages (line 31)
+      - async const updateChatShowSystemMessages = (userId: string, showSystemMessages: boolean): Promise<ChatPreferenceRecord> =>
+
+- **packages/server/src/db/rooms.ts**
+  - Exports: createRoomStore
+  - Imports: ../auth/types.js, pg
+  - Functions:
+    - mapRoomRow (line 42)
+      - const mapRoomRow = (row: {
+  id: string;
+  slug: string;
+  name: string;
+  room_seq: string | number;
+}): RoomRecord =>
+    - mapOccupantRow (line 54)
+      - const mapOccupantRow = (row: {
+  id: string;
+  username: string;
+  roles: string[] | null;
+  x: number;
+  y: number;
+  room_id?: string | null;
+}): RoomSnapshotOccupant & { roomId: string | null } =>
+    - createRoomStore (line 69) [exported]
+      - const createRoomStore = (pool: Pool): RoomStore =>
+    - getRoomBySlug (line 70)
+      - async const getRoomBySlug = (slug: string): Promise<RoomRecord | null> =>
+    - getRoomById (line 83)
+      - async const getRoomById = (id: string): Promise<RoomRecord | null> =>
+    - getTileFlags (line 96)
+      - async const getTileFlags = (roomId: string): Promise<TileFlagRecord[]> =>
+    - getTileFlag (line 110)
+      - async const getTileFlag = (roomId: string, x: number, y: number): Promise<TileFlagRecord | null> =>
+    - updateTileFlag (line 131)
+      - async const updateTileFlag = (roomId: string, x: number, y: number, updates: Partial<Omit<TileFlagRecord, 'x' | 'y'>>): Promise<TileFlagRecord> =>
+    - listOccupants (line 157)
+      - async const listOccupants = (roomId: string): Promise<RoomSnapshotOccupant[]> =>
+    - getOccupant (line 180)
+      - async const getOccupant = (userId: string): Promise<RoomOccupantRecord | null> =>
+    - upsertOccupantPosition (line 204)
+      - async const upsertOccupantPosition = (userId: string, roomId: string, position: { x: number; y: number }): Promise<RoomSnapshotOccupant> =>
+    - clearOccupant (line 227)
+      - async const clearOccupant = (userId: string): Promise<void> =>
+    - incrementRoomSequence (line 231)
+      - async const incrementRoomSequence = (roomId: string): Promise<number> =>
 
   - _Output truncated due to markdownMaxPerGroup limit._
 
@@ -579,6 +572,149 @@ Generated at: 2025-09-26T22:44:55.516Z
       - async const connect = () =>
     - detachListeners (line 1536)
       - const detachListeners = () =>
+
+
+## Module: server-admin-api
+
+- **packages/server/src/api/admin.ts**
+  - Tags: fastify, admin, http
+  - Exports: adminRoutes
+  - Imports: ../auth/http.js, ../auth/jwt.js, ../auth/types.js, ../config.js, ../db/admin.js, ../db/audit.js, ../db/items.js, ../db/rooms.js, ../ws/connection.js, fastify, node:crypto, zod
+  - Functions:
+    - isTileInBounds (line 72)
+      - const isTileInBounds = (x: number, y: number): boolean =>
+    - adminRoutes (line 81) [exported]
+      - const adminRoutes = (app, options, done) =>
+    - requireAdmin (line 90)
+      - async const requireAdmin = (request: FastifyRequest, reply: FastifyReply): Promise<AuthenticatedUser | null> =>
+
+
+## Module: server-auth-api
+
+- **packages/server/src/api/auth.ts**
+  - Tags: fastify, auth, http
+  - Exports: authRoutes
+  - Imports: ../auth/jwt.js, ../auth/store.js, ../config.js, fastify, zod
+  - Functions:
+    - authRoutes (line 20) [exported]
+      - async const authRoutes = (app: FastifyInstance, options: AuthPluginOptions): Promise<void> =>
+
+
+## Module: server-occupants-api
+
+- **packages/server/src/api/occupants.ts**
+  - Tags: fastify, rooms, http
+  - Exports: occupantRoutes
+  - Imports: ../auth/http.js, ../auth/jwt.js, ../config.js, ../db/items.js, ../db/rooms.js, ../db/social.js, ../ws/connection.js, fastify, zod
+  - Functions:
+    - occupantRoutes (line 65) [exported]
+      - const occupantRoutes = (app, options, done) =>
+    - requireAuth (line 72)
+      - const requireAuth = (request: FastifyRequest): { userId: string } | null =>
+    - resolveOccupantContext (line 87)
+      - async const resolveOccupantContext = (roomId: string, occupantId: string, requesterId: string) =>
+    - resolveTradeContext (line 110)
+      - async const resolveTradeContext = (roomId: string, tradeId: string, requesterId: string) =>
+    - mapTradeRecord (line 137)
+      - const mapTradeRecord = (trade: TradeSessionRecord) =>
+    - mapTradeProposal (line 153)
+      - const mapTradeProposal = (proposal: TradeProposalRecord) =>
+    - buildNegotiationState (line 166)
+      - async const buildNegotiationState = (tradeId: string) =>
+    - resolveTradeParticipant (line 174)
+      - async const resolveTradeParticipant = (params: {
+    trade: TradeSessionRecord;
+    requesterId: string;
+  }) =>
+
+
+## Module: shared-rest-auth
+
+- **packages/schemas/src/openapi/auth.ts**
+  - Tags: openapi, auth, http
+  - Imports: openapi-types
+
+
+## Module: shared-rest-occupants
+
+- **packages/schemas/src/rest/occupants.ts**
+  - Tags: rest, occupants, zod
+  - Imports: zod
+
+
+## Module: shared-schemas-root
+
+- **packages/schemas/src/index.ts**
+  - Tags: schemas, exports
+  - Exports: *
+
+
+## Module: shared-ws-admin
+
+- **packages/schemas/src/ws/admin.ts**
+  - Tags: websocket, admin, schema
+  - Imports: zod
+
+
+## Module: shared-ws-auth
+
+- **packages/schemas/src/ws/auth.ts**
+  - Tags: websocket, auth, schema
+  - Imports: zod
+
+
+## Module: shared-ws-chat
+
+- **packages/schemas/src/ws/chat.ts**
+  - Tags: websocket, chat, schema
+  - Imports: ./envelope.js, zod
+
+
+## Module: shared-ws-envelope
+
+- **packages/schemas/src/ws/envelope.ts**
+  - Tags: websocket, schema, helpers
+  - Exports: buildEnvelopeSchema
+  - Imports: zod
+  - Functions:
+    - buildEnvelopeSchema (line 19) [exported]
+      - const buildEnvelopeSchema = (dataSchema: Schema) =>
+
+
+## Module: shared-ws-items
+
+- **packages/schemas/src/ws/items.ts**
+  - Tags: websocket, items, schema
+  - Exports: roomItemSchema
+  - Imports: ./room.js, zod
+
+
+## Module: shared-ws-move
+
+- **packages/schemas/src/ws/move.ts**
+  - Tags: websocket, movement, schema
+  - Imports: ./envelope.js, zod
+
+
+## Module: shared-ws-room
+
+- **packages/schemas/src/ws/room.ts**
+  - Tags: websocket, room, schema
+  - Imports: ./admin.js, zod
+
+
+## Module: shared-ws-social
+
+- **packages/schemas/src/ws/social.ts**
+  - Tags: websocket, social, schema
+  - Imports: zod
+
+
+## Module: shared-ws-trade
+
+- **packages/schemas/src/ws/trade.ts**
+  - Tags: websocket, trade, schema
+  - Imports: ../rest/occupants.js, zod
 
 
 ## Module: ui-feedback

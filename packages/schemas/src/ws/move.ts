@@ -1,3 +1,5 @@
+// @module: shared-ws-move
+// @tags: websocket, movement, schema
 import { z } from 'zod';
 import { buildEnvelopeSchema } from './envelope.js';
 

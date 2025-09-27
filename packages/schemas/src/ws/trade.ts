@@ -1,3 +1,5 @@
+// @module: shared-ws-trade
+// @tags: websocket, trade, schema
 import { z } from 'zod';
 import {
   tradeNegotiationStateSchema,
