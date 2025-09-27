@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+pnpm codemap
+git add codemap.json CODEMAP.md

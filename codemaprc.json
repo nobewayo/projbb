@@ -1,0 +1,15 @@
+{
+  "include": [
+    "packages/**/*.{ts,tsx,js,jsx}"
+  ],
+  "exclude": [
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/.next/**",
+    "**/build/**",
+    "**/coverage/**",
+    "**/*.d.ts",
+    "**/*.test.*",
+    "**/*.spec.*"
+  ]
+}

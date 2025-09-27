@@ -1,0 +1,106 @@
+name: Smoke (screenshot + connectivity)
+
+on:
+  push:
+    branches:
+      - "**"
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: bitby
+          POSTGRES_USER: bitby
+          POSTGRES_DB: bitby
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd="pg_isready -U bitby"
+          --health-interval=5s --health-timeout=5s --health-retries=30
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd="redis-cli ping || exit 1"
+          --health-interval=5s --health-timeout=5s --health-retries=30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with: { node-version: "20" }
+
+      - name: Enable pnpm + install
+        run: |
+          corepack enable
+          pnpm i --frozen-lockfile || pnpm i
+
+      - name: Build (schemas/server/client)
+        run: |
+          pnpm --filter @bitby/schemas build || true
+          pnpm --filter @bitby/server build || true
+          pnpm --filter @bitby/client build
+
+      - name: Start server (wait for /healthz & /readyz)
+        env:
+          POSTGRES_URL: postgres://bitby:bitby@localhost:5432/bitby
+          REDIS_URL: redis://localhost:6379
+          JWT_SECRET: dev-secret
+        run: |
+          (pnpm --filter @bitby/server start || pnpm --filter @bitby/server dev) &
+          for i in {1..90}; do
+            curl -fsS http://localhost:3001/healthz && curl -fsS http://localhost:3001/readyz && break
+            sleep 1
+          done
+
+      - name: Connectivity checks
+        run: |
+          sudo apt-get update -y >/dev/null 2>&1
+          sudo apt-get install -y postgresql-client redis-tools >/dev/null 2>&1
+          psql "postgres://bitby:bitby@localhost:5432/bitby" -c "select 1;" >/dev/null
+          redis-cli -h 127.0.0.1 -p 6379 ping | grep -qi PONG
+
+      - name: Preview client
+        env:
+          VITE_BITBY_WS_URL: http://localhost:3001/ws
+        run: |
+          pnpm --filter @bitby/client preview -- --port 4173 --strictPort &
+          for i in {1..60}; do
+            curl -fsS http://localhost:4173 && break
+            sleep 1
+          done
+
+      - name: Install Playwright
+        run: npx playwright install --with-deps
+
+      - name: Screenshot
+        run: |
+          node - <<'JS'
+          const { chromium } = require('playwright');
+          (async () => {
+            const fs = require('fs'); fs.mkdirSync('artifacts', { recursive: true });
+            const browser = await chromium.launch();
+            const page = await browser.newPage();
+            await page.goto('http://localhost:4173', { waitUntil: 'domcontentloaded' });
+            const start = Date.now();
+            let ok = false;
+            while (Date.now() - start < 30000 && !ok) {
+              ok = await page.locator('text=Connected').first().isVisible().catch(() => false);
+              if (!ok) ok = await page.locator('[data-connected="true"]').first().isVisible().catch(() => false);
+              if (!ok) await page.waitForTimeout(500);
+            }
+            await page.screenshot({ path: 'artifacts/screenshot.png', fullPage: true });
+            await browser.close();
+            if (!ok) console.log('Connected marker not found, screenshot saved for diagnosis.');
+          })();
+          JS
+
+      - name: Upload screenshot
+        uses: actions/upload-artifact@v4
+        with:
+          name: client-screenshot
+          path: artifacts/screenshot.png

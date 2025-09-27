@@ -9,6 +9,7 @@
     "lint": "pnpm -r run lint",
     "typecheck": "pnpm -r run typecheck",
     "test": "pnpm -r run test",
+	"prepare": "husky install",
     "codemap": "tsx tools/codemap/generate.ts",
     "green": "tsx tools/ci/green-checks.ts"
   },
@@ -17,9 +18,10 @@
     "@typescript-eslint/parser": "^6.21.0",
     "eslint": "^8.57.0",
     "eslint-config-prettier": "^9.1.0",
-    "globby": "^13.2.2",
+    "globby": "^14.0.0",
     "prettier": "^3.2.5",
-    "tsx": "^4.7.2",
-    "typescript": "^5.4.5"
+    "tsx": "^4.7.0",
+    "typescript": "^5.6.0",
+	"husky": "^9.0.0"
   }
 }
