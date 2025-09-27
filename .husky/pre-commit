@@ -1,3 +1,4 @@
 #!/usr/bin/env bash
 pnpm codemap
-git add codemap.json CODEMAP.md
+pnpm featuremap || true
+git add codemap.json CODEMAP.md docs/FEATURES.md
