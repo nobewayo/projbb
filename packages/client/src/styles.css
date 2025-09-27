@@ -677,6 +677,10 @@ body {
   border-color: rgba(255, 107, 129, 0.45);
 }
 
+.action-toast--info {
+  border-color: rgba(122, 209, 255, 0.6);
+}
+
 .trade-banner {
   position: absolute;
   left: 50%;

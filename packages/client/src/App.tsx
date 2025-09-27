@@ -1329,6 +1329,19 @@ const App = (): JSX.Element => {
     }
   }, [connection.tradeLifecycleEvent, connection.user?.id, showToast, tradeState]);
 
+  useEffect(() => {
+    const ignored = connection.lastIgnoredSocialEvent;
+    if (!ignored) {
+      return;
+    }
+
+    const message =
+      ignored.type === 'mute'
+        ? 'Ignorerede en mute-opdatering målrettet en anden spiller.'
+        : 'Ignorerede en rapport-opdatering målrettet en anden spiller.';
+    showToast(message, 'info');
+  }, [connection.lastIgnoredSocialEvent?.receivedAt, connection.lastIgnoredSocialEvent?.type, showToast]);
+
   const chatLogEntries = useMemo(() => {
     const formattedHistory: ChatMessage[] = connection.chatLog.map((message) => {
       const timestamp = new Date(message.createdAt);

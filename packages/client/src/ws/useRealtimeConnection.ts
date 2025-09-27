@@ -214,6 +214,11 @@ export interface TradeLifecycleEvent {
   receivedAt: number;
 }
 
+type SocialIgnoreEvent = {
+  type: 'mute' | 'report';
+  receivedAt: number;
+};
+
 export type ActionResult<T> =
   | { ok: true; data: T }
   | { ok: false; message: string; status: number };
@@ -248,6 +253,7 @@ interface InternalConnectionState {
   mutedOccupantIds: string[];
   reportHistory: ReportRecordSummary[];
   tradeLifecycleEvent: TradeLifecycleEvent | null;
+  lastIgnoredSocialEvent: SocialIgnoreEvent | null;
 }
 
 const cloneOccupant = (occupant: RoomOccupant): RoomOccupant => ({
@@ -410,6 +416,7 @@ export const useRealtimeConnection = (): RealtimeConnectionState => {
     mutedOccupantIds: [],
     reportHistory: [],
     tradeLifecycleEvent: null,
+    lastIgnoredSocialEvent: null,
   });
 
   const socketRef = useRef<Socket | null>(null);
@@ -1213,7 +1220,13 @@ export const useRealtimeConnection = (): RealtimeConnectionState => {
           const sessionUser = sessionUserRef.current;
           // Ignore mute broadcasts that are unrelated to the current user to
           // avoid leaking another player's moderation state into this client.
-          if (!sessionUser || broadcast.mute.userId !== sessionUser.id) {
+          if (!sessionUser) {
+            return;
+          }
+          if (broadcast.mute.userId !== sessionUser.id) {
+            updateState({
+              lastIgnoredSocialEvent: { type: 'mute', receivedAt: Date.now() },
+            });
             return;
           }
 
@@ -1234,7 +1247,13 @@ export const useRealtimeConnection = (): RealtimeConnectionState => {
 
           const broadcast: SocialReportBroadcast = parsed.data;
           const sessionUser = sessionUserRef.current;
-          if (!sessionUser || broadcast.report.reporterId !== sessionUser.id) {
+          if (!sessionUser) {
+            return;
+          }
+          if (broadcast.report.reporterId !== sessionUser.id) {
+            updateState({
+              lastIgnoredSocialEvent: { type: 'report', receivedAt: Date.now() },
+            });
             return;
           }
 

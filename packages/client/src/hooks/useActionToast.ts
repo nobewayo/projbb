@@ -6,12 +6,12 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 export type ActionToast = {
   id: number;
   message: string;
-  tone: 'success' | 'error';
+  tone: 'success' | 'error' | 'info';
 };
 
 export interface UseActionToastResult {
   toast: ActionToast | null;
-  showToast: (message: string, tone: 'success' | 'error') => void;
+  showToast: (message: string, tone: 'success' | 'error' | 'info') => void;
   dismissToast: () => void;
 }
 
@@ -32,7 +32,7 @@ export const useActionToast = (timeoutMs = 4000): UseActionToastResult => {
   }, [clearTimer]);
 
   const showToast = useCallback(
-    (message: string, tone: 'success' | 'error') => {
+    (message: string, tone: 'success' | 'error' | 'info') => {
       clearTimer();
       setToast({ id: Date.now(), message, tone });
       timerRef.current = window.setTimeout(() => {

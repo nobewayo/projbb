@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2025-09-27T12:17:21.293Z",
+  "generatedAt": "2025-09-27T13:37:27.031Z",
   "count": 50,
   "files": [
     {
@@ -70,8 +70,8 @@
     },
     {
       "path": "packages/client/src/App.tsx",
-      "size": 78381,
-      "checksum": "ca0a2589a1b1a500be02837d948edc1bc5904d47435065b048cda6f937dd1003",
+      "size": 78833,
+      "checksum": "8381d885e00a98b96e6a5b169d0b8f21535a102ef2cc878d60f58550c1294892",
       "tags": [
         "ui",
         "realtime",
@@ -173,25 +173,25 @@
           },
           {
             "name": "handlePointerDown",
-            "line": 1385,
+            "line": 1398,
             "exported": false,
             "signature": "(event: PointerEvent): void =>"
           },
           {
             "name": "handleKeyDown",
-            "line": 1404,
+            "line": 1417,
             "exported": false,
             "signature": "(event: KeyboardEvent): void =>"
           },
           {
             "name": "handleScroll",
-            "line": 1427,
+            "line": 1440,
             "exported": false,
             "signature": "(): void =>"
           },
           {
             "name": "handleMenuButtonClick",
-            "line": 2042,
+            "line": 2055,
             "exported": false,
             "signature": "(label: string): void =>"
           }
@@ -733,8 +733,8 @@
     },
     {
       "path": "packages/client/src/hooks/useActionToast.ts",
-      "size": 1269,
-      "checksum": "0242e5d3c08979ce5add72a7fe410b2b2e39db3597e9fca8ee70021b4ae448a8",
+      "size": 1296,
+      "checksum": "8270b7533dd4da7e7054f9ca11993b22cd25601e2b00ea9bf0bc54aee3fccd22",
       "tags": [
         "toast",
         "hooks",
@@ -761,8 +761,8 @@
     },
     {
       "path": "packages/client/src/ws/useRealtimeConnection.ts",
-      "size": 74903,
-      "checksum": "a854b977fd192c34ea942a86b8cd9ad95e15bf74d68300c36fa96919ba71891d",
+      "size": 75407,
+      "checksum": "f0a9d6a777b36f4e41e333b5fce7a9b157ec263a0291bdc9e8d83b0d2ac804d7",
       "tags": [
         "websocket",
         "state",
@@ -804,229 +804,229 @@
           },
           {
             "name": "cloneOccupant",
-            "line": 253,
+            "line": 259,
             "exported": false,
             "signature": "(occupant: RoomOccupant): RoomOccupant => ("
           },
           {
             "name": "sortOccupants",
-            "line": 259,
+            "line": 265,
             "exported": false,
             "signature": "(map: Map<string, RoomOccupant>): RoomOccupant[] => Array.from(map.values()) .map((occupant) => cloneOccupant(occupant)) .sort((a, b) =>"
           },
           {
             "name": "buildEnvelope",
-            "line": 270,
+            "line": 276,
             "exported": false,
             "signature": "( seq: number, op: string, data: Record<string, unknown> ="
           },
           {
             "name": "normaliseSocketProtocol",
-            "line": 286,
+            "line": 292,
             "exported": false,
             "signature": "(protocol: string): string =>"
           },
           {
             "name": "resolveSocketEndpoint",
-            "line": 297,
+            "line": 303,
             "exported": false,
             "signature": "(): SocketEndpoint =>"
           },
           {
             "name": "resolveHttpBaseUrl",
-            "line": 323,
+            "line": 329,
             "exported": false,
             "signature": "(): string =>"
           },
           {
             "name": "getExplicitToken",
-            "line": 338,
+            "line": 344,
             "exported": false,
             "signature": "(): string | null =>"
           },
           {
             "name": "getDevCredentials",
-            "line": 343,
+            "line": 349,
             "exported": false,
             "signature": "():"
           },
           {
             "name": "getLatestPendingTarget",
-            "line": 348,
+            "line": 354,
             "exported": false,
             "signature": "( pendingMoves: Map<number,"
           },
           {
             "name": "normaliseTypingPreview",
-            "line": 358,
+            "line": 364,
             "exported": false,
             "signature": "(input: string | null | undefined): string | null =>"
           },
           {
             "name": "snapshotTypingIndicators",
-            "line": 369,
+            "line": 375,
             "exported": false,
             "signature": "( source: Map<string, TypingIndicatorInternal>, ): TypingIndicatorView[] => Array.from(source.entries()).map(([userId, indicator]) => ("
           },
           {
             "name": "snapshotChatBubbles",
-            "line": 378,
+            "line": 384,
             "exported": false,
             "signature": "( source: Map<string, ChatBubbleInternal>, ): ChatBubbleView[] => Array.from(source.entries()).map(([userId, bubble]) => ("
           },
           {
             "name": "useRealtimeConnection",
-            "line": 388,
+            "line": 394,
             "exported": true,
             "signature": "(): RealtimeConnectionState =>"
           },
           {
             "name": "clearPingTimer",
-            "line": 448,
-            "exported": false,
-            "signature": "() =>"
-          },
-          {
-            "name": "clearCountdownTimer",
             "line": 455,
             "exported": false,
             "signature": "() =>"
           },
           {
-            "name": "clearTypingCleanupTimer",
+            "name": "clearCountdownTimer",
             "line": 462,
             "exported": false,
             "signature": "() =>"
           },
           {
-            "name": "clearBubbleCleanupTimer",
+            "name": "clearTypingCleanupTimer",
             "line": 469,
             "exported": false,
             "signature": "() =>"
           },
           {
-            "name": "abortLogin",
+            "name": "clearBubbleCleanupTimer",
             "line": 476,
             "exported": false,
             "signature": "() =>"
           },
           {
+            "name": "abortLogin",
+            "line": 483,
+            "exported": false,
+            "signature": "() =>"
+          },
+          {
             "name": "clearActiveSocket",
-            "line": 484,
+            "line": 491,
             "exported": false,
             "signature": "() =>"
           },
           {
             "name": "startPingTimer",
-            "line": 507,
+            "line": 514,
             "exported": false,
             "signature": "(intervalMs: number) =>"
           },
           {
             "name": "updateState",
-            "line": 523,
+            "line": 530,
             "exported": false,
             "signature": "(partial: Partial<InternalConnectionState>) =>"
           },
           {
             "name": "requestAuthToken",
-            "line": 546,
+            "line": 553,
             "exported": false,
             "signature": "async (): Promise<string> =>"
           },
           {
             "name": "scheduleReconnect",
-            "line": 641,
+            "line": 648,
             "exported": false,
             "signature": "() =>"
           },
           {
             "name": "filterChatLogByMuted",
-            "line": 701,
+            "line": 708,
             "exported": false,
             "signature": "( log: ChatMessageBroadcast[], mutedIds: Set<string>, ): ChatMessageBroadcast[] => log .filter((entry) => !entry.userId || !mutedIds.has(entry.userId)) .slice(-200)"
           },
           {
             "name": "appendChatMessage",
-            "line": 709,
+            "line": 716,
             "exported": false,
             "signature": "(message: ChatMessageBroadcast) =>"
           },
           {
             "name": "publishTypingIndicators",
-            "line": 728,
+            "line": 735,
             "exported": false,
             "signature": "() =>"
           },
           {
             "name": "pruneTypingIndicators",
-            "line": 732,
+            "line": 739,
             "exported": false,
             "signature": "(now: number = Date.now()): void =>"
           },
           {
             "name": "scheduleTypingCleanup",
-            "line": 745,
+            "line": 752,
             "exported": false,
             "signature": "() =>"
           },
           {
             "name": "upsertTypingIndicator",
-            "line": 756,
+            "line": 763,
             "exported": false,
             "signature": "( userId: string, preview: string | null, expiresAt?: number, ): void =>"
           },
           {
             "name": "removeTypingIndicator",
-            "line": 773,
+            "line": 780,
             "exported": false,
             "signature": "(userId: string): void =>"
           },
           {
             "name": "publishChatBubbles",
-            "line": 782,
+            "line": 789,
             "exported": false,
             "signature": "() =>"
           },
           {
             "name": "pruneChatBubbles",
-            "line": 786,
+            "line": 793,
             "exported": false,
             "signature": "(now: number = Date.now()): void =>"
           },
           {
             "name": "scheduleBubbleCleanup",
-            "line": 799,
+            "line": 806,
             "exported": false,
             "signature": "() =>"
           },
           {
             "name": "upsertChatBubble",
-            "line": 810,
+            "line": 817,
             "exported": false,
             "signature": "(userId: string, messageId: string, body: string): void =>"
           },
           {
             "name": "removeChatBubble",
-            "line": 820,
+            "line": 827,
             "exported": false,
             "signature": "(userId: string): void =>"
           },
           {
             "name": "handleEnvelope",
-            "line": 829,
+            "line": 836,
             "exported": false,
             "signature": "(envelope: MessageEnvelope) =>"
           },
           {
             "name": "connect",
-            "line": 1483,
+            "line": 1502,
             "exported": false,
             "signature": "async () =>"
           },
           {
             "name": "detachListeners",
-            "line": 1540,
+            "line": 1559,
             "exported": false,
             "signature": "() =>"
           }
