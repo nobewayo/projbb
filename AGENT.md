@@ -11,6 +11,22 @@
 7. Keep a **Carry-Over (Finish Next)** list for in-progress tasks.
 8. **No automatic PRs.** Codex never merges. You open/merge PRs when you want.
 
+--- 
+
+## Final Message Contract (chat)
+
+When finishing a session, reply in chat **only** with this minimal format. Do **not** include citations, chunk IDs, line numbers, diffs, or images. Do **not** wait on CI. Do **not** open PRs.
+
+### Session Summary
+- <3–6 short bullets of what changed>
+
+### Next Actions (Top 3)
+1. <next small step>
+2. <next small step>
+3. <next small step>
+
+_Note: Client screenshot appears under Actions → latest run → client-screenshot._
+
 ---
 
 ## 1) Purpose and scope (lightweight)
