@@ -62,6 +62,20 @@ One source of truth for how to build, test, and review projbb. Follow every requ
 - Green Environment Pre-Cutover Health Checks (section 8) must pass before routing traffic or completing cutover steps.
 
 ## 6. PR rules
+
+### Changed lines for PR body
+1) Commit first
+2) Generate file list:
+   tools/ci/diff-lines.sh auto --out .ci/changed-lines.txt
+3) Add and amend, or make a small follow up commit:
+   git add .ci/changed-lines.txt
+   git commit --amend --no-edit || git commit -m "chore: add changed lines list"
+
+Notes
+- Use --allow-dirty only for a quick preview, not for PRs.
+- The script auto detects the base. No need to pass origin/main.
+
+
 - **Branches:** Use lowercase feature prefixes such as `docs/<topic>` or `feat/<area>` that describe the change scope.
 - **Commits:** Follow Conventional Commits, for example `docs: trim README quickstart`. Keep commits focused and include refreshed codemap updates when applicable.
 - **PR body timing:** Do not wait for CI to finish before drafting the PR body. Summaries and testing notes should accompany the first push.
