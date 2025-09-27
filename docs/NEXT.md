@@ -11,10 +11,12 @@
 - Added dedicated reducers and Vitest coverage for social mute/report broadcasts.
 - Hardened the trade banner actions with inline loading indicators, guarded buttons, and a retry path for failed lifecycle calls.
 
-## Next Actions (Top 3)
+## Next Actions (Top 5)
 1. Add invite expiration and resend handling to the trade lifecycle banner.
 2. Hook the admin quick menu buttons up to real server affordance endpoints.
 3. Break down `packages/client/src/App.tsx` to isolate admin tooling from the primary render path.
+4. Expand Vitest coverage around the trade banner flow to confirm the new expiration and resend paths.
+5. Document the admin quick menu affordances so QA can validate the wired server endpoints.
 
 ## Quick Wins (High Impact, Low Effort)
 - Document a hover affordance for disabled admin buttons to explain the required role.
