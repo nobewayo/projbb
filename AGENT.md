@@ -29,6 +29,16 @@ _Note: Client screenshot appears under Actions → latest run → client-screens
 
 ---
 
+## Install & Push Behavior
+- Use `pnpm install --reporter=silent` to reduce noise when setting up hooks.
+- End-of-session:
+  - Commit only if there are staged or working-tree changes (no empty commits).
+  - If `git remote get-url origin` fails, **skip push** and state that in chat. Never add a remote automatically.
+- Do not open PRs unless the user explicitly asks.
+
+
+---
+
 ## 1) Purpose and scope (lightweight)
 Single source of truth for how to work in this repo. Prefer clarity and speed over ceremony. All rules here supersede any older automation.
 
