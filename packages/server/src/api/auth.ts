@@ -1,3 +1,6 @@
+// @module: server-auth-api
+// @tags: fastify, auth, http
+
 import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import type { ServerConfig } from '../config.js';

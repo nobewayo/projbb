@@ -1,3 +1,6 @@
+// @module: server-admin-api
+// @tags: fastify, admin, http
+
 import { randomUUID } from 'node:crypto';
 import type { FastifyPluginCallback, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
