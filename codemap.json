@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2025-09-27T12:07:08.702Z",
+  "generatedAt": "2025-09-27T12:17:21.293Z",
   "count": 50,
   "files": [
     {
@@ -70,8 +70,8 @@
     },
     {
       "path": "packages/client/src/App.tsx",
-      "size": 78442,
-      "checksum": "d8e3212fb77c1d210ed272fd647649cb094f9c3bac061ab1511e45a91e762de2",
+      "size": 78381,
+      "checksum": "ca0a2589a1b1a500be02837d948edc1bc5904d47435065b048cda6f937dd1003",
       "tags": [
         "ui",
         "realtime",
@@ -95,103 +95,103 @@
         "functions": [
           {
             "name": "adjustPosition",
-            "line": 167,
+            "line": 165,
             "exported": false,
             "signature": "(): void =>"
           },
           {
             "name": "renderTileSection",
-            "line": 251,
+            "line": 249,
             "exported": false,
             "signature": "( tile: GridTile, items: CanvasItem[], focusedItemId: string | null, ): JSX.Element => ( <section className=\"context-menu__section\" aria-label=\"Tile items\"> <header className=\"context-menu__header\"> <div> <span className=\"context-menu__title\">Felt ("
           },
           {
             "name": "renderTileMenu",
-            "line": 314,
+            "line": 312,
             "exported": false,
             "signature": "(payload: TileContextMenuState): JSX.Element => renderTileSection(payload.tile, payload.items, payload.focusedItemId)"
           },
           {
             "name": "renderOccupantMenu",
-            "line": 317,
+            "line": 315,
             "exported": false,
             "signature": "(payload: OccupantContextMenuState): JSX.Element =>"
           },
           {
             "name": "App",
-            "line": 488,
+            "line": 486,
             "exported": false,
             "signature": "(): JSX.Element =>"
           },
           {
             "name": "isEditableElement",
-            "line": 735,
+            "line": 733,
             "exported": false,
             "signature": "(element: Element | null): boolean =>"
           },
           {
             "name": "commitDraft",
-            "line": 748,
+            "line": 746,
             "exported": false,
             "signature": "(next: string) =>"
           },
           {
             "name": "handleGlobalKeyDown",
-            "line": 758,
+            "line": 756,
             "exported": false,
             "signature": "(event: KeyboardEvent): void =>"
           },
           {
             "name": "buildSlots",
-            "line": 972,
+            "line": 970,
             "exported": false,
             "signature": "(userId: string | null) =>"
           },
           {
             "name": "handleSlotChange",
-            "line": 989,
+            "line": 987,
             "exported": false,
             "signature": "(slotIndex: number, value: string) =>"
           },
           {
             "name": "handleSlotClear",
-            "line": 1013,
+            "line": 1011,
             "exported": false,
             "signature": "(slotIndex: number) =>"
           },
           {
             "name": "handleReadinessToggle",
-            "line": 1036,
+            "line": 1034,
             "exported": false,
             "signature": "(next: boolean) =>"
           },
           {
             "name": "parseTimestamp",
-            "line": 1236,
+            "line": 1234,
             "exported": false,
             "signature": "(value?: string | null): number =>"
           },
           {
             "name": "handlePointerDown",
-            "line": 1387,
+            "line": 1385,
             "exported": false,
             "signature": "(event: PointerEvent): void =>"
           },
           {
             "name": "handleKeyDown",
-            "line": 1406,
+            "line": 1404,
             "exported": false,
             "signature": "(event: KeyboardEvent): void =>"
           },
           {
             "name": "handleScroll",
-            "line": 1429,
+            "line": 1427,
             "exported": false,
             "signature": "(): void =>"
           },
           {
             "name": "handleMenuButtonClick",
-            "line": 2044,
+            "line": 2042,
             "exported": false,
             "signature": "(label: string): void =>"
           }
@@ -761,8 +761,8 @@
     },
     {
       "path": "packages/client/src/ws/useRealtimeConnection.ts",
-      "size": 74632,
-      "checksum": "9fa0d99da1d320bd76fc80945712659b9c28cda9ff568025bdb378fd17de6351",
+      "size": 74903,
+      "checksum": "a854b977fd192c34ea942a86b8cd9ad95e15bf74d68300c36fa96919ba71891d",
       "tags": [
         "websocket",
         "state",
@@ -1020,13 +1020,13 @@
           },
           {
             "name": "connect",
-            "line": 1479,
+            "line": 1483,
             "exported": false,
             "signature": "async () =>"
           },
           {
             "name": "detachListeners",
-            "line": 1536,
+            "line": 1540,
             "exported": false,
             "signature": "() =>"
           }

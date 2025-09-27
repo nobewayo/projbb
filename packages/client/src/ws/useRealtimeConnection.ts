@@ -1209,12 +1209,15 @@ export const useRealtimeConnection = (): RealtimeConnectionState => {
             return;
           }
 
+          const broadcast: SocialMuteBroadcast = parsed.data;
           const sessionUser = sessionUserRef.current;
-          if (!sessionUser || parsed.data.mute.userId !== sessionUser.id) {
+          // Ignore mute broadcasts that are unrelated to the current user to
+          // avoid leaking another player's moderation state into this client.
+          if (!sessionUser || broadcast.mute.userId !== sessionUser.id) {
             return;
           }
 
-          mutedOccupantIdSetRef.current.add(parsed.data.mute.mutedUserId);
+          mutedOccupantIdSetRef.current.add(broadcast.mute.mutedUserId);
           setState((previous) => ({
             ...previous,
             mutedOccupantIds: Array.from(mutedOccupantIdSetRef.current),
@@ -1229,19 +1232,20 @@ export const useRealtimeConnection = (): RealtimeConnectionState => {
             return;
           }
 
+          const broadcast: SocialReportBroadcast = parsed.data;
           const sessionUser = sessionUserRef.current;
-          if (!sessionUser || parsed.data.report.reporterId !== sessionUser.id) {
+          if (!sessionUser || broadcast.report.reporterId !== sessionUser.id) {
             return;
           }
 
           const existingIndex = reportHistoryRef.current.findIndex(
-            (entry) => entry.id === parsed.data.report.id,
+            (entry) => entry.id === broadcast.report.id,
           );
           if (existingIndex >= 0) {
-            reportHistoryRef.current[existingIndex] = parsed.data.report;
+            reportHistoryRef.current[existingIndex] = broadcast.report;
           } else {
             reportHistoryRef.current = [
-              parsed.data.report,
+              broadcast.report,
               ...reportHistoryRef.current,
             ].slice(0, 50);
           }
