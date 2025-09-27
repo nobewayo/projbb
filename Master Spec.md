@@ -127,7 +127,7 @@ sy >= originY && (sy + tileH) <= (originY + gridH)
 
 **Right-click**
 - **Grid**: show **only items** on that tile.  
-  - Actions per item: **Info** (always) → panel; **Saml Op** only if user **stands** on that tile and tile not `noPickup`.  
+  - Actions per item: **Info** (always) → panel; **Pick up** only if user **stands** on that tile and tile not `noPickup`.  
 - **Player**: right-click avatar → player menu (profile/actions).  
 - Always `preventDefault()`; long-press on touch.
 
@@ -579,7 +579,7 @@ CREATE TABLE audit_log (
 
 **Components**
 - Buttons: Primary (filled), Ghost (outlined); min hit 40×40.  
-- Context menu: z-index high; title “On this tile”; Info/Saml Op inline; click-through not allowed while open.  
+- Context menu: z-index high; title “On this tile”; Info/Pick up inline; click-through not allowed while open.  
 - Primary menu bar: fixed to the stage bottom, spans canvas + panel, cannot collapse, and keeps only the bottom-left corner round while the remaining corners stay square.
 - A11y: focus ring 2px, contrast AA+, keyboardable; `Esc` closes menus; respect `prefers-reduced-motion`.  
 - Visual stability test: switching theme must **not** alter any canvas pixels (checksum render).
@@ -912,7 +912,7 @@ ads:
 
 ## A.6 Context Menus
 
-- **Grid right-click**: shows **items only on that tile**. For each item: name + buttons [**Info**] and [**Saml Op**] (pickup only if user stands on that tile and tile not `noPickup`).  
+- **Grid right-click**: shows **items only on that tile**. For each item: name + buttons [**Info**] and [**Pick up**] (pickup only if user stands on that tile and tile not `noPickup`).  
 - **Player right-click**: shows actions (View profile, Trade, Mute, Report… per role/permissions).  
 - Max width 320px; keyboard accessible; escape closes; clicks outside close; menu never scrolls canvas.
 
@@ -963,15 +963,15 @@ ads:
 
 ## A.14 Error & Empty States
 
-- **Network lost**: **blocking overlay** covering the stage; disables all interactions until WS reconnect + re-auth + room resync complete. Show spinner + “Forbinder igen…” and backoff status; optional “Genindlæs” button remains within overlay (still blocks gameplay).  
+- **Network lost**: **blocking overlay** covering the stage; disables all interactions until WS reconnect + re-auth + room resync complete. Show spinner + “Reconnecting…” and backoff status; optional “Reload” button remains within overlay (still blocks gameplay).  
 - **Asset missing**: show neutral placeholder tile/item; log once per asset per session.
 
 ## A.15 Microcopy
 
-- Teleport: “Vælg et rum” / “Mine rum” / “Offentlige rum”  
-- Pickup success: “Lagt i rygsæk”  
-- Pickup blocked: “Kan ikke samle op her”  
-- Locked tile: “Det felt er låst”
+- Teleport: “Select a room” / “My rooms” / “Public rooms”  
+- Pickup success: “Added to backpack”  
+- Pickup blocked: “Cannot pick up here”  
+- Locked tile: “This tile is locked”
 
 ## A.16 Motion
 

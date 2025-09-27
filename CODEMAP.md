@@ -1,6 +1,6 @@
 # CODEMAP
 
-Total files: 50
+Total files: 51
 
 ## packages/client
 
@@ -31,6 +31,7 @@ Total files: 50
 
 ## packages/client/src/ws
 
+- packages/client/src/ws/socialReducers.ts — exports: filterChatLogByMuted, reduceSocialMuteBroadcast, reduceSocialReportBroadcast
 - packages/client/src/ws/useRealtimeConnection.ts — exports: useRealtimeConnection
 
 ## packages/schemas/src

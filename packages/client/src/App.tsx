@@ -17,6 +17,7 @@ import './styles.css';
 import {
   useRealtimeConnection,
   type TradeLifecycleAcknowledgement,
+  type ActionResult,
 } from './ws/useRealtimeConnection';
 import type { GridTile } from './canvas/types';
 import { createTileKey } from './canvas/geometry';
@@ -83,6 +84,13 @@ type PickupAvailability = {
 };
 
 type OccupantMenuAction = 'profile' | 'trade' | 'mute' | 'report';
+
+type TradeActionKind = 'accept' | 'cancel' | 'decline' | 'complete';
+
+type TradeActionState =
+  | { status: 'idle' }
+  | { status: 'loading'; action: TradeActionKind }
+  | { status: 'error'; action: TradeActionKind; message: string };
 
 type TradeLifecycleState =
   | { status: 'idle' }
@@ -254,16 +262,16 @@ const ActiveContextMenu = forwardRef<HTMLDivElement | null, ActiveContextMenuPro
       <section className="context-menu__section" aria-label="Tile items">
         <header className="context-menu__header">
           <div>
-            <span className="context-menu__title">Felt ({tile.gridX}, {tile.gridY})</span>
+            <span className="context-menu__title">Tile ({tile.gridX}, {tile.gridY})</span>
           </div>
           <p className="context-menu__subtitle">
             {items.length === 1
-              ? '1 genstand på feltet'
-              : `${items.length} genstande på feltet`}
+              ? '1 item on this tile'
+              : `${items.length} items on this tile`}
           </p>
         </header>
         {items.length === 0 ? (
-          <p className="context-menu__empty">Ingen genstande på dette felt.</p>
+          <p className="context-menu__empty">No items on this tile.</p>
         ) : (
           <ul className="context-menu__list">
             {items.map((item) => {
@@ -285,7 +293,7 @@ const ActiveContextMenu = forwardRef<HTMLDivElement | null, ActiveContextMenuPro
                       ({item.tileX}, {item.tileY})
                     </span>
                   </div>
-                  <div className="context-menu__actions" role="group" aria-label={`Handlinger for ${item.name}`}>
+                  <div className="context-menu__actions" role="group" aria-label={`Actions for ${item.name}`}>
                     <button type="button" role="menuitem" onClick={() => onSelectItemInfo(item)}>
                       Info
                     </button>
@@ -295,7 +303,7 @@ const ActiveContextMenu = forwardRef<HTMLDivElement | null, ActiveContextMenuPro
                       onClick={() => onSelectItemPickup(item)}
                       disabled={!availability.canPickup}
                     >
-                      Saml Op
+                      Pick up
                     </button>
                   </div>
                   <p className="context-menu__status" role="status">
@@ -325,7 +333,7 @@ const ActiveContextMenu = forwardRef<HTMLDivElement | null, ActiveContextMenuPro
         {
           action: 'profile',
           label: 'View profile',
-          description: 'Åbn spillerkortet i højre panel',
+          description: 'Open the player card in the right panel',
         },
       ];
 
@@ -333,19 +341,19 @@ const ActiveContextMenu = forwardRef<HTMLDivElement | null, ActiveContextMenuPro
         actions.push({
           action: 'trade',
           label: 'Trade',
-          description: 'Start en byttehandel',
+          description: 'Start a trade',
           disabled: occupant.roles.includes('npc'),
         });
         actions.push({
           action: 'mute',
           label: 'Mute',
-          description: 'Skjul spillerens chat',
+          description: "Hide the player's chat",
           disabled: occupant.roles.includes('npc') || mutedOccupantIds.has(occupant.id),
         });
         actions.push({
           action: 'report',
           label: 'Report',
-          description: 'Indsend en rapport til moderatorerne',
+          description: 'Submit a report to the moderators',
         });
       }
 
@@ -359,7 +367,7 @@ const ActiveContextMenu = forwardRef<HTMLDivElement | null, ActiveContextMenuPro
               </span>
             </div>
             <p className="context-menu__subtitle">
-              Står på felt ({tile.gridX}, {tile.gridY})
+              Standing on tile ({tile.gridX}, {tile.gridY})
             </p>
           </header>
           <ul className="context-menu__list context-menu__list--actions">
@@ -485,9 +493,6 @@ const placeholderChatHistory: ChatMessage[] = [
 
 const App = (): JSX.Element => {
   const [isChatVisible, setIsChatVisible] = useState(true);
-  const [isAdminPanelVisible, setIsAdminPanelVisible] = useState(
-    () => import.meta.env.DEV,
-  );
   const [showSystemMessages, setShowSystemMessages] = useState(true);
   const [showBackToTop, setShowBackToTop] = useState(false);
   const [chatDraft, setChatDraft] = useState('');
@@ -499,10 +504,52 @@ const App = (): JSX.Element => {
   const [profilePanelState, setProfilePanelState] = useState<ProfilePanelState>({ status: 'idle' });
   const [activeDockView, setActiveDockView] = useState<'default' | 'backpack'>('default');
   const [tradeState, setTradeState] = useState<TradeLifecycleState>({ status: 'idle' });
+  const [tradeActionState, setTradeActionState] = useState<TradeActionState>({ status: 'idle' });
   const { toast: actionToast, showToast } = useActionToast();
   const profileRequestRef = useRef(0);
   const lastTradeEventRevisionRef = useRef(0);
+  const tradeActionExecutorRef = useRef<
+    (() => Promise<ActionResult<TradeLifecycleAcknowledgement>>) | null
+  >(null);
   const connection = useRealtimeConnection();
+  const {
+    isAdminQuickMenuVisible,
+    setAdminQuickMenuVisible,
+    toggleAdminQuickMenu,
+  } = connection;
+
+  const runTradeAction = useCallback(
+    async (
+      action: TradeActionKind,
+      execute: () => Promise<ActionResult<TradeLifecycleAcknowledgement>>,
+    ) => {
+      tradeActionExecutorRef.current = execute;
+      setTradeActionState({ status: 'loading', action });
+      const result = await execute();
+      if (!result.ok) {
+        setTradeActionState({ status: 'error', action, message: result.message });
+        return result;
+      }
+
+      tradeActionExecutorRef.current = null;
+      setTradeActionState({ status: 'idle' });
+      return result;
+    },
+    [],
+  );
+
+  const retryTradeAction = useCallback(() => {
+    if (tradeActionState.status !== 'error') {
+      return;
+    }
+
+    const execute = tradeActionExecutorRef.current;
+    if (!execute) {
+      return;
+    }
+
+    void runTradeAction(tradeActionState.action, execute);
+  }, [runTradeAction, tradeActionState]);
 
   useEffect(() => {
     if (typeof document === 'undefined') {
@@ -547,6 +594,7 @@ const App = (): JSX.Element => {
     };
   }, [connection.status]);
   const localUserId = connection.user?.id ?? null;
+  const isAdminUser = connection.user?.roles.includes('admin') ?? false;
   const {
     sendChat,
     updateTypingPreview,
@@ -597,11 +645,12 @@ const App = (): JSX.Element => {
     [fetchOccupantProfile],
   );
   const handleTradeInviteAccepted = useCallback(() => {
-    if (tradeState.status !== 'pending') {
+    if (tradeState.status !== 'pending' || tradeActionState.status === 'loading') {
       return;
     }
 
-    void acceptTradeSession(tradeState.trade.id).then((result) => {
+    const tradeId = tradeState.trade.id;
+    void runTradeAction('accept', () => acceptTradeSession(tradeId)).then((result) => {
       if (!result.ok) {
         showToast(result.message, 'error');
         return;
@@ -621,19 +670,22 @@ const App = (): JSX.Element => {
       });
       showToast(`Trading with ${result.data.participant.username}`, 'success');
     });
-  }, [acceptTradeSession, showToast, tradeState]);
+  }, [acceptTradeSession, runTradeAction, showToast, tradeActionState.status, tradeState]);
 
   const requestTradeCancellation = useCallback(
     (reason: 'cancelled' | 'declined') => {
       if (
         tradeState.status === 'idle' ||
         tradeState.status === 'completed' ||
-        tradeState.status === 'cancelled'
+        tradeState.status === 'cancelled' ||
+        tradeActionState.status === 'loading'
       ) {
         return;
       }
 
-      void cancelTradeSession(tradeState.trade.id, reason).then((result) => {
+      const tradeId = tradeState.trade.id;
+      const action: TradeActionKind = reason === 'declined' ? 'decline' : 'cancel';
+      void runTradeAction(action, () => cancelTradeSession(tradeId, reason)).then((result) => {
         if (!result.ok) {
           showToast(result.message, 'error');
           return;
@@ -679,7 +731,14 @@ const App = (): JSX.Element => {
         }
       });
     },
-    [cancelTradeSession, connection.user?.id, showToast, tradeState],
+    [
+      cancelTradeSession,
+      connection.user?.id,
+      runTradeAction,
+      showToast,
+      tradeActionState.status,
+      tradeState,
+    ],
   );
 
   const handleTradeCancel = useCallback(() => {
@@ -691,11 +750,12 @@ const App = (): JSX.Element => {
   }, [requestTradeCancellation]);
 
   const handleTradeComplete = useCallback(() => {
-    if (tradeState.status !== 'in-progress') {
+    if (tradeState.status !== 'in-progress' || tradeActionState.status === 'loading') {
       return;
     }
 
-    void completeTradeSession(tradeState.trade.id).then((result) => {
+    const tradeId = tradeState.trade.id;
+    void runTradeAction('complete', () => completeTradeSession(tradeId)).then((result) => {
       if (!result.ok) {
         showToast(result.message, 'error');
         return;
@@ -715,7 +775,13 @@ const App = (): JSX.Element => {
       });
       showToast(`Trade with ${result.data.participant.username} completed`, 'success');
     });
-  }, [completeTradeSession, showToast, tradeState]);
+  }, [
+    completeTradeSession,
+    runTradeAction,
+    showToast,
+    tradeActionState.status,
+    tradeState,
+  ]);
 
   const handleTradeDismiss = useCallback(() => {
     setTradeState({ status: 'idle' });
@@ -724,10 +790,28 @@ const App = (): JSX.Element => {
   const isGridVisible = adminAffordances.gridVisible;
   const showHoverWhenGridHidden = adminAffordances.showHoverWhenGridHidden;
   const areMoveAnimationsEnabled = adminAffordances.moveAnimationsEnabled;
+  const shouldShowAdminQuickMenu = isAdminUser && isAdminQuickMenuVisible;
 
   useEffect(() => {
     chatDraftRef.current = chatDraft;
   }, [chatDraft]);
+
+  useEffect(() => {
+    if (
+      tradeState.status === 'idle' ||
+      tradeState.status === 'cancelled' ||
+      tradeState.status === 'completed'
+    ) {
+      setTradeActionState({ status: 'idle' });
+      tradeActionExecutorRef.current = null;
+    }
+  }, [tradeState.status]);
+
+  useEffect(() => {
+    if (!isAdminUser) {
+      setAdminQuickMenuVisible(false);
+    }
+  }, [isAdminUser, setAdminQuickMenuVisible]);
 
   useEffect(() => {
     const isEditableElement = (element: Element | null): boolean => {
@@ -915,6 +999,70 @@ const App = (): JSX.Element => {
     }
 
     const participantName = tradeState.participant.username;
+    const isActionLoading = tradeActionState.status === 'loading';
+    const tradeActionFeedback = (() => {
+      if (tradeActionState.status === 'loading') {
+        const copy = (() => {
+          switch (tradeActionState.action) {
+            case 'accept':
+              return 'Confirming the trade acceptance…';
+            case 'cancel':
+              return 'Cancelling the trade…';
+            case 'decline':
+              return 'Declining the trade invite…';
+            case 'complete':
+              return 'Completing the trade…';
+            default:
+              return 'Working on the trade update…';
+          }
+        })();
+        return (
+          <p className="trade-banner__feedback" role="status" aria-live="polite">
+            {copy}
+          </p>
+        );
+      }
+
+      if (tradeActionState.status === 'error') {
+        const copy = (() => {
+          switch (tradeActionState.action) {
+            case 'accept':
+              return 'Could not mark the trade as accepted.';
+            case 'cancel':
+              return 'Could not cancel the trade.';
+            case 'decline':
+              return 'Could not decline the trade invite.';
+            case 'complete':
+              return 'Could not complete the trade.';
+            default:
+              return 'The trade update failed.';
+          }
+        })();
+        return (
+          <div
+            className="trade-banner__feedback trade-banner__feedback--error"
+            role="alert"
+            aria-live="assertive"
+          >
+            <span>
+              {copy}
+              {tradeActionState.message ? ` — ${tradeActionState.message}` : ''}
+            </span>
+            <div className="trade-banner__feedback-actions">
+              <button
+                type="button"
+                className="trade-banner__button trade-banner__button--link"
+                onClick={retryTradeAction}
+              >
+                Try again
+              </button>
+            </div>
+          </div>
+        );
+      }
+
+      return null;
+    })();
 
     if (tradeState.status === 'pending') {
       return (
@@ -932,6 +1080,7 @@ const App = (): JSX.Element => {
               type="button"
               className="trade-banner__button trade-banner__button--primary"
               onClick={handleTradeInviteAccepted}
+              disabled={isActionLoading}
             >
               Mark as accepted
             </button>
@@ -939,6 +1088,7 @@ const App = (): JSX.Element => {
               type="button"
               className="trade-banner__button"
               onClick={handleTradeCancel}
+              disabled={isActionLoading}
             >
               Cancel invite
             </button>
@@ -946,10 +1096,12 @@ const App = (): JSX.Element => {
               type="button"
               className="trade-banner__button trade-banner__button--danger"
               onClick={handleTradeDecline}
+              disabled={isActionLoading}
             >
               Mark as declined
             </button>
           </div>
+          {tradeActionFeedback}
         </aside>
       );
     }
@@ -1127,7 +1279,7 @@ const App = (): JSX.Element => {
               type="button"
               className="trade-banner__button trade-banner__button--primary"
               onClick={handleTradeComplete}
-              disabled={!completionEnabled}
+              disabled={!completionEnabled || isActionLoading}
             >
               Complete trade
             </button>
@@ -1135,10 +1287,12 @@ const App = (): JSX.Element => {
               type="button"
               className="trade-banner__button trade-banner__button--danger"
               onClick={handleTradeCancel}
+              disabled={isActionLoading}
             >
               Cancel trade
             </button>
           </div>
+          {tradeActionFeedback}
         </aside>
       );
     }
@@ -1196,7 +1350,9 @@ const App = (): JSX.Element => {
     clearTradeProposal,
     connection.user?.id,
     inventoryEntries,
+    retryTradeAction,
     showToast,
+    tradeActionState,
     tradeState,
     updateTradeProposal,
     updateTradeReadiness,
@@ -1337,8 +1493,8 @@ const App = (): JSX.Element => {
 
     const message =
       ignored.type === 'mute'
-        ? 'Ignorerede en mute-opdatering målrettet en anden spiller.'
-        : 'Ignorerede en rapport-opdatering målrettet en anden spiller.';
+        ? 'Ignored a mute update targeted at another player.'
+        : 'Ignored a report update targeted at another player.';
     showToast(message, 'info');
   }, [connection.lastIgnoredSocialEvent?.receivedAt, connection.lastIgnoredSocialEvent?.type, showToast]);
 
@@ -1599,24 +1755,24 @@ const App = (): JSX.Element => {
       return pickupResultForSelectedItem.message;
     }
     if (isPickupPending) {
-      return 'Afventer serverbekræftelse…';
+      return 'Awaiting server confirmation…';
     }
     if (!isSelectedItemPresent) {
-      return 'Genstanden er ikke længere i rummet.';
+      return 'The item is no longer in the room.';
     }
     if (!localOccupant) {
-      return 'Forbind til rummet for at samle op.';
+      return 'Connect to the room to pick up.';
     }
     if (selectedItemTileKey && noPickupTileKeys.has(selectedItemTileKey)) {
-      return 'Kan ikke samle op her';
+      return 'Cannot pick up here';
     }
     if (
       localOccupant.position.x !== selectedItem.tileX ||
       localOccupant.position.y !== selectedItem.tileY
     ) {
-      return 'Stil dig på feltet for at samle op';
+      return 'Stand on the tile to pick up';
     }
-    return 'Klar til at samle op';
+    return 'Ready to pick up';
   }, [
     isPickupPending,
     isSelectedItemPresent,
@@ -1640,10 +1796,10 @@ const App = (): JSX.Element => {
     if (isPickupPending) {
       return 'pending';
     }
-    if (!isSelectedItemPresent || pickupStatusMessage === 'Kan ikke samle op her') {
+    if (!isSelectedItemPresent || pickupStatusMessage === 'Cannot pick up here') {
       return 'blocked';
     }
-    if (pickupStatusMessage === 'Klar til at samle op') {
+    if (pickupStatusMessage === 'Ready to pick up') {
       return 'ready';
     }
     return 'pending';
@@ -1670,7 +1826,7 @@ const App = (): JSX.Element => {
     pickupStatusMessage.length > 0 &&
     (pickupResultForSelectedItem !== null ||
       isPickupPending ||
-      pickupStatusMessage !== 'Klar til at samle op');
+      pickupStatusMessage !== 'Ready to pick up');
 
   const getPickupAvailability = useCallback(
     (item: CanvasItem): PickupAvailability => {
@@ -1683,37 +1839,37 @@ const App = (): JSX.Element => {
       const isPresent = connection.items.some((candidate) => candidate.id === item.id);
 
       if (isPending) {
-        return { canPickup: false, message: 'Pickup behandles…' };
+        return { canPickup: false, message: 'Pickup in progress…' };
       }
 
       if (!localOccupant) {
-        return { canPickup: false, message: 'Afventer forbindelse' };
+        return { canPickup: false, message: 'Waiting for connection' };
       }
 
       if (
         localOccupant.position.x !== item.tileX ||
         localOccupant.position.y !== item.tileY
       ) {
-        return { canPickup: false, message: 'Stå på feltet for at samle op' };
+        return { canPickup: false, message: 'Stand on the tile to pick up' };
       }
 
       if (noPickupTileKeys.has(tileKey)) {
-        return { canPickup: false, message: 'Pickup blokeret på dette felt' };
+        return { canPickup: false, message: 'Pickup blocked on this tile' };
       }
 
       if (!isPresent && (!result || result.status !== 'ok')) {
-        return { canPickup: false, message: 'Genstanden er allerede væk' };
+        return { canPickup: false, message: 'The item is already gone' };
       }
 
       if (result?.status === 'ok') {
-        return { canPickup: false, message: 'Allerede samlet op' };
+        return { canPickup: false, message: 'Already picked up' };
       }
 
       if (result?.status === 'error') {
-        return { canPickup: true, message: 'Prøv igen' };
+        return { canPickup: true, message: 'Try again' };
       }
 
-      return { canPickup: true, message: 'Klar til at samle op' };
+      return { canPickup: true, message: 'Ready to pick up' };
     },
     [
       connection.items,
@@ -1798,7 +1954,7 @@ const App = (): JSX.Element => {
 
       if (action === 'trade') {
         if (localUserId && localUserId === occupant.id) {
-          showToast('Du kan ikke handle med dig selv.', 'error');
+          showToast('You cannot trade with yourself.', 'error');
           return;
         }
         void initiateTradeWithOccupant(occupant.id).then((result) => {
@@ -2054,7 +2210,11 @@ const App = (): JSX.Element => {
 
   const handleMenuButtonClick = (label: string): void => {
     if (label === 'Admin') {
-      setIsAdminPanelVisible((prev) => !prev);
+      if (!isAdminUser) {
+        return;
+      }
+
+      toggleAdminQuickMenu();
       return;
     }
 
@@ -2144,20 +2304,20 @@ const App = (): JSX.Element => {
         label: 'Plant',
         onClick: () => {
           if (!localTile) {
-            showToast('Stå på et felt for at plante.', 'error');
+            showToast('Stand on a tile to plant.', 'error');
             return;
           }
 
           void spawnPlantAtTile(localTile)
             .then((ok) => {
               if (ok) {
-                showToast('Plant placeret på feltet.', 'success');
+                showToast('Plant placed on the tile.', 'success');
               } else {
-                showToast('Kunne ikke plante her.', 'error');
+                showToast('Could not plant here.', 'error');
               }
             })
             .catch(() => {
-              showToast('Kunne ikke plante her.', 'error');
+              showToast('Could not plant here.', 'error');
             });
         },
         disabled: !localTile,
@@ -2293,11 +2453,12 @@ const App = (): JSX.Element => {
             {dockButtons.map((label) => {
               const isPressed =
                 label === 'Admin'
-                  ? isAdminPanelVisible
+                  ? isAdminQuickMenuVisible
                   : label === 'Backpack'
                   ? isBackpackOpen
                   : undefined;
               const pressedProp = typeof isPressed === 'boolean' ? isPressed : undefined;
+              const isAdminButton = label === 'Admin';
               return (
                 <button
                   key={label}
@@ -2305,6 +2466,7 @@ const App = (): JSX.Element => {
                   onClick={() => handleMenuButtonClick(label)}
                   aria-pressed={pressedProp}
                   data-active={pressedProp}
+                  disabled={isAdminButton && !isAdminUser}
                 >
                   {label}
                 </button>
@@ -2456,12 +2618,12 @@ const App = (): JSX.Element => {
       </div>
       <nav
         className={
-          isAdminPanelVisible
+          shouldShowAdminQuickMenu
             ? 'admin-quick-menu admin-quick-menu--visible'
             : 'admin-quick-menu'
         }
         aria-label="Admin quick menu"
-        aria-hidden={!isAdminPanelVisible}
+        aria-hidden={!shouldShowAdminQuickMenu}
         role="group"
       >
         {adminShortcuts.map((item) => (

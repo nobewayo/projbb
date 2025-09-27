@@ -1,6 +1,6 @@
 # FEATURES
 
-_Last updated: 2025-09-27T13:37:29.401Z_
+_Last updated: 2025-09-27T14:38:57.563Z_
 
 This file is generated from the codebase (module tags, routes, exports) to inventory what exists today. Status and notes may need a quick human touch.
 
@@ -13,7 +13,7 @@ This file is generated from the codebase (module tags, routes, exports) to inven
 | canvas | 4 | 0 | 0 | 0 | 0 |
 | client | 3 | 0 | 0 | 0 | 0 |
 | client-app | 1 | 0 | 0 | 0 | 0 |
-| client-realtime | 1 | 0 | 0 | 0 | 0 |
+| client-realtime | 2 | 0 | 0 | 0 | 0 |
 | config.ts | 1 | 0 | 0 | 0 | 1 |
 | db | 9 | 0 | 0 | 0 | 0 |
 | index.ts | 2 | 0 | 2 | 0 | 1 |

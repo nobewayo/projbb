@@ -7,14 +7,17 @@
 - Suppressed unsupported TypeScript version warnings in the ESLint parser to match current tooling.
 - Recorded ignored social mute/report broadcasts and surfaced informational toasts instead of silently discarding them.
 - Expanded the client toast hook and styles to support an info tone used by moderation notices.
+- Wired the admin quick menu visibility toggle into the realtime admin state store and dock UI.
+- Added dedicated reducers and Vitest coverage for social mute/report broadcasts.
+- Hardened the trade banner actions with inline loading indicators, guarded buttons, and a retry path for failed lifecycle calls.
 
 ## Next Actions (Top 3)
-1. Design and implement the admin quick menu toggle flow described in AGENT section 3, wiring it to the existing admin state store.
-2. Add coverage for social mute/report event reducers to prevent regressions.
-3. Continue hardening trade lifecycle UI flows (loading states, retries).
+1. Add invite expiration and resend handling to the trade lifecycle banner.
+2. Hook the admin quick menu buttons up to real server affordance endpoints.
+3. Break down `packages/client/src/App.tsx` to isolate admin tooling from the primary render path.
 
 ## Quick Wins (High Impact, Low Effort)
-- Surface a toast when a mute/report broadcast is ignored because it targets another user.
+- Document a hover affordance for disabled admin buttons to explain the required role.
 
 ## Strategic Work (High Value, Higher Effort)
 - Align real-time moderation tooling with persistent server state and auditing requirements.
@@ -30,3 +33,5 @@
 ## Session Log
 - 2025-09-27 12:15 UTC — 396e929 — Cleared client lint noise on social moderation events
 - 2025-09-27 13:28 UTC — (pending) — Disabled TypeScript lint mismatch warning and added moderation ignore toasts
+- 2025-09-27 14:28 UTC — (pending) — Implemented admin quick menu toggle state and social broadcast reducers with tests
+- 2025-09-27 15:28 UTC — (pending) — Added guarded trade banner actions with retry affordances

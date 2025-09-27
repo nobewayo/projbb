@@ -48,12 +48,18 @@ import {
   type TradeLifecycleResponse,
   type TradeLifecycleBroadcast,
   type MuteResponse,
-  type ReportResponse,
+  type ReportRecord,
   type SocialState,
   type SocialMuteBroadcast,
   type SocialReportBroadcast,
   type SocialReportRecord,
 } from '@bitby/schemas';
+import {
+  filterChatLogByMuted,
+  reduceSocialMuteBroadcast,
+  reduceSocialReportBroadcast,
+  type SocialIgnoreEvent,
+} from './socialReducers';
 
 const DEFAULT_HEARTBEAT_MS = 15_000;
 const MAX_RECONNECT_DELAY_MS = 15_000;
@@ -144,6 +150,8 @@ export interface RealtimeConnectionState extends InternalConnectionState {
   updateTypingPreview: (preview: string) => void;
   clearTypingPreview: () => void;
   updateShowSystemMessages: (show: boolean) => void;
+  setAdminQuickMenuVisible: (visible: boolean) => void;
+  toggleAdminQuickMenu: () => void;
   updateAdminAffordances: (updates: Partial<AdminDevAffordanceState>) => Promise<boolean>;
   updateTileLock: (tile: { x: number; y: number }, locked: boolean) => Promise<boolean>;
   updateTileNoPickup: (tile: { x: number; y: number }, noPickup: boolean) => Promise<boolean>;
@@ -214,11 +222,6 @@ export interface TradeLifecycleEvent {
   receivedAt: number;
 }
 
-type SocialIgnoreEvent = {
-  type: 'mute' | 'report';
-  receivedAt: number;
-};
-
 export type ActionResult<T> =
   | { ok: true; data: T }
   | { ok: false; message: string; status: number };
@@ -227,7 +230,7 @@ export type OccupantProfileSummary = OccupantProfile;
 export type TradeSessionBootstrap = TradeBootstrapResponse;
 export type TradeLifecycleAcknowledgement = TradeLifecycleResponse;
 export type MuteRecordSummary = MuteResponse['mute'];
-export type ReportRecordSummary = ReportResponse['report'];
+export type ReportRecordSummary = ReportRecord;
 
 interface InternalConnectionState {
   status: ConnectionStatus;
@@ -250,6 +253,7 @@ interface InternalConnectionState {
   chatBubbles: ChatBubbleView[];
   chatPreferences: ChatPreferences | null;
   adminState: AdminState;
+  isAdminQuickMenuVisible: boolean;
   mutedOccupantIds: string[];
   reportHistory: ReportRecordSummary[];
   tradeLifecycleEvent: TradeLifecycleEvent | null;
@@ -413,6 +417,7 @@ export const useRealtimeConnection = (): RealtimeConnectionState => {
     chatBubbles: [],
     chatPreferences: null,
     adminState: { ...DEFAULT_ADMIN_STATE },
+    isAdminQuickMenuVisible: import.meta.env.DEV,
     mutedOccupantIds: [],
     reportHistory: [],
     tradeLifecycleEvent: null,
@@ -704,14 +709,6 @@ export const useRealtimeConnection = (): RealtimeConnectionState => {
         void connect();
       }, delay);
     };
-
-    const filterChatLogByMuted = (
-      log: ChatMessageBroadcast[],
-      mutedIds: Set<string>,
-    ): ChatMessageBroadcast[] =>
-      log
-        .filter((entry) => !entry.userId || !mutedIds.has(entry.userId))
-        .slice(-200);
 
     const appendChatMessage = (message: ChatMessageBroadcast) => {
       const isMuted =
@@ -1217,25 +1214,36 @@ export const useRealtimeConnection = (): RealtimeConnectionState => {
           }
 
           const broadcast: SocialMuteBroadcast = parsed.data;
-          const sessionUser = sessionUserRef.current;
-          // Ignore mute broadcasts that are unrelated to the current user to
-          // avoid leaking another player's moderation state into this client.
-          if (!sessionUser) {
-            return;
-          }
-          if (broadcast.mute.userId !== sessionUser.id) {
-            updateState({
-              lastIgnoredSocialEvent: { type: 'mute', receivedAt: Date.now() },
-            });
-            return;
-          }
+          const sessionUserId = sessionUserRef.current?.id ?? null;
+          const now = Date.now();
 
-          mutedOccupantIdSetRef.current.add(broadcast.mute.mutedUserId);
-          setState((previous) => ({
-            ...previous,
-            mutedOccupantIds: Array.from(mutedOccupantIdSetRef.current),
-            chatLog: filterChatLogByMuted(previous.chatLog, mutedOccupantIdSetRef.current),
-          }));
+          setState((previous) => {
+            const outcome = reduceSocialMuteBroadcast({
+              broadcast,
+              sessionUserId,
+              mutedIds: mutedOccupantIdSetRef.current,
+              chatLog: previous.chatLog,
+              now: () => now,
+            });
+
+            if (outcome.kind === 'applied') {
+              return {
+                ...previous,
+                mutedOccupantIds: outcome.mutedOccupantIds,
+                chatLog: outcome.chatLog,
+                lastIgnoredSocialEvent: null,
+              };
+            }
+
+            if (outcome.kind === 'ignored') {
+              return {
+                ...previous,
+                lastIgnoredSocialEvent: outcome.event,
+              };
+            }
+
+            return previous;
+          });
           return;
         }
         case 'social:report:recorded': {
@@ -1246,32 +1254,30 @@ export const useRealtimeConnection = (): RealtimeConnectionState => {
           }
 
           const broadcast: SocialReportBroadcast = parsed.data;
-          const sessionUser = sessionUserRef.current;
-          if (!sessionUser) {
-            return;
-          }
-          if (broadcast.report.reporterId !== sessionUser.id) {
-            updateState({
-              lastIgnoredSocialEvent: { type: 'report', receivedAt: Date.now() },
-            });
+          const sessionUserId = sessionUserRef.current?.id ?? null;
+          const outcome = reduceSocialReportBroadcast({
+            broadcast,
+            sessionUserId,
+            reportHistory: reportHistoryRef.current,
+          });
+
+          if (outcome.kind === 'noop') {
             return;
           }
 
-          const existingIndex = reportHistoryRef.current.findIndex(
-            (entry) => entry.id === broadcast.report.id,
-          );
-          if (existingIndex >= 0) {
-            reportHistoryRef.current[existingIndex] = broadcast.report;
-          } else {
-            reportHistoryRef.current = [
-              broadcast.report,
-              ...reportHistoryRef.current,
-            ].slice(0, 50);
+          if (outcome.kind === 'ignored') {
+            setState((previous) => ({
+              ...previous,
+              lastIgnoredSocialEvent: outcome.event,
+            }));
+            return;
           }
 
+          reportHistoryRef.current = outcome.reportHistory.map((entry) => ({ ...entry }));
           setState((previous) => ({
             ...previous,
             reportHistory: reportHistoryRef.current.map((entry) => ({ ...entry })),
+            lastIgnoredSocialEvent: null,
           }));
           return;
         }
@@ -1320,7 +1326,7 @@ export const useRealtimeConnection = (): RealtimeConnectionState => {
             lastPickupResult: {
               itemId: parsed.data.itemId,
               status: 'ok',
-              message: 'Lagt i rygsæk',
+              message: 'Added to backpack',
             },
             lastRoomSeq: parsed.data.roomSeq,
           }));
@@ -1964,6 +1970,23 @@ export const useRealtimeConnection = (): RealtimeConnectionState => {
     [state.status],
   );
 
+  const setAdminQuickMenuVisible = useCallback((visible: boolean) => {
+    setState((previous) => {
+      if (previous.isAdminQuickMenuVisible === visible) {
+        return previous;
+      }
+
+      return { ...previous, isAdminQuickMenuVisible: visible };
+    });
+  }, []);
+
+  const toggleAdminQuickMenu = useCallback(() => {
+    setState((previous) => ({
+      ...previous,
+      isAdminQuickMenuVisible: !previous.isAdminQuickMenuVisible,
+    }));
+  }, []);
+
   const sendAdminPost = useCallback(
     async (path: string, body: Record<string, unknown>): Promise<boolean> => {
       if (state.status !== 'connected') {
@@ -2367,6 +2390,8 @@ export const useRealtimeConnection = (): RealtimeConnectionState => {
       updateTypingPreview,
       clearTypingPreview,
       updateShowSystemMessages,
+      setAdminQuickMenuVisible,
+      toggleAdminQuickMenu,
       updateAdminAffordances,
       updateTileLock,
       updateTileNoPickup,
@@ -2392,6 +2417,8 @@ export const useRealtimeConnection = (): RealtimeConnectionState => {
       updateTypingPreview,
       clearTypingPreview,
       updateShowSystemMessages,
+      setAdminQuickMenuVisible,
+      toggleAdminQuickMenu,
       updateAdminAffordances,
       updateTileLock,
       updateTileNoPickup,
