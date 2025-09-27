@@ -73,7 +73,7 @@ One source of truth for how to build, test, and review projbb. Follow every requ
 
 Notes
 - Use --allow-dirty only for a quick preview, not for PRs.
-- The script auto detects the base. No need to pass origin/main.
+- The helper auto-detects the base, works offline, and refuses to run on a dirty tree. Commit first; no need to pass origin/main.
 
 
 - **Branches:** Use lowercase feature prefixes such as `docs/<topic>` or `feat/<area>` that describe the change scope.
