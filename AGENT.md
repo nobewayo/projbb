@@ -1,33 +1,48 @@
-# AGENT for projbb
+# AGENT for projbb — Golden Rules Edition
 
-## 1. Purpose and scope
-One source of truth for how to build, test, and review projbb. Follow every requirement in this document while implementing Bitby.
+## 0) Golden Rules (every session)
+1. **Screenshot artifact** after each push (GitHub Actions “Smoke” job).
+2. **Connectivity check**: server `/healthz` & `/readyz` return 200; Postgres + Redis reachable; client preview loads.
+3. **Rundown + next plan** written in `docs/NEXT.md` using the canonical headings below.
+4. **Automatic codemap** refresh on commit (husky pre-commit runs `pnpm codemap`); if the hook isn’t installed, run it manually before committing.
+5. **NEXT.md is the plan** the next Codex reads first.
+6. Keep two prioritized lists (see headings): quick wins vs. strategic work.
+7. Keep a **Carry-Over (Finish Next)** list for in-progress tasks.
+8. **No automatic PRs.** Codex never merges. You open/merge PRs when you want.
 
-### Pre-work sync (before starting any task)
-- Ensure `origin` exists. If it is missing, run `git remote add origin git@github.com:nobewayo/projbb.git` or fall back to `https://github.com/nobewayo/projbb.git` when SSH is unavailable.
-- `git fetch origin`
-- `git switch main`
-- `git pull --ff-only`
+---
+
+## 1) Purpose and scope (lightweight)
+Single source of truth for how to work in this repo. Prefer clarity and speed over ceremony. All rules here supersede any older automation.
+
+### Pre‑work sync (minimal)
+- If `origin` exists: `git fetch origin && git switch main && git pull --ff-only`.
+- If it doesn’t: **do not** invent a remote during tasks; pushing can be skipped. (When you want Codex to push, provide an HTTPS remote + token in chat.)
+
+---
 
 ## 2. Repo map
 - **Workspace:** pnpm monorepo. Root package.json wires shared scripts. `pnpm-workspace.yaml` registers all packages.
 - **Client:** `packages/client` contains the Vite and React front end that renders the deterministic top right anchored grid, socket powered chat, context menus, admin UI, and inventory flows documented below.
 - **Server:** `packages/server` houses the Fastify and Socket.IO API that serves `/auth/login`, realtime envelopes for `auth`, `move`, `chat`, trade, admin toggles, and the `/healthz`, `/readyz`, `/metrics` endpoints. Postgres migrations, Redis connectivity, and the Vitest integration harness live here.
 - **Shared schemas:** `packages/schemas` shares JSON Schemas and OpenAPI documents for realtime and REST payloads so both tiers validate the same contracts.
-- **Infra and scripts:** `tools` and `scripts` contain automation such as `tools/ci/diff-lines.sh`, setup scripts, and CI helpers. Docker orchestration documents live under `Docker-Setup.md` and `packages/infra`.
+- **Infra and scripts:** `tools` and `scripts` contain automation, setup scripts, and CI helpers. Docker orchestration documents live under `Docker-Setup.md` and `packages/infra`.
 - **Tests:** Vitest suites live alongside the packages they validate. Server integration tests boot Postgres and Redis (via Testcontainers or local services). React Testing Library suites cover client components. Additional specs appear in package level `__tests__` directories.
 - **Assets:** Development sprites live inside `packages/client/src/assets/` (avatars, items, dev room background).
 - **Docs:** Historical specifications sit at `Master Spec.md` (marked deprecated) and change logs stay in section 9 of this file. Deprecations live in `docs/`.
 
-## 3. Code Atlas contract
-- Always read `codemap.json` before changing files. Search by `@module`, `@tags`, exports, and dependencies to understand the feature surface.
-- When you create or edit a file, add or update the header:
+## 3) Code Atlas (codemap) — discipline, not a gate
+- Always consult **`codemap.json`** before edits to find the right files by module/tags/exports.
+- When creating/editing a file, add header tags:
   ```
-  // @module: <domain>
-  // @tags: <comma tags>
+// @module: <domain>
+// @tags: <comma list>
   ```
-- After edits run `pnpm codemap` from the repo root and commit the refreshed map along with your code. CI fails if the codemap is stale.
-- Keep modules small and intention revealing. Comment non obvious logic, especially around grid math, z order, snapback rules, payload validation, and realtime envelopes.
+- **After edits**: codemap refresh must happen **before** the commit goes up:
+  - Preferred: **husky pre‑commit** runs `pnpm codemap` and stages `codemap.json` + `CODEMAP.md`.
+  - Fallback if hook not installed: run `pnpm codemap` manually, then `git add codemap.json CODEMAP.md`.
+
+> Note: Codemap is **not** a CI gate anymore. Keep it fresh for fast navigation.
 
 ## 4. Build and run
 - **Install:** `pnpm install` from the repo root.
@@ -56,31 +71,41 @@ One source of truth for how to build, test, and review projbb. Follow every requ
   - `pnpm test` from the repo root honors the same stack variable and runs both client and server suites.
 - **Docker workflow:** `packages/infra/docker/docker-compose.full.yml` pairs with `Docker-Setup.md` for Debian or Ubuntu Compose deployments where nginx fronts the production client and the API plus data stores remain on the internal network.
 
-## 5. CI checks and gates
-- Codemap freshness gate. CI fails if `codemap.json` is outdated relative to `pnpm codemap` output.
-- Smoke screenshot job captures the connected UI state. Link the Smoke artifact in PR discussions instead of taking local screenshots.
-- Green Environment Pre-Cutover Health Checks (section 8) must pass before routing traffic or completing cutover steps.
+## 5) CI — Smoke only (what it does)
+A single workflow at `.github/workflows/smoke.yml` that runs on pushes:
+- Starts **Postgres** and **Redis**.
+- Builds workspaces (schemas/server/client).
+- Boots the **server**, waits for `/healthz` and `/readyz` to be 200.
+- Boots the **client preview**.
+- Takes a **screenshot** and uploads artifact **client-screenshot**.
 
-## 6. PR rules
+No other checks/gates are required. Don’t block on CI to write session notes.
 
-### Changed lines for PR body
-1) Commit first
-2) Generate file list:
-   tools/ci/diff-lines.sh auto --out .ci/changed-lines.txt
-3) Add and amend, or make a small follow up commit:
-   git add .ci/changed-lines.txt
-   git commit --amend --no-edit || git commit -m "chore: add changed lines list"
+## 6) PR policy (no auto PR)
+- Codex **does not** open or merge PRs automatically.
+- You decide when to open a PR from your working branch to `main`.
+- Keep PRs scoped. Include a short “what/why” and (optionally) link the latest **client-screenshot** artifact.
+- Remove any “changed-lines” helper; do not reference `tools/ci/diff-lines.sh`.
 
-Notes
-- Use --allow-dirty only for a quick preview, not for PRs.
-- The helper auto-detects the base, works offline, and refuses to run on a dirty tree. Commit first; no need to pass origin/main.
+---
 
+## 7) NEXT.md — canonical headings and ritual
+`docs/NEXT.md` is the single source of truth for what happens next. At the **end of every session**, Codex updates these sections:
 
-- **Branches:** Use lowercase feature prefixes such as `docs/<topic>` or `feat/<area>` that describe the change scope.
-- **Commits:** Follow Conventional Commits, for example `docs: trim README quickstart`. Keep commits focused and include refreshed codemap updates when applicable.
-- **PR body timing:** Do not wait for CI to finish before drafting the PR body. Summaries and testing notes should accompany the first push.
-- **Changed lines helper:** Always run the diff-lines script **after committing** your changes to produce `.ci/changed-lines.txt` for inline review. Preferred call: `tools/ci/diff-lines.sh auto --out .ci/changed-lines.txt`. Amend the commit (or add a follow-up) with the refreshed file before pushing.
-- **Template checklist:** Confirm codemap updated, tests run or justified, docs aligned with Master Spec guidance merged into this AGENT, and Smoke artifact linked. Reference relevant sections when you mark checklist items.
+- **Session Summary** — 3–6 bullets of what was done.
+- **Next Actions (Top 3)** — the very next small, shippable steps.
+- **Quick Wins (High Impact, Low Effort)** — bite-size tasks that move the needle.
+- **Strategic Work (High Value, Higher Effort)** — deeper tasks we should do soon.
+- **Carry-Over (Finish Next)** — in-progress items to complete before starting new work.
+- **Open Questions / Decisions Needed** — blockers or choices to make.
+- **Session Log** — timestamped one-liners for traceability: `YYYY‑MM‑DD HH:MM UTC — <short‑sha> — one-liner`.
+
+This is the first place the next agent looks to know what to do.
+
+---
+
+## Reference only (kept for context, not enforced)
+- “Green environment pre‑cutover” checks are **reference material**, not CI gates.
 
 ## 7. Security and performance rules
 ### 7.1 Non negotiables (read first)
@@ -1028,7 +1053,7 @@ maintenance:
 - Banners show **local time** and **region label**.  
 - If gating exceeded in a region, **auto-defer** to next window.
 
-### 18.3) **Green Environment Pre-Cutover Health Checks**
+### 18.3) **Reference only — not enforced by CI — Green Environment Pre-Cutover Health Checks**
 
 **Must-pass checks**
 1) **Process/HTTP**: `/healthz` & `/readyz` 200; build hash matches.  
@@ -1244,7 +1269,7 @@ ads:
 
 **End of Master Spec v3.7 + Appendix A (UX/UI Extras)**
 
-## 8. Green Environment Pre-Cutover Health Checks
+## 8. Reference only — not enforced by CI — Green Environment Pre-Cutover Health Checks
 Must-pass checks
 - Process or HTTP: `/healthz` and `/readyz` return 200. Build hash matches if header is present.
 - DB: connection pool up, EXPLAIN smoke query p95 below threshold.
