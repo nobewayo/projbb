@@ -1,3 +1,6 @@
+// @module: server-runtime
+// @tags: fastify, websocket, infrastructure
+
 import { randomUUID } from 'node:crypto';
 import Fastify, { type FastifyInstance } from 'fastify';
 import cors from '@fastify/cors';

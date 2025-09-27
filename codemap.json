@@ -1,2691 +1,4532 @@
 {
-  "generatedAt": "2025-09-27T00:18:07.701Z",
-  "options": {
-    "fast": false
-  },
+  "generatedAt": "2025-09-27T11:15:34.509Z",
+  "count": 50,
   "files": [
-    {
-      "path": "packages/client/src/App.tsx",
-      "size": 78442,
-      "checksum": "d8e3212fb77c1d210ed272fd647649cb094f9c3bac061ab1511e45a91e762de2",
-      "module": "client-app",
-      "tags": [
-        "ui",
-        "realtime",
-        "smoke-check"
-      ],
-      "imports": [
-        "./assets/items/couch.png",
-        "./assets/items/plant.png",
-        "./canvas/GridCanvas",
-        "./canvas/geometry",
-        "./canvas/types",
-        "./components/InventoryCard",
-        "./components/ProfilePanel",
-        "./hooks/useActionToast",
-        "./styles.css",
-        "./ws/useRealtimeConnection",
-        "react"
-      ],
-      "namedExports": [
-        "default"
-      ],
-      "symbols": {
-        "functions": [
-          {
-            "name": "adjustPosition",
-            "line": 167,
-            "exported": false,
-            "signature": "const adjustPosition = (): void =>"
-          },
-          {
-            "name": "renderTileSection",
-            "line": 251,
-            "exported": false,
-            "signature": "const renderTileSection = (tile: GridTile, items: CanvasItem[], focusedItemId: string | null): JSX.Element =>"
-          },
-          {
-            "name": "renderTileMenu",
-            "line": 314,
-            "exported": false,
-            "signature": "const renderTileMenu = (payload: TileContextMenuState): JSX.Element =>"
-          },
-          {
-            "name": "renderOccupantMenu",
-            "line": 317,
-            "exported": false,
-            "signature": "const renderOccupantMenu = (payload: OccupantContextMenuState): JSX.Element =>"
-          },
-          {
-            "name": "App",
-            "line": 488,
-            "exported": false,
-            "signature": "const App = (): JSX.Element =>"
-          },
-          {
-            "name": "isEditableElement",
-            "line": 735,
-            "exported": false,
-            "signature": "const isEditableElement = (element: Element | null): boolean =>"
-          },
-          {
-            "name": "commitDraft",
-            "line": 748,
-            "exported": false,
-            "signature": "const commitDraft = (next: string) =>"
-          },
-          {
-            "name": "handleGlobalKeyDown",
-            "line": 758,
-            "exported": false,
-            "signature": "const handleGlobalKeyDown = (event: KeyboardEvent): void =>"
-          },
-          {
-            "name": "buildSlots",
-            "line": 972,
-            "exported": false,
-            "signature": "const buildSlots = (userId: string | null) =>"
-          },
-          {
-            "name": "handleSlotChange",
-            "line": 989,
-            "exported": false,
-            "signature": "const handleSlotChange = (slotIndex: number, value: string) =>"
-          },
-          {
-            "name": "handleSlotClear",
-            "line": 1013,
-            "exported": false,
-            "signature": "const handleSlotClear = (slotIndex: number) =>"
-          },
-          {
-            "name": "handleReadinessToggle",
-            "line": 1036,
-            "exported": false,
-            "signature": "const handleReadinessToggle = (next: boolean) =>"
-          },
-          {
-            "name": "parseTimestamp",
-            "line": 1236,
-            "exported": false,
-            "signature": "const parseTimestamp = (value?: string | null): number =>"
-          },
-          {
-            "name": "handlePointerDown",
-            "line": 1387,
-            "exported": false,
-            "signature": "const handlePointerDown = (event: PointerEvent): void =>"
-          },
-          {
-            "name": "handleKeyDown",
-            "line": 1406,
-            "exported": false,
-            "signature": "const handleKeyDown = (event: KeyboardEvent): void =>"
-          },
-          {
-            "name": "handleScroll",
-            "line": 1429,
-            "exported": false,
-            "signature": "const handleScroll = (): void =>"
-          },
-          {
-            "name": "handleMenuButtonClick",
-            "line": 2044,
-            "exported": false,
-            "signature": "const handleMenuButtonClick = (label: string): void =>"
-          }
-        ],
-        "classes": [],
-        "methods": []
-      }
-    },
-    {
-      "path": "packages/client/src/canvas/constants.ts",
-      "size": 1051,
-      "checksum": "977f2e079107d2e5b16cad545a5c48b7a1808b808165a44cbb3036e637ef8011",
-      "module": "canvas",
-      "tags": [
-        "grid",
-        "constants"
-      ],
-      "imports": [],
-      "namedExports": [],
-      "symbols": {
-        "functions": [],
-        "classes": [],
-        "methods": []
-      }
-    },
-    {
-      "path": "packages/client/src/canvas/geometry.ts",
-      "size": 4513,
-      "checksum": "a6ae98dee0606911c0b0ca3048ba2d2783429daf1d73c71a5663d1f053b63c54",
-      "module": "canvas",
-      "tags": [
-        "grid",
-        "geometry"
-      ],
-      "imports": [
-        "./constants",
-        "./types"
-      ],
-      "namedExports": [
-        "buildGridDefinition",
-        "createTileKey",
-        "findTileAtPoint",
-        "getColumnsForRow",
-        "isPointInsideTile",
-        "toScreenPosition"
-      ],
-      "symbols": {
-        "functions": [
-          {
-            "name": "createTileKey",
-            "line": 20,
-            "exported": false,
-            "signature": "const createTileKey = (gridX: number, gridY: number): string =>"
-          },
-          {
-            "name": "getColumnsForRow",
-            "line": 22,
-            "exported": true,
-            "signature": "const getColumnsForRow = (row: number): number =>"
-          },
-          {
-            "name": "getMaxColumns",
-            "line": 25,
-            "exported": false,
-            "signature": "const getMaxColumns = (): number =>"
-          },
-          {
-            "name": "getRowOffset",
-            "line": 27,
-            "exported": false,
-            "signature": "const getRowOffset = (row: number): number =>"
-          },
-          {
-            "name": "getRowRightSpan",
-            "line": 32,
-            "exported": false,
-            "signature": "const getRowRightSpan = (row: number): number =>"
-          },
-          {
-            "name": "computeMaxRowSpan",
-            "line": 38,
-            "exported": false,
-            "signature": "const computeMaxRowSpan = (rowCount: number): number =>"
-          },
-          {
-            "name": "buildGridDefinition",
-            "line": 51,
-            "exported": true,
-            "signature": "const buildGridDefinition = (canvasWidth: number = CANVAS_WIDTH, canvasHeight: number = CANVAS_HEIGHT): GridDefinition =>"
-          },
-          {
-            "name": "isPointInsideTile",
-            "line": 116,
-            "exported": true,
-            "signature": "const isPointInsideTile = (tile: GridTile, px: number, py: number): boolean =>"
-          },
-          {
-            "name": "findTileAtPoint",
-            "line": 123,
-            "exported": true,
-            "signature": "const findTileAtPoint = (grid: GridDefinition, px: number, py: number): GridTile | null =>"
-          },
-          {
-            "name": "toScreenPosition",
-            "line": 170,
-            "exported": true,
-            "signature": "const toScreenPosition = (grid: GridDefinition, gridX: number, gridY: number): { x: number; y: number } =>"
-          }
-        ],
-        "classes": [],
-        "methods": []
-      }
-    },
-    {
-      "path": "packages/client/src/canvas/GridCanvas.tsx",
-      "size": 36746,
-      "checksum": "007608f08576b5e846709073b07db015828e2e1b01b33d491497e2560e5a7e04",
-      "module": "canvas",
-      "tags": [
-        "grid",
-        "rendering",
-        "input"
-      ],
-      "imports": [
-        "../assets/avatars/avatar1.png",
-        "../assets/avatars/avatar2.png",
-        "../assets/rooms/dev_room.png",
-        "./constants",
-        "./geometry",
-        "./types",
-        "react"
-      ],
-      "namedExports": [
-        "default"
-      ],
-      "symbols": {
-        "functions": [
-          {
-            "name": "loadImage",
-            "line": 168,
-            "exported": false,
-            "signature": "async const loadImage = (source: string): Promise<HTMLImageElement> =>"
-          },
-          {
-            "name": "easeOutCubic",
-            "line": 176,
-            "exported": false,
-            "signature": "const easeOutCubic = (t: number): number =>"
-          },
-          {
-            "name": "prepareContext",
-            "line": 178,
-            "exported": false,
-            "signature": "const prepareContext = (canvas: HTMLCanvasElement): CanvasRenderingContext2D | null =>"
-          },
-          {
-            "name": "drawBackground",
-            "line": 201,
-            "exported": false,
-            "signature": "const drawBackground = (context: CanvasRenderingContext2D, assets: SpriteAssets | null): void =>"
-          },
-          {
-            "name": "traceDiamond",
-            "line": 212,
-            "exported": false,
-            "signature": "const traceDiamond = (context: CanvasRenderingContext2D, tile: GridTile): void =>"
-          },
-          {
-            "name": "drawTile",
-            "line": 221,
-            "exported": false,
-            "signature": "const drawTile = (context: CanvasRenderingContext2D, tile: GridTile, options: { hovered: boolean; locked: boolean; pending: boolean; noPickup: boolean }): void =>"
-          },
-          {
-            "name": "drawHiddenHoverTile",
-            "line": 260,
-            "exported": false,
-            "signature": "const drawHiddenHoverTile = (context: CanvasRenderingContext2D, tile: GridTile): void =>"
-          },
-          {
-            "name": "drawUsername",
-            "line": 275,
-            "exported": false,
-            "signature": "const drawUsername = (context: CanvasRenderingContext2D, sprite: OccupantRenderState): void =>"
-          },
-          {
-            "name": "splitLongWord",
-            "line": 290,
-            "exported": false,
-            "signature": "const splitLongWord = (context: CanvasRenderingContext2D, word: string, maxWidth: number): string[] =>"
-          },
-          {
-            "name": "wrapBubbleLines",
-            "line": 314,
-            "exported": false,
-            "signature": "const wrapBubbleLines = (context: CanvasRenderingContext2D, text: string, maxWidth: number): string[] =>"
-          },
-          {
-            "name": "pushLine",
-            "line": 331,
-            "exported": false,
-            "signature": "const pushLine = (line: string) =>"
-          },
-          {
-            "name": "drawSpeechBubble",
-            "line": 377,
-            "exported": false,
-            "signature": "const drawSpeechBubble = (context: CanvasRenderingContext2D, sprite: OccupantRenderState, options: {\n    text: string;\n    fill: string;\n    textColor: string;\n    offset: number;\n  }): void =>"
-          },
-          {
-            "name": "drawTypingBubble",
-            "line": 453,
-            "exported": false,
-            "signature": "const drawTypingBubble = (context: CanvasRenderingContext2D, sprite: OccupantRenderState, indicator: CanvasTypingIndicator): void =>"
-          },
-          {
-            "name": "drawChatBubbleForSprite",
-            "line": 467,
-            "exported": false,
-            "signature": "const drawChatBubbleForSprite = (context: CanvasRenderingContext2D, sprite: OccupantRenderState, bubble: CanvasChatBubble): void =>"
-          },
-          {
-            "name": "drawOccupant",
-            "line": 480,
-            "exported": false,
-            "signature": "const drawOccupant = (context: CanvasRenderingContext2D, sprite: OccupantRenderState, assets: SpriteAssets | null): void =>"
-          },
-          {
-            "name": "updateSpritePositions",
-            "line": 511,
-            "exported": false,
-            "signature": "const updateSpritePositions = (sprites: Map<string, OccupantRenderState>, now: number, animationsEnabled: boolean): void =>"
-          },
-          {
-            "name": "getAvatarVariantIndex",
-            "line": 539,
-            "exported": false,
-            "signature": "const getAvatarVariantIndex = (occupant: CanvasOccupant): number =>"
-          },
-          {
-            "name": "formatCoordinate",
-            "line": 556,
-            "exported": false,
-            "signature": "const formatCoordinate = (value: number): string =>"
-          },
-          {
-            "name": "GridCanvas",
-            "line": 558,
-            "exported": false,
-            "signature": "const GridCanvas = ({\n  occupants,\n  tileFlags,\n  pendingMoveTarget,\n  onTileClick,\n  items,\n  onTileContextMenu,\n  onItemContextMenu,\n  onOccupantContextMenu,\n  localOccupantId = null,\n  showGrid,\n  showHoverWhenGridHidden,\n  moveAnimationsEnabled,\n  typingIndicators,\n  chatBubbles,\n}: GridCanvasProps): JSX.Element =>"
-          },
-          {
-            "name": "loadAssets",
-            "line": 631,
-            "exported": false,
-            "signature": "async const loadAssets = (): Promise<void> =>"
-          },
-          {
-            "name": "loadItemAssets",
-            "line": 669,
-            "exported": false,
-            "signature": "async const loadItemAssets = (): Promise<void> =>"
-          },
-          {
-            "name": "renderFrame",
-            "line": 858,
-            "exported": false,
-            "signature": "const renderFrame = (timestamp: number): void =>"
-          },
-          {
-            "name": "handlePointerMove",
-            "line": 1018,
-            "exported": false,
-            "signature": "const handlePointerMove = (event: PointerEvent): void =>"
-          },
-          {
-            "name": "handlePointerLeave",
-            "line": 1037,
-            "exported": false,
-            "signature": "const handlePointerLeave = (): void =>"
-          },
-          {
-            "name": "handlePointerDown",
-            "line": 1043,
-            "exported": false,
-            "signature": "const handlePointerDown = (event: PointerEvent): void =>"
-          },
-          {
-            "name": "handleContextMenu",
-            "line": 1060,
-            "exported": false,
-            "signature": "const handleContextMenu = (event: MouseEvent): void =>"
-          },
-          {
-            "name": "getTileItems",
-            "line": 1069,
-            "exported": false,
-            "signature": "const getTileItems = (tile: GridTile | null): CanvasItem[] =>"
-          }
-        ],
-        "classes": [],
-        "methods": []
-      }
-    },
-    {
-      "path": "packages/client/src/canvas/types.ts",
-      "size": 661,
-      "checksum": "9eac3fd40ab9a53d9a7b052d77be46ee19d702fe83c0679e31fc36cc493a8194",
-      "tags": [],
-      "imports": [],
-      "namedExports": [],
-      "symbols": {
-        "functions": [],
-        "classes": [],
-        "methods": []
-      }
-    },
-    {
-      "path": "packages/client/src/components/InventoryCard.tsx",
-      "size": 1338,
-      "checksum": "f0f3ff7447a05e97a09175f2021afa546b0bb70652ad598865a877c633501e80",
-      "module": "ui-inventory",
-      "tags": [
-        "inventory",
-        "panel",
-        "ui"
-      ],
-      "imports": [],
-      "namedExports": [
-        "default"
-      ],
-      "symbols": {
-        "functions": [
-          {
-            "name": "InventoryCard",
-            "line": 16,
-            "exported": false,
-            "signature": "const InventoryCard = ({ items }: InventoryCardProps): JSX.Element =>"
-          }
-        ],
-        "classes": [],
-        "methods": []
-      }
-    },
-    {
-      "path": "packages/client/src/components/ProfilePanel.tsx",
-      "size": 3189,
-      "checksum": "ad877ca644eb50798f24a9b4124119700f160276158e405dc1b9a940ee76b700",
-      "module": "ui-profile",
-      "tags": [
-        "profile",
-        "panel",
-        "realtime"
-      ],
-      "imports": [
-        "../ws/useRealtimeConnection"
-      ],
-      "namedExports": [
-        "default"
-      ],
-      "symbols": {
-        "functions": [
-          {
-            "name": "ProfilePanel",
-            "line": 18,
-            "exported": false,
-            "signature": "const ProfilePanel = ({ state, onRetry, onClose }: ProfilePanelProps): JSX.Element | null =>"
-          }
-        ],
-        "classes": [],
-        "methods": []
-      }
-    },
-    {
-      "path": "packages/client/src/hooks/useActionToast.ts",
-      "size": 1269,
-      "checksum": "0242e5d3c08979ce5add72a7fe410b2b2e39db3597e9fca8ee70021b4ae448a8",
-      "module": "ui-feedback",
-      "tags": [
-        "toast",
-        "hooks",
-        "ui"
-      ],
-      "imports": [
-        "react"
-      ],
-      "namedExports": [
-        "useActionToast"
-      ],
-      "symbols": {
-        "functions": [
-          {
-            "name": "useActionToast",
-            "line": 18,
-            "exported": true,
-            "signature": "const useActionToast = (timeoutMs = 4000): UseActionToastResult =>"
-          }
-        ],
-        "classes": [],
-        "methods": []
-      }
-    },
-    {
-      "path": "packages/client/src/main.tsx",
-      "size": 306,
-      "checksum": "ee0a7b37abf47d03ccae4a7c6d4bb1c120fecfff164a445017868b6e65c6d8c6",
-      "tags": [],
-      "imports": [
-        "./App.js",
-        "react",
-        "react-dom/client"
-      ],
-      "namedExports": [],
-      "symbols": {
-        "functions": [],
-        "classes": [],
-        "methods": []
-      }
-    },
-    {
-      "path": "packages/client/src/ws/useRealtimeConnection.ts",
-      "size": 74632,
-      "checksum": "9fa0d99da1d320bd76fc80945712659b9c28cda9ff568025bdb378fd17de6351",
-      "module": "client-realtime",
-      "tags": [
-        "websocket",
-        "state",
-        "hooks"
-      ],
-      "imports": [
-        "@bitby/schemas",
-        "react",
-        "socket.io-client"
-      ],
-      "namedExports": [
-        "useRealtimeConnection"
-      ],
-      "symbols": {
-        "functions": [
-          {
-            "name": "sortRoomItems",
-            "line": 73,
-            "exported": false,
-            "signature": "const sortRoomItems = (items: Iterable<RoomItem>): RoomItem[] =>"
-          },
-          {
-            "name": "sortInventoryItems",
-            "line": 81,
-            "exported": false,
-            "signature": "const sortInventoryItems = (items: Iterable<InventoryItem>): InventoryItem[] =>"
-          },
-          {
-            "name": "isSessionUser",
-            "line": 111,
-            "exported": false,
-            "signature": "const isSessionUser = (value: unknown): value is SessionUser =>"
-          },
-          {
-            "name": "isSessionRoom",
-            "line": 126,
-            "exported": false,
-            "signature": "const isSessionRoom = (value: unknown): value is SessionRoom =>"
-          },
-          {
-            "name": "cloneOccupant",
-            "line": 253,
-            "exported": false,
-            "signature": "const cloneOccupant = (occupant: RoomOccupant): RoomOccupant =>"
-          },
-          {
-            "name": "sortOccupants",
-            "line": 259,
-            "exported": false,
-            "signature": "const sortOccupants = (map: Map<string, RoomOccupant>): RoomOccupant[] =>"
-          },
-          {
-            "name": "buildEnvelope",
-            "line": 270,
-            "exported": false,
-            "signature": "const buildEnvelope = (seq: number, op: string, data: Record<string, unknown> = {}): MessageEnvelope =>"
-          },
-          {
-            "name": "normaliseSocketProtocol",
-            "line": 286,
-            "exported": false,
-            "signature": "const normaliseSocketProtocol = (protocol: string): string =>"
-          },
-          {
-            "name": "resolveSocketEndpoint",
-            "line": 297,
-            "exported": false,
-            "signature": "const resolveSocketEndpoint = (): SocketEndpoint =>"
-          },
-          {
-            "name": "resolveHttpBaseUrl",
-            "line": 323,
-            "exported": false,
-            "signature": "const resolveHttpBaseUrl = (): string =>"
-          },
-          {
-            "name": "getExplicitToken",
-            "line": 338,
-            "exported": false,
-            "signature": "const getExplicitToken = (): string | null =>"
-          },
-          {
-            "name": "getDevCredentials",
-            "line": 343,
-            "exported": false,
-            "signature": "const getDevCredentials = (): { username: string; password: string } =>"
-          },
-          {
-            "name": "getLatestPendingTarget",
-            "line": 348,
-            "exported": false,
-            "signature": "const getLatestPendingTarget = (pendingMoves: Map<number, { to: { x: number; y: number } }>): { x: number; y: number } | null =>"
-          },
-          {
-            "name": "normaliseTypingPreview",
-            "line": 358,
-            "exported": false,
-            "signature": "const normaliseTypingPreview = (input: string | null | undefined): string | null =>"
-          },
-          {
-            "name": "snapshotTypingIndicators",
-            "line": 369,
-            "exported": false,
-            "signature": "const snapshotTypingIndicators = (source: Map<string, TypingIndicatorInternal>): TypingIndicatorView[] =>"
-          },
-          {
-            "name": "snapshotChatBubbles",
-            "line": 378,
-            "exported": false,
-            "signature": "const snapshotChatBubbles = (source: Map<string, ChatBubbleInternal>): ChatBubbleView[] =>"
-          },
-          {
-            "name": "useRealtimeConnection",
-            "line": 388,
-            "exported": true,
-            "signature": "const useRealtimeConnection = (): RealtimeConnectionState =>"
-          },
-          {
-            "name": "clearPingTimer",
-            "line": 448,
-            "exported": false,
-            "signature": "const clearPingTimer = () =>"
-          },
-          {
-            "name": "clearCountdownTimer",
-            "line": 455,
-            "exported": false,
-            "signature": "const clearCountdownTimer = () =>"
-          },
-          {
-            "name": "clearTypingCleanupTimer",
-            "line": 462,
-            "exported": false,
-            "signature": "const clearTypingCleanupTimer = () =>"
-          },
-          {
-            "name": "clearBubbleCleanupTimer",
-            "line": 469,
-            "exported": false,
-            "signature": "const clearBubbleCleanupTimer = () =>"
-          },
-          {
-            "name": "abortLogin",
-            "line": 476,
-            "exported": false,
-            "signature": "const abortLogin = () =>"
-          },
-          {
-            "name": "clearActiveSocket",
-            "line": 484,
-            "exported": false,
-            "signature": "const clearActiveSocket = () =>"
-          },
-          {
-            "name": "startPingTimer",
-            "line": 507,
-            "exported": false,
-            "signature": "const startPingTimer = (intervalMs: number) =>"
-          },
-          {
-            "name": "updateState",
-            "line": 523,
-            "exported": false,
-            "signature": "const updateState = (partial: Partial<InternalConnectionState>) =>"
-          },
-          {
-            "name": "requestAuthToken",
-            "line": 546,
-            "exported": false,
-            "signature": "async const requestAuthToken = (): Promise<string> =>"
-          },
-          {
-            "name": "scheduleReconnect",
-            "line": 641,
-            "exported": false,
-            "signature": "const scheduleReconnect = () =>"
-          },
-          {
-            "name": "filterChatLogByMuted",
-            "line": 701,
-            "exported": false,
-            "signature": "const filterChatLogByMuted = (log: ChatMessageBroadcast[], mutedIds: Set<string>): ChatMessageBroadcast[] =>"
-          },
-          {
-            "name": "appendChatMessage",
-            "line": 709,
-            "exported": false,
-            "signature": "const appendChatMessage = (message: ChatMessageBroadcast) =>"
-          },
-          {
-            "name": "publishTypingIndicators",
-            "line": 728,
-            "exported": false,
-            "signature": "const publishTypingIndicators = () =>"
-          },
-          {
-            "name": "pruneTypingIndicators",
-            "line": 732,
-            "exported": false,
-            "signature": "const pruneTypingIndicators = (now: number = Date.now()): void =>"
-          },
-          {
-            "name": "scheduleTypingCleanup",
-            "line": 745,
-            "exported": false,
-            "signature": "const scheduleTypingCleanup = () =>"
-          },
-          {
-            "name": "upsertTypingIndicator",
-            "line": 756,
-            "exported": false,
-            "signature": "const upsertTypingIndicator = (userId: string, preview: string | null, expiresAt?: number): void =>"
-          },
-          {
-            "name": "removeTypingIndicator",
-            "line": 773,
-            "exported": false,
-            "signature": "const removeTypingIndicator = (userId: string): void =>"
-          },
-          {
-            "name": "publishChatBubbles",
-            "line": 782,
-            "exported": false,
-            "signature": "const publishChatBubbles = () =>"
-          },
-          {
-            "name": "pruneChatBubbles",
-            "line": 786,
-            "exported": false,
-            "signature": "const pruneChatBubbles = (now: number = Date.now()): void =>"
-          },
-          {
-            "name": "scheduleBubbleCleanup",
-            "line": 799,
-            "exported": false,
-            "signature": "const scheduleBubbleCleanup = () =>"
-          },
-          {
-            "name": "upsertChatBubble",
-            "line": 810,
-            "exported": false,
-            "signature": "const upsertChatBubble = (userId: string, messageId: string, body: string): void =>"
-          },
-          {
-            "name": "removeChatBubble",
-            "line": 820,
-            "exported": false,
-            "signature": "const removeChatBubble = (userId: string): void =>"
-          },
-          {
-            "name": "handleEnvelope",
-            "line": 829,
-            "exported": false,
-            "signature": "const handleEnvelope = (envelope: MessageEnvelope) =>"
-          },
-          {
-            "name": "connect",
-            "line": 1479,
-            "exported": false,
-            "signature": "async const connect = () =>"
-          },
-          {
-            "name": "detachListeners",
-            "line": 1536,
-            "exported": false,
-            "signature": "const detachListeners = () =>"
-          }
-        ],
-        "classes": [],
-        "methods": []
-      }
-    },
     {
       "path": "packages/client/vite.config.ts",
       "size": 630,
-      "checksum": "45180ffcfc7fe71fd17bfac8ad4f9cf2b6ca3d737341bea9d5d0fd92c94cbbc0",
-      "tags": [],
       "imports": [
-        "@vitejs/plugin-react",
         "node:path",
         "node:url",
-        "vite"
+        "vite",
+        "@vitejs/plugin-react"
       ],
-      "namedExports": [
-        "default"
-      ],
-      "symbols": {
-        "functions": [],
-        "classes": [],
-        "methods": []
-      }
+      "exports": [],
+      "symbols": []
     },
     {
       "path": "packages/client/vitest.config.ts",
       "size": 628,
-      "checksum": "5f1a4e83a66c208796d2b4ee6b10abe77fb3e190b2cc43d70726fd7bfd36ffb6",
-      "tags": [],
       "imports": [
-        "@vitejs/plugin-react",
         "node:path",
         "node:url",
-        "vitest/config"
+        "vitest/config",
+        "@vitejs/plugin-react"
       ],
-      "namedExports": [
-        "default"
-      ],
-      "symbols": {
-        "functions": [],
-        "classes": [],
-        "methods": []
-      }
+      "exports": [],
+      "symbols": []
     },
     {
       "path": "packages/client/vitest.setup.ts",
       "size": 43,
-      "checksum": "91a3c8962a0edcb956206a501d943fe99e1c78c6d4d8b5c9a948a3362c75978c",
-      "tags": [],
       "imports": [
         "@testing-library/jest-dom/vitest"
       ],
-      "namedExports": [],
-      "symbols": {
-        "functions": [],
-        "classes": [],
-        "methods": []
-      }
-    },
-    {
-      "path": "packages/schemas/src/index.ts",
-      "size": 351,
-      "checksum": "b96f0dfc1d4250e8ae603d6bfe0f1627c7d9ac66c87ffb8ec1b30633cf36e4e4",
-      "tags": [],
-      "imports": [],
-      "namedExports": [
-        "*"
-      ],
-      "symbols": {
-        "functions": [],
-        "classes": [],
-        "methods": []
-      }
-    },
-    {
-      "path": "packages/schemas/src/openapi/auth.ts",
-      "size": 3069,
-      "checksum": "ff4b1f9e89ae2a70dac7beb2133baaf2fc675475867e7938f8d4aac84af8d447",
-      "tags": [],
-      "imports": [
-        "openapi-types"
-      ],
-      "namedExports": [],
-      "symbols": {
-        "functions": [],
-        "classes": [],
-        "methods": []
-      }
-    },
-    {
-      "path": "packages/schemas/src/rest/occupants.ts",
-      "size": 3433,
-      "checksum": "d5a66860f1d0653cfca70aad2ee36bfd5c4a221d857d1491b7fb1c89a5aedd52",
-      "tags": [],
-      "imports": [
-        "zod"
-      ],
-      "namedExports": [],
-      "symbols": {
-        "functions": [],
-        "classes": [],
-        "methods": []
-      }
-    },
-    {
-      "path": "packages/schemas/src/ws/admin.ts",
-      "size": 1872,
-      "checksum": "2a7d8fbd6e9c3ba61525ca5649676d9885094121cc38e6603d7693e3b11608f9",
-      "tags": [],
-      "imports": [
-        "zod"
-      ],
-      "namedExports": [],
-      "symbols": {
-        "functions": [],
-        "classes": [],
-        "methods": []
-      }
-    },
-    {
-      "path": "packages/schemas/src/ws/auth.ts",
-      "size": 463,
-      "checksum": "01f7434830f74eeb8bcfdceeff5b8d16032ad407239e4741ea6ba4d9e5e313eb",
-      "tags": [],
-      "imports": [
-        "zod"
-      ],
-      "namedExports": [],
-      "symbols": {
-        "functions": [],
-        "classes": [],
-        "methods": []
-      }
-    },
-    {
-      "path": "packages/schemas/src/ws/chat.ts",
-      "size": 3213,
-      "checksum": "fa80b0dcebbfb9204f426bec17579e3445bb4f94ba7d23dc61b9910ffc99bc41",
-      "tags": [],
-      "imports": [
-        "./envelope.js",
-        "zod"
-      ],
-      "namedExports": [],
-      "symbols": {
-        "functions": [],
-        "classes": [],
-        "methods": []
-      }
-    },
-    {
-      "path": "packages/schemas/src/ws/envelope.ts",
-      "size": 639,
-      "checksum": "297a16ea2a24c7aaed6aa072ce16a0c72f4ff9925141b869f52311403bd2f872",
-      "tags": [],
-      "imports": [
-        "zod"
-      ],
-      "namedExports": [
-        "buildEnvelopeSchema"
-      ],
-      "symbols": {
-        "functions": [
-          {
-            "name": "buildEnvelopeSchema",
-            "line": 17,
-            "exported": true,
-            "signature": "const buildEnvelopeSchema = (dataSchema: Schema) =>"
-          }
-        ],
-        "classes": [],
-        "methods": []
-      }
-    },
-    {
-      "path": "packages/schemas/src/ws/items.ts",
-      "size": 2210,
-      "checksum": "000b6391e19fd49166c6385be124b6b61b8313a37fb53767ca380f14651289c1",
-      "tags": [],
-      "imports": [
-        "./room.js",
-        "zod"
-      ],
-      "namedExports": [
-        "roomItemSchema"
-      ],
-      "symbols": {
-        "functions": [],
-        "classes": [],
-        "methods": []
-      }
-    },
-    {
-      "path": "packages/schemas/src/ws/move.ts",
-      "size": 2708,
-      "checksum": "b82f541a9640b48f4387e748ea6472c4140dae79a592b2be57e30f2f9a278e51",
-      "tags": [],
-      "imports": [
-        "./envelope.js",
-        "zod"
-      ],
-      "namedExports": [],
-      "symbols": {
-        "functions": [],
-        "classes": [],
-        "methods": []
-      }
-    },
-    {
-      "path": "packages/schemas/src/ws/room.ts",
-      "size": 2377,
-      "checksum": "6a0a6a7b3dd77beb0950dcbc556d20511ed5cfb32df0969bb8b02739fcbac665",
-      "tags": [],
-      "imports": [
-        "./admin.js",
-        "zod"
-      ],
-      "namedExports": [],
-      "symbols": {
-        "functions": [],
-        "classes": [],
-        "methods": []
-      }
-    },
-    {
-      "path": "packages/schemas/src/ws/social.ts",
-      "size": 1156,
-      "checksum": "df438462f948428d281837ca92b9bfe3631776bb36597f936d563c259ce13ba9",
-      "tags": [],
-      "imports": [
-        "zod"
-      ],
-      "namedExports": [],
-      "symbols": {
-        "functions": [],
-        "classes": [],
-        "methods": []
-      }
-    },
-    {
-      "path": "packages/schemas/src/ws/trade.ts",
-      "size": 444,
-      "checksum": "8c6317e17c6fdeb2b73f50bc1a0a3cff0791d0632022505bb8ab7aa9641fca15",
-      "tags": [],
-      "imports": [
-        "../rest/occupants.js",
-        "zod"
-      ],
-      "namedExports": [],
-      "symbols": {
-        "functions": [],
-        "classes": [],
-        "methods": []
-      }
-    },
-    {
-      "path": "packages/server/src/__tests__/helpers/testStack.ts",
-      "size": 3969,
-      "checksum": "721180cc70cd8d1a3848c1c99297f50a3d7a8ca1ac6618f32384f4ef31021ca9",
-      "tags": [],
-      "imports": [
-        "@testcontainers/postgresql",
-        "@testcontainers/redis",
-        "ioredis",
-        "pg"
-      ],
-      "namedExports": [
-        "startTestStack"
-      ],
-      "symbols": {
-        "functions": [
-          {
-            "name": "parseInteger",
-            "line": 9,
-            "exported": false,
-            "signature": "const parseInteger = (value: string | undefined, fallback: number): number =>"
-          },
-          {
-            "name": "buildRedisFlusher",
-            "line": 37,
-            "exported": false,
-            "signature": "const buildRedisFlusher = (redisUrl: string) =>"
-          },
-          {
-            "name": "attemptExternalStack",
-            "line": 46,
-            "exported": false,
-            "signature": "async const attemptExternalStack = (): Promise<TestStack | null> =>"
-          },
-          {
-            "name": "startContainerStack",
-            "line": 108,
-            "exported": false,
-            "signature": "async const startContainerStack = (): Promise<TestStack> =>"
-          },
-          {
-            "name": "startTestStack",
-            "line": 138,
-            "exported": true,
-            "signature": "async const startTestStack = (): Promise<TestStack> =>"
-          }
-        ],
-        "classes": [],
-        "methods": []
-      }
-    },
-    {
-      "path": "packages/server/src/api/admin.ts",
-      "size": 11409,
-      "checksum": "a9a56cb810cd4853887da32ab1591451034d82e0172d17b117db68c9576894bc",
-      "module": "server-admin-api",
-      "tags": [
-        "fastify",
-        "admin",
-        "http"
-      ],
-      "imports": [
-        "../auth/http.js",
-        "../auth/jwt.js",
-        "../auth/types.js",
-        "../config.js",
-        "../db/admin.js",
-        "../db/audit.js",
-        "../db/items.js",
-        "../db/rooms.js",
-        "../ws/connection.js",
-        "fastify",
-        "node:crypto",
-        "zod"
-      ],
-      "namedExports": [
-        "adminRoutes"
-      ],
-      "symbols": {
-        "functions": [
-          {
-            "name": "isTileInBounds",
-            "line": 72,
-            "exported": false,
-            "signature": "const isTileInBounds = (x: number, y: number): boolean =>"
-          },
-          {
-            "name": "adminRoutes",
-            "line": 81,
-            "exported": true,
-            "signature": "const adminRoutes = (app, options, done) =>"
-          },
-          {
-            "name": "requireAdmin",
-            "line": 90,
-            "exported": false,
-            "signature": "async const requireAdmin = (request: FastifyRequest, reply: FastifyReply): Promise<AuthenticatedUser | null> =>"
-          }
-        ],
-        "classes": [],
-        "methods": []
-      }
-    },
-    {
-      "path": "packages/server/src/api/auth.ts",
-      "size": 1721,
-      "checksum": "e23488167a02af9e7e1a5743b2c9ac7287154647fa891ddf210cb5e329801b07",
-      "module": "server-auth-api",
-      "tags": [
-        "fastify",
-        "auth",
-        "http"
-      ],
-      "imports": [
-        "../auth/jwt.js",
-        "../auth/store.js",
-        "../config.js",
-        "fastify",
-        "zod"
-      ],
-      "namedExports": [
-        "authRoutes"
-      ],
-      "symbols": {
-        "functions": [
-          {
-            "name": "authRoutes",
-            "line": 20,
-            "exported": true,
-            "signature": "async const authRoutes = (app: FastifyInstance, options: AuthPluginOptions): Promise<void> =>"
-          }
-        ],
-        "classes": [],
-        "methods": []
-      }
-    },
-    {
-      "path": "packages/server/src/api/occupants.ts",
-      "size": 23816,
-      "checksum": "9cd4a667141f575b98fde0a1ff6b3c9f5e7f6a3511082aa5f6a18ec8a8e78045",
-      "module": "server-occupants-api",
-      "tags": [
-        "fastify",
-        "rooms",
-        "http"
-      ],
-      "imports": [
-        "../auth/http.js",
-        "../auth/jwt.js",
-        "../config.js",
-        "../db/items.js",
-        "../db/rooms.js",
-        "../db/social.js",
-        "../ws/connection.js",
-        "fastify",
-        "zod"
-      ],
-      "namedExports": [
-        "occupantRoutes"
-      ],
-      "symbols": {
-        "functions": [
-          {
-            "name": "occupantRoutes",
-            "line": 65,
-            "exported": true,
-            "signature": "const occupantRoutes = (app, options, done) =>"
-          },
-          {
-            "name": "requireAuth",
-            "line": 72,
-            "exported": false,
-            "signature": "const requireAuth = (request: FastifyRequest): { userId: string } | null =>"
-          },
-          {
-            "name": "resolveOccupantContext",
-            "line": 87,
-            "exported": false,
-            "signature": "async const resolveOccupantContext = (roomId: string, occupantId: string, requesterId: string) =>"
-          },
-          {
-            "name": "resolveTradeContext",
-            "line": 110,
-            "exported": false,
-            "signature": "async const resolveTradeContext = (roomId: string, tradeId: string, requesterId: string) =>"
-          },
-          {
-            "name": "mapTradeRecord",
-            "line": 137,
-            "exported": false,
-            "signature": "const mapTradeRecord = (trade: TradeSessionRecord) =>"
-          },
-          {
-            "name": "mapTradeProposal",
-            "line": 153,
-            "exported": false,
-            "signature": "const mapTradeProposal = (proposal: TradeProposalRecord) =>"
-          },
-          {
-            "name": "buildNegotiationState",
-            "line": 166,
-            "exported": false,
-            "signature": "async const buildNegotiationState = (tradeId: string) =>"
-          },
-          {
-            "name": "resolveTradeParticipant",
-            "line": 174,
-            "exported": false,
-            "signature": "async const resolveTradeParticipant = (params: {\n    trade: TradeSessionRecord;\n    requesterId: string;\n  }) =>"
-          }
-        ],
-        "classes": [],
-        "methods": []
-      }
-    },
-    {
-      "path": "packages/server/src/auth/http.ts",
-      "size": 289,
-      "checksum": "41f81dd09961fbfa05a8da57c57cde772785714a7d63f9de8710c33bd8655bb7",
-      "tags": [],
-      "imports": [],
-      "namedExports": [
-        "extractBearerToken"
-      ],
-      "symbols": {
-        "functions": [
-          {
-            "name": "extractBearerToken",
-            "line": 1,
-            "exported": true,
-            "signature": "const extractBearerToken = (authorization?: string): string | null =>"
-          }
-        ],
-        "classes": [],
-        "methods": []
-      }
-    },
-    {
-      "path": "packages/server/src/auth/jwt.ts",
-      "size": 1534,
-      "checksum": "226d5bfab498885e36b171934a8b3cef06e42a3cb435bbe16990fac26ed965b6",
-      "tags": [],
-      "imports": [
-        "../config.js",
-        "./types.js",
-        "jsonwebtoken"
-      ],
-      "namedExports": [
-        "decodeToken",
-        "signToken"
-      ],
-      "symbols": {
-        "functions": [
-          {
-            "name": "assertValidClaims",
-            "line": 11,
-            "exported": false,
-            "signature": "function assertValidClaims(claims: TokenClaims): asserts claims is TokenClaims & { sub: string; username: string }"
-          },
-          {
-            "name": "signToken",
-            "line": 23,
-            "exported": true,
-            "signature": "const signToken = (user: PublicUser, config: ServerConfig): string =>"
-          },
-          {
-            "name": "decodeToken",
-            "line": 37,
-            "exported": true,
-            "signature": "const decodeToken = (token: string, config: ServerConfig): AuthenticatedUser =>"
-          }
-        ],
-        "classes": [],
-        "methods": []
-      }
-    },
-    {
-      "path": "packages/server/src/auth/store.ts",
-      "size": 1615,
-      "checksum": "3606ab1ac081c068c497c26908f3ef17e772281635da88e2d2914b7f95230135",
-      "tags": [],
-      "imports": [
-        "./types.js",
-        "argon2",
-        "pg"
-      ],
-      "namedExports": [
-        "createUserStore"
-      ],
-      "symbols": {
-        "functions": [
-          {
-            "name": "normaliseUsername",
-            "line": 11,
-            "exported": false,
-            "signature": "const normaliseUsername = (username: string): string =>"
-          },
-          {
-            "name": "createUserStore",
-            "line": 13,
-            "exported": true,
-            "signature": "const createUserStore = (pool: Pool): UserStore =>"
-          },
-          {
-            "name": "findUserByUsername",
-            "line": 14,
-            "exported": false,
-            "signature": "async const findUserByUsername = (username: string): Promise<UserRecord | null> =>"
-          },
-          {
-            "name": "toPublicUser",
-            "line": 41,
-            "exported": false,
-            "signature": "const toPublicUser = (user: UserRecord): PublicUser =>"
-          },
-          {
-            "name": "verifyUserPassword",
-            "line": 47,
-            "exported": false,
-            "signature": "async const verifyUserPassword = (user: UserRecord, password: string): Promise<boolean> =>"
-          }
-        ],
-        "classes": [],
-        "methods": []
-      }
-    },
-    {
-      "path": "packages/server/src/auth/types.ts",
-      "size": 1052,
-      "checksum": "ceba5748a90427b29a8cfd1e4cb71afdd5720cd65ad9f5c196c5976b822d684d",
-      "tags": [],
-      "imports": [],
-      "namedExports": [],
-      "symbols": {
-        "functions": [],
-        "classes": [],
-        "methods": []
-      }
-    },
-    {
-      "path": "packages/server/src/config.ts",
-      "size": 3425,
-      "checksum": "ca7c32fb97b517186b50513e923245a21d39564d5a16dfa8d45b45148cd0238c",
-      "tags": [],
-      "imports": [
-        "zod"
-      ],
-      "namedExports": [
-        "loadConfig",
-        "resolveCorsOrigins"
-      ],
-      "symbols": {
-        "functions": [
-          {
-            "name": "numericEnv",
-            "line": 3,
-            "exported": false,
-            "signature": "const numericEnv = (value: unknown, defaultValue: number): number =>"
-          },
-          {
-            "name": "buildOrigin",
-            "line": 60,
-            "exported": false,
-            "signature": "const buildOrigin = (protocol: string, hostname: string, port: string): string =>"
-          },
-          {
-            "name": "resolveCorsOrigins",
-            "line": 67,
-            "exported": true,
-            "signature": "const resolveCorsOrigins = (origin: string): string | string[] =>"
-          },
-          {
-            "name": "addVariant",
-            "line": 80,
-            "exported": false,
-            "signature": "const addVariant = (value: string): void =>"
-          },
-          {
-            "name": "loadConfig",
-            "line": 94,
-            "exported": true,
-            "signature": "const loadConfig = (env: NodeJS.ProcessEnv = process.env): ServerConfig =>"
-          }
-        ],
-        "classes": [],
-        "methods": []
-      }
-    },
-    {
-      "path": "packages/server/src/db/admin.ts",
-      "size": 5613,
-      "checksum": "ac9438c6c304ee3efc734b4f80350a53d4d169f52389a21136ad1787243f1350",
-      "tags": [],
-      "imports": [
-        "pg"
-      ],
-      "namedExports": [
-        "createAdminStateStore"
-      ],
-      "symbols": {
-        "functions": [
-          {
-            "name": "mapRow",
-            "line": 39,
-            "exported": false,
-            "signature": "const mapRow = (row: {\n  room_id: string;\n  grid_visible: boolean | null;\n  show_hover_when_grid_hidden: boolean | null;\n  move_animations_enabled: boolean | null;\n  last_latency_trace_id: string | null;\n  last_latency_trace_requested_at: Date | string | null;\n  last_latency_trace_requested_by: string | null;\n}): RoomAdminStateRecord =>"
-          },
-          {
-            "name": "serialiseTrace",
-            "line": 76,
-            "exported": false,
-            "signature": "const serialiseTrace = (trace: LatencyTraceState | null): {\n  id: string | null;\n  requestedAt: Date | null;\n  requestedBy: string | null;\n} =>"
-          },
-          {
-            "name": "createAdminStateStore",
-            "line": 91,
-            "exported": true,
-            "signature": "const createAdminStateStore = (pool: Pool): AdminStateStore =>"
-          },
-          {
-            "name": "getRoomState",
-            "line": 92,
-            "exported": false,
-            "signature": "async const getRoomState = (roomId: string): Promise<RoomAdminStateRecord> =>"
-          },
-          {
-            "name": "upsertState",
-            "line": 109,
-            "exported": false,
-            "signature": "async const upsertState = (roomId: string, next: RoomAdminStateRecord): Promise<RoomAdminStateRecord> =>"
-          },
-          {
-            "name": "updateAffordances",
-            "line": 148,
-            "exported": false,
-            "signature": "async const updateAffordances = (roomId: string, updates: Partial<DevAffordanceState>): Promise<RoomAdminStateRecord> =>"
-          },
-          {
-            "name": "recordLatencyTrace",
-            "line": 164,
-            "exported": false,
-            "signature": "async const recordLatencyTrace = (roomId: string, trace: { traceId: string; requestedAt: Date; requestedBy: string | null }): Promise<RoomAdminStateRecord> =>"
-          }
-        ],
-        "classes": [],
-        "methods": []
-      }
-    },
-    {
-      "path": "packages/server/src/db/audit.ts",
-      "size": 2461,
-      "checksum": "774a7b41f1b1fd2bbf3f9ed546919eaf5434f17a54c853749c2e78d2092c6744",
-      "tags": [],
-      "imports": [
-        "pg"
-      ],
-      "namedExports": [
-        "createAuditLogStore"
-      ],
-      "symbols": {
-        "functions": [
-          {
-            "name": "parseContext",
-            "line": 25,
-            "exported": false,
-            "signature": "const parseContext = (raw: unknown): Record<string, unknown> =>"
-          },
-          {
-            "name": "mapRow",
-            "line": 33,
-            "exported": false,
-            "signature": "const mapRow = (row: {\n  id: number;\n  user_id: string;\n  room_id: string | null;\n  action: string;\n  ctx: unknown;\n  created_at: Date | string;\n}): AuditLogRecord =>"
-          },
-          {
-            "name": "createAuditLogStore",
-            "line": 50,
-            "exported": true,
-            "signature": "const createAuditLogStore = (pool: Pool): AuditLogStore =>"
-          },
-          {
-            "name": "recordAdminAction",
-            "line": 51,
-            "exported": false,
-            "signature": "async const recordAdminAction = ({\n    userId,\n    roomId,\n    action,\n    context,\n  }) =>"
-          },
-          {
-            "name": "listRecentAdminActions",
-            "line": 67,
-            "exported": false,
-            "signature": "async const listRecentAdminActions = (options = {}) =>"
-          }
-        ],
-        "classes": [],
-        "methods": []
-      }
-    },
-    {
-      "path": "packages/server/src/db/chat.ts",
-      "size": 3737,
-      "checksum": "b949cc46d29eb863edf7ef3adc6050e8875ea1227748f16228444469be777672",
-      "tags": [],
-      "imports": [
-        "pg"
-      ],
-      "namedExports": [
-        "createChatStore"
-      ],
-      "symbols": {
-        "functions": [
-          {
-            "name": "mapRow",
-            "line": 28,
-            "exported": false,
-            "signature": "const mapRow = (row: {\n  id: string;\n  room_id: string;\n  user_id: string;\n  username: string;\n  roles: string[] | null;\n  body: string;\n  created_at: Date;\n  room_seq: string | number;\n}): ChatMessageRecord =>"
-          },
-          {
-            "name": "createChatStore",
-            "line": 48,
-            "exported": true,
-            "signature": "const createChatStore = (pool: Pool): ChatStore =>"
-          },
-          {
-            "name": "createMessage",
-            "line": 49,
-            "exported": false,
-            "signature": "async const createMessage = ({\n    id,\n    roomId,\n    userId,\n    body,\n    roomSeq,\n  }: {\n    id: string;\n    roomId: string;\n    userId: string;\n    body: string;\n    roomSeq: number;\n  }): Promise<ChatMessageRecord> =>"
-          },
-          {
-            "name": "listRecentMessages",
-            "line": 83,
-            "exported": false,
-            "signature": "async const listRecentMessages = (roomId: string, limit: number): Promise<ChatMessageRecord[]> =>"
-          },
-          {
-            "name": "pruneMessagesForRoom",
-            "line": 109,
-            "exported": false,
-            "signature": "async const pruneMessagesForRoom = ({\n    roomId,\n    retain,\n  }) =>"
-          }
-        ],
-        "classes": [],
-        "methods": []
-      }
-    },
-    {
-      "path": "packages/server/src/db/items.ts",
-      "size": 8422,
-      "checksum": "6b8c090cdc6659c09186227fab1e7eb134510c652ac3ddf4daa4532fa6287c71",
-      "tags": [],
-      "imports": [
-        "node:crypto",
-        "pg"
-      ],
-      "namedExports": [
-        "createItemStore"
-      ],
-      "symbols": {
-        "functions": [
-          {
-            "name": "mapRoomItemRow",
-            "line": 53,
-            "exported": false,
-            "signature": "const mapRoomItemRow = (row: {\n  id: string;\n  room_id: string;\n  name: string;\n  description: string;\n  texture_key: string;\n  tile_x: number;\n  tile_y: number;\n  picked_up_at: Date | string | null;\n  picked_up_by: string | null;\n}): RoomItemRecord =>"
-          },
-          {
-            "name": "mapInventoryRow",
-            "line": 75,
-            "exported": false,
-            "signature": "const mapInventoryRow = (row: {\n  id: string;\n  user_id: string;\n  room_item_id: string;\n  room_id: string;\n  acquired_at: Date | string;\n}): {\n  id: string;\n  userId: string;\n  roomItemId: string;\n  roomId: string;\n  acquiredAt: Date;\n} =>"
-          },
-          {
-            "name": "withTransaction",
-            "line": 95,
-            "exported": false,
-            "signature": "async const withTransaction = (pool: Pool, fn: (client: PoolClient) => Promise<T>): Promise<T> =>"
-          },
-          {
-            "name": "createItemStore",
-            "line": 115,
-            "exported": true,
-            "signature": "const createItemStore = (pool: Pool): ItemStore =>"
-          },
-          {
-            "name": "listRoomItems",
-            "line": 116,
-            "exported": false,
-            "signature": "async const listRoomItems = (roomId: string): Promise<RoomItemRecord[]> =>"
-          },
-          {
-            "name": "listInventoryForUser",
-            "line": 138,
-            "exported": false,
-            "signature": "async const listInventoryForUser = (userId: string): Promise<InventoryItemRecord[]> =>"
-          },
-          {
-            "name": "attemptPickup",
-            "line": 166,
-            "exported": false,
-            "signature": "async const attemptPickup = ({\n    itemId,\n    userId,\n    roomId,\n  }: {\n    itemId: string;\n    userId: string;\n    roomId: string;\n  }): Promise<ItemPickupResult> =>"
-          },
-          {
-            "name": "createRoomItem",
-            "line": 263,
-            "exported": false,
-            "signature": "async const createRoomItem = ({\n    roomId,\n    name,\n    description,\n    textureKey,\n    tileX,\n    tileY,\n    id,\n  }: {\n    roomId: string;\n    name: string;\n    description: string;\n    textureKey: string;\n    tileX: number;\n    tileY: number;\n    id?: string;\n  }): Promise<RoomItemRecord> =>"
-          }
-        ],
-        "classes": [],
-        "methods": []
-      }
-    },
-    {
-      "path": "packages/server/src/db/migrations.ts",
-      "size": 14073,
-      "checksum": "bd770dcbda58f53b3d18504b0338d2604d35d880ad79f712089c62f46cbc1a33",
-      "tags": [],
-      "imports": [
-        "./social.js",
-        "pg"
-      ],
-      "namedExports": [
-        "runMigrations"
-      ],
-      "symbols": {
-        "functions": [
-          {
-            "name": "escapeSqlString",
-            "line": 68,
-            "exported": false,
-            "signature": "const escapeSqlString = (value: string): string =>"
-          },
-          {
-            "name": "ensureMigrationTable",
-            "line": 308,
-            "exported": false,
-            "signature": "async const ensureMigrationTable = (pool: Pool): Promise<void> =>"
-          },
-          {
-            "name": "hasMigrationRun",
-            "line": 317,
-            "exported": false,
-            "signature": "async const hasMigrationRun = (client: PoolClient, id: string): Promise<boolean> =>"
-          },
-          {
-            "name": "recordMigration",
-            "line": 325,
-            "exported": false,
-            "signature": "async const recordMigration = (client: PoolClient, id: string): Promise<void> =>"
-          },
-          {
-            "name": "runMigrations",
-            "line": 332,
-            "exported": true,
-            "signature": "async const runMigrations = (pool: Pool): Promise<void> =>"
-          }
-        ],
-        "classes": [],
-        "methods": []
-      }
-    },
-    {
-      "path": "packages/server/src/db/pool.ts",
-      "size": 485,
-      "checksum": "215bb8a4e1d8a78eb9f1833059f4c81b60b795ad5f08e8d29463e0b7ac8404ba",
-      "tags": [],
-      "imports": [
-        "../config.js",
-        "pg"
-      ],
-      "namedExports": [
-        "createPgPool"
-      ],
-      "symbols": {
-        "functions": [
-          {
-            "name": "createPgPool",
-            "line": 4,
-            "exported": true,
-            "signature": "const createPgPool = (config: ServerConfig): Pool =>"
-          }
-        ],
-        "classes": [],
-        "methods": []
-      }
-    },
-    {
-      "path": "packages/server/src/db/preferences.ts",
-      "size": 1618,
-      "checksum": "3e0e6adebaecaf57b19d669d668b08dfb457634658a889bac4c79846cebb489b",
-      "tags": [],
-      "imports": [
-        "pg"
-      ],
-      "namedExports": [
-        "createPreferenceStore"
-      ],
-      "symbols": {
-        "functions": [
-          {
-            "name": "createPreferenceStore",
-            "line": 16,
-            "exported": true,
-            "signature": "const createPreferenceStore = (pool: Pool): PreferenceStore =>"
-          },
-          {
-            "name": "getChatPreferences",
-            "line": 17,
-            "exported": false,
-            "signature": "async const getChatPreferences = (userId: string): Promise<ChatPreferenceRecord> =>"
-          },
-          {
-            "name": "updateChatShowSystemMessages",
-            "line": 31,
-            "exported": false,
-            "signature": "async const updateChatShowSystemMessages = (userId: string, showSystemMessages: boolean): Promise<ChatPreferenceRecord> =>"
-          }
-        ],
-        "classes": [],
-        "methods": []
-      }
-    },
-    {
-      "path": "packages/server/src/db/rooms.ts",
-      "size": 7185,
-      "checksum": "7b0ea90f644fa87e86469726cc7b121788bd298a14cd6b9a244cd1bdef91e22e",
-      "tags": [],
-      "imports": [
-        "../auth/types.js",
-        "pg"
-      ],
-      "namedExports": [
-        "createRoomStore"
-      ],
-      "symbols": {
-        "functions": [
-          {
-            "name": "mapRoomRow",
-            "line": 42,
-            "exported": false,
-            "signature": "const mapRoomRow = (row: {\n  id: string;\n  slug: string;\n  name: string;\n  room_seq: string | number;\n}): RoomRecord =>"
-          },
-          {
-            "name": "mapOccupantRow",
-            "line": 54,
-            "exported": false,
-            "signature": "const mapOccupantRow = (row: {\n  id: string;\n  username: string;\n  roles: string[] | null;\n  x: number;\n  y: number;\n  room_id?: string | null;\n}): RoomSnapshotOccupant & { roomId: string | null } =>"
-          },
-          {
-            "name": "createRoomStore",
-            "line": 69,
-            "exported": true,
-            "signature": "const createRoomStore = (pool: Pool): RoomStore =>"
-          },
-          {
-            "name": "getRoomBySlug",
-            "line": 70,
-            "exported": false,
-            "signature": "async const getRoomBySlug = (slug: string): Promise<RoomRecord | null> =>"
-          },
-          {
-            "name": "getRoomById",
-            "line": 83,
-            "exported": false,
-            "signature": "async const getRoomById = (id: string): Promise<RoomRecord | null> =>"
-          },
-          {
-            "name": "getTileFlags",
-            "line": 96,
-            "exported": false,
-            "signature": "async const getTileFlags = (roomId: string): Promise<TileFlagRecord[]> =>"
-          },
-          {
-            "name": "getTileFlag",
-            "line": 110,
-            "exported": false,
-            "signature": "async const getTileFlag = (roomId: string, x: number, y: number): Promise<TileFlagRecord | null> =>"
-          },
-          {
-            "name": "updateTileFlag",
-            "line": 131,
-            "exported": false,
-            "signature": "async const updateTileFlag = (roomId: string, x: number, y: number, updates: Partial<Omit<TileFlagRecord, 'x' | 'y'>>): Promise<TileFlagRecord> =>"
-          },
-          {
-            "name": "listOccupants",
-            "line": 157,
-            "exported": false,
-            "signature": "async const listOccupants = (roomId: string): Promise<RoomSnapshotOccupant[]> =>"
-          },
-          {
-            "name": "getOccupant",
-            "line": 180,
-            "exported": false,
-            "signature": "async const getOccupant = (userId: string): Promise<RoomOccupantRecord | null> =>"
-          },
-          {
-            "name": "upsertOccupantPosition",
-            "line": 204,
-            "exported": false,
-            "signature": "async const upsertOccupantPosition = (userId: string, roomId: string, position: { x: number; y: number }): Promise<RoomSnapshotOccupant> =>"
-          },
-          {
-            "name": "clearOccupant",
-            "line": 227,
-            "exported": false,
-            "signature": "async const clearOccupant = (userId: string): Promise<void> =>"
-          },
-          {
-            "name": "incrementRoomSequence",
-            "line": 231,
-            "exported": false,
-            "signature": "async const incrementRoomSequence = (roomId: string): Promise<number> =>"
-          }
-        ],
-        "classes": [],
-        "methods": []
-      }
-    },
-    {
-      "path": "packages/server/src/db/social.ts",
-      "size": 22128,
-      "checksum": "cfaeb38996a819ae3c6fc5984f6286ccf2391394a99af945b4c9ba344a32ff19",
-      "tags": [],
-      "imports": [
-        "node:crypto",
-        "pg"
-      ],
-      "namedExports": [
-        "createSocialStore"
-      ],
-      "symbols": {
-        "functions": [
-          {
-            "name": "createSocialStore",
-            "line": 105,
-            "exported": true,
-            "signature": "const createSocialStore = (pool: Pool): SocialStore =>"
-          },
-          {
-            "name": "mapTradeRow",
-            "line": 108,
-            "exported": false,
-            "signature": "const mapTradeRow = (row: {\n    id: string;\n    initiator_id: string;\n    recipient_id: string;\n    room_id: string;\n    status: 'pending' | 'accepted' | 'completed' | 'cancelled';\n    created_at: Date | string;\n    accepted_at: Date | string | null;\n    completed_at: Date | string | null;\n    cancelled_at: Date | string | null;\n    cancelled_by: string | null;\n    cancelled_reason: 'cancelled' | 'declined' | null;\n    initiator_ready: boolean;\n    recipient_ready: boolean;\n  }): TradeSessionRecord =>"
-          },
-          {
-            "name": "createTradeSession",
-            "line": 138,
-            "exported": false,
-            "signature": "async const createTradeSession = ({\n    initiatorId,\n    recipientId,\n    roomId,\n  }) =>"
-          },
-          {
-            "name": "getTradeSessionById",
-            "line": 168,
-            "exported": false,
-            "signature": "async const getTradeSessionById = (tradeId) =>"
-          },
-          {
-            "name": "getLatestTradeSessionForUser",
-            "line": 198,
-            "exported": false,
-            "signature": "async const getLatestTradeSessionForUser = (userId) =>"
-          },
-          {
-            "name": "updateTradeSessionStatus",
-            "line": 233,
-            "exported": false,
-            "signature": "async const updateTradeSessionStatus = ({\n    tradeId,\n    actorId,\n    status,\n    reason,\n  }) =>"
-          },
-          {
-            "name": "updateTradeParticipantReadiness",
-            "line": 349,
-            "exported": false,
-            "signature": "async const updateTradeParticipantReadiness = ({\n    tradeId,\n    actorId,\n    ready,\n  }) =>"
-          },
-          {
-            "name": "listTradeProposalsForTrade",
-            "line": 419,
-            "exported": false,
-            "signature": "async const listTradeProposalsForTrade = (tradeId) =>"
-          },
-          {
-            "name": "removeTradeProposalsForItem",
-            "line": 454,
-            "exported": false,
-            "signature": "async const removeTradeProposalsForItem = (tradeId: string, inventoryItemId: string) =>"
-          },
-          {
-            "name": "resetReadinessForParticipant",
-            "line": 463,
-            "exported": false,
-            "signature": "async const resetReadinessForParticipant = (tradeId: string, participantId: string) =>"
-          },
-          {
-            "name": "upsertTradeProposal",
-            "line": 473,
-            "exported": false,
-            "signature": "async const upsertTradeProposal = ({\n    tradeId,\n    offeredBy,\n    slotIndex,\n    inventoryItemId,\n  }) =>"
-          },
-          {
-            "name": "removeTradeProposal",
-            "line": 556,
-            "exported": false,
-            "signature": "async const removeTradeProposal = ({\n    tradeId,\n    offeredBy,\n    slotIndex,\n  }) =>"
-          },
-          {
-            "name": "recordMute",
-            "line": 590,
-            "exported": false,
-            "signature": "async const recordMute = ({\n    userId,\n    mutedUserId,\n    roomId,\n  }) =>"
-          },
-          {
-            "name": "recordReport",
-            "line": 622,
-            "exported": false,
-            "signature": "async const recordReport = ({\n    reporterId,\n    reportedUserId,\n    roomId,\n    reason,\n  }) =>"
-          },
-          {
-            "name": "getUserProfile",
-            "line": 654,
-            "exported": false,
-            "signature": "async const getUserProfile = (userId) =>"
-          },
-          {
-            "name": "listMutesForUser",
-            "line": 681,
-            "exported": false,
-            "signature": "async const listMutesForUser = (userId) =>"
-          },
-          {
-            "name": "listReportsByUser",
-            "line": 705,
-            "exported": false,
-            "signature": "async const listReportsByUser = (userId) =>"
-          }
-        ],
-        "classes": [],
-        "methods": []
-      }
-    },
-    {
-      "path": "packages/server/src/index.ts",
-      "size": 1240,
-      "checksum": "0b7657040863cdb6b8b381c8366e577e225889f78647c40cf0b1641c37f2d54d",
-      "tags": [],
-      "imports": [
-        "./config.js",
-        "./readiness.js",
-        "./server.js",
-        "dotenv/config"
-      ],
-      "namedExports": [],
-      "symbols": {
-        "functions": [
-          {
-            "name": "bootstrap",
-            "line": 6,
-            "exported": false,
-            "signature": "async const bootstrap = (): Promise<void> =>"
-          },
-          {
-            "name": "close",
-            "line": 11,
-            "exported": false,
-            "signature": "async const close = () =>"
-          }
-        ],
-        "classes": [],
-        "methods": []
-      }
-    },
-    {
-      "path": "packages/server/src/metrics/registry.ts",
-      "size": 1115,
-      "checksum": "2c4e476dce673ba3b836c8875582754bbbf22f38acfedf928bf9485d3cdcfd57",
-      "tags": [],
-      "imports": [
-        "prom-client"
-      ],
-      "namedExports": [
-        "createMetricsBundle"
-      ],
-      "symbols": {
-        "functions": [
-          {
-            "name": "createMetricsBundle",
-            "line": 11,
-            "exported": true,
-            "signature": "const createMetricsBundle = (): MetricsBundle =>"
-          }
-        ],
-        "classes": [],
-        "methods": []
-      }
-    },
-    {
-      "path": "packages/server/src/readiness.ts",
-      "size": 377,
-      "checksum": "e142da60c6e4e4bd780d2bda4735c81ddc7a050525024bcb38f21c70fae7eb39",
-      "tags": [],
-      "imports": [],
-      "namedExports": [
-        "createReadinessController"
-      ],
-      "symbols": {
-        "functions": [
-          {
-            "name": "createReadinessController",
-            "line": 7,
-            "exported": true,
-            "signature": "const createReadinessController = (): ReadinessController =>"
-          }
-        ],
-        "classes": [],
-        "methods": []
-      }
-    },
-    {
-      "path": "packages/server/src/redis/pubsub.ts",
-      "size": 4954,
-      "checksum": "c69df7840c73e1971382540ec3b1081ac3b60cb63e403a4b6911cd28a5beb602",
-      "tags": [],
-      "imports": [
-        "../config.js",
-        "../db/admin.js",
-        "../db/items.js",
-        "../db/rooms.js",
-        "@bitby/schemas",
-        "fastify",
-        "ioredis"
-      ],
-      "namedExports": [
-        "createRoomPubSub"
-      ],
-      "symbols": {
-        "functions": [
-          {
-            "name": "ROOM_EVENT_CHANNEL",
-            "line": 13,
-            "exported": false,
-            "signature": "const ROOM_EVENT_CHANNEL = (roomId: string): string =>"
-          },
-          {
-            "name": "createRoomPubSub",
-            "line": 97,
-            "exported": true,
-            "signature": "async const createRoomPubSub = ({\n  config,\n  logger,\n  instanceId,\n}: {\n  config: ServerConfig;\n  logger: FastifyBaseLogger;\n  instanceId: string;\n}): Promise<RoomPubSub> =>"
-          },
-          {
-            "name": "publish",
-            "line": 121,
-            "exported": false,
-            "signature": "async const publish = (event: RoomEvent): Promise<void> =>"
-          },
-          {
-            "name": "subscribe",
-            "line": 126,
-            "exported": false,
-            "signature": "async const subscribe = (roomId: string, handler: (event: RoomEvent) => void): Promise<void> =>"
-          },
-          {
-            "name": "listener",
-            "line": 136,
-            "exported": false,
-            "signature": "const listener = (incomingChannel: string, payload: string) =>"
-          },
-          {
-            "name": "close",
-            "line": 172,
-            "exported": false,
-            "signature": "async const close = (): Promise<void> =>"
-          }
-        ],
-        "classes": [],
-        "methods": []
-      }
-    },
-    {
-      "path": "packages/server/src/server.ts",
-      "size": 4039,
-      "checksum": "48f3940d64275fa7675eac246e7b408cf302d0ee75f5cc6daeef6671130bdaa3",
-      "tags": [],
-      "imports": [
-        "./api/admin.js",
-        "./api/auth.js",
-        "./api/occupants.js",
-        "./auth/store.js",
-        "./config.js",
-        "./db/admin.js",
-        "./db/audit.js",
-        "./db/chat.js",
-        "./db/items.js",
-        "./db/migrations.js",
-        "./db/pool.js",
-        "./db/preferences.js",
-        "./db/rooms.js",
-        "./db/social.js",
-        "./metrics/registry.js",
-        "./readiness.js",
-        "./redis/pubsub.js",
-        "./ws/connection.js",
-        "@fastify/cors",
-        "fastify",
-        "node:crypto",
-        "socket.io"
-      ],
-      "namedExports": [
-        "createServer"
-      ],
-      "symbols": {
-        "functions": [
-          {
-            "name": "createServer",
-            "line": 32,
-            "exported": true,
-            "signature": "async const createServer = ({\n  config,\n  readiness,\n}: CreateServerOptions): Promise<FastifyInstance> =>"
-          }
-        ],
-        "classes": [],
-        "methods": []
-      }
-    },
-    {
-      "path": "packages/server/src/ws/connection.ts",
-      "size": 58004,
-      "checksum": "b9c63b7bd09c1925367b90f6d3e31e8bf4d534322be5e1dd234dbc1f2196638b",
-      "tags": [],
-      "imports": [
-        "../auth/jwt.js",
-        "../auth/types.js",
-        "../config.js",
-        "../db/admin.js",
-        "../db/chat.js",
-        "../db/items.js",
-        "../db/preferences.js",
-        "../db/rooms.js",
-        "../db/social.js",
-        "../metrics/registry.js",
-        "../redis/pubsub.js",
-        "@bitby/schemas",
-        "fastify",
-        "node:crypto",
-        "socket.io",
-        "zod"
-      ],
-      "namedExports": [
-        "createRealtimeServer"
-      ],
-      "symbols": {
-        "functions": [
-          {
-            "name": "createTileKey",
-            "line": 218,
-            "exported": false,
-            "signature": "const createTileKey = (x: number, y: number): string =>"
-          },
-          {
-            "name": "getColumnsForRow",
-            "line": 220,
-            "exported": false,
-            "signature": "const getColumnsForRow = (row: number): number =>"
-          },
-          {
-            "name": "toUnixTimestamp",
-            "line": 223,
-            "exported": false,
-            "signature": "const toUnixTimestamp = () =>"
-          },
-          {
-            "name": "createEnvelope",
-            "line": 225,
-            "exported": false,
-            "signature": "const createEnvelope = (op: string, seq: number, data: EnvelopeData = {}): Envelope =>"
-          },
-          {
-            "name": "toRoomItem",
-            "line": 232,
-            "exported": false,
-            "signature": "const toRoomItem = (record: RoomItemRecord): RoomItem =>"
-          },
-          {
-            "name": "toInventoryPayload",
-            "line": 241,
-            "exported": false,
-            "signature": "const toInventoryPayload = (record: InventoryItemRecord): InventoryItemPayload =>"
-          },
-          {
-            "name": "toMutePayload",
-            "line": 251,
-            "exported": false,
-            "signature": "const toMutePayload = (record: MuteRecord): SocialMutePayload =>"
-          },
-          {
-            "name": "toReportPayload",
-            "line": 259,
-            "exported": false,
-            "signature": "const toReportPayload = (record: ReportRecord): SocialReportPayload =>"
-          },
-          {
-            "name": "toTradePayload",
-            "line": 268,
-            "exported": false,
-            "signature": "const toTradePayload = (record: TradeSessionRecord): TradeLifecyclePayload =>"
-          },
-          {
-            "name": "toTradeProposalPayload",
-            "line": 284,
-            "exported": false,
-            "signature": "const toTradeProposalPayload = (record: TradeProposalRecord) =>"
-          },
-          {
-            "name": "cloneOccupant",
-            "line": 297,
-            "exported": false,
-            "signature": "const cloneOccupant = (occupant: RoomOccupant): RoomOccupant =>"
-          },
-          {
-            "name": "cloneItem",
-            "line": 304,
-            "exported": false,
-            "signature": "const cloneItem = (item: RoomItem): RoomItem =>"
-          },
-          {
-            "name": "sortOccupants",
-            "line": 313,
-            "exported": false,
-            "signature": "const sortOccupants = (map: Map<string, RoomOccupant>): RoomOccupant[] =>"
-          },
-          {
-            "name": "sortItems",
-            "line": 324,
-            "exported": false,
-            "signature": "const sortItems = (map: Map<string, RoomItem>): RoomItem[] =>"
-          },
-          {
-            "name": "safeSend",
-            "line": 335,
-            "exported": false,
-            "signature": "const safeSend = (logger: FastifyBaseLogger, socket: Socket, envelope: Envelope): void =>"
-          },
-          {
-            "name": "acknowledge",
-            "line": 347,
-            "exported": false,
-            "signature": "const acknowledge = (logger: FastifyBaseLogger, socket: Socket, requestEnvelope: Envelope, op: string, data: EnvelopeData = {}): void =>"
-          },
-          {
-            "name": "emitSystemMessage",
-            "line": 357,
-            "exported": false,
-            "signature": "const emitSystemMessage = (logger: FastifyBaseLogger, socket: Socket, op: string, data: EnvelopeData): void =>"
-          },
-          {
-            "name": "createRealtimeServer",
-            "line": 366,
-            "exported": true,
-            "signature": "async const createRealtimeServer = ({\n  config,\n  roomStore,\n  chatStore,\n  itemStore,\n  pubsub,\n  metrics,\n  preferenceStore,\n  adminStateStore,\n  socialStore,\n}: RealtimeDependencies): Promise<RealtimeServer> =>"
-          },
-          {
-            "name": "updateRoomSeq",
-            "line": 406,
-            "exported": false,
-            "signature": "const updateRoomSeq = (roomSeq: number): void =>"
-          },
-          {
-            "name": "getOrCreateSocialState",
-            "line": 412,
-            "exported": false,
-            "signature": "const getOrCreateSocialState = (userId: string): UserSocialState =>"
-          },
-          {
-            "name": "serialiseSocialState",
-            "line": 421,
-            "exported": false,
-            "signature": "const serialiseSocialState = (userId: string): {\n    mutes: SocialMutePayload[];\n    reports: SocialReportPayload[];\n  } =>"
-          },
-          {
-            "name": "refreshSocialStateForUser",
-            "line": 432,
-            "exported": false,
-            "signature": "async const refreshSocialStateForUser = (userId: string) =>"
-          },
-          {
-            "name": "resolveTradeParticipantForUser",
-            "line": 451,
-            "exported": false,
-            "signature": "async const resolveTradeParticipantForUser = (params: {\n    trade: TradeLifecyclePayload;\n    requesterId: string;\n  }): Promise<TradeParticipantSummary> =>"
-          },
-          {
-            "name": "buildTradeNegotiationPayload",
-            "line": 477,
-            "exported": false,
-            "signature": "async const buildTradeNegotiationPayload = (tradeId: string): Promise<TradeNegotiationPayload> =>"
-          },
-          {
-            "name": "hydrateTradeLifecycleForUser",
-            "line": 487,
-            "exported": false,
-            "signature": "async const hydrateTradeLifecycleForUser = (userId: string): Promise<TradeLifecycleBroadcast | null> =>"
-          },
-          {
-            "name": "serialiseAdminState",
-            "line": 510,
-            "exported": false,
-            "signature": "const serialiseAdminState = (): {\n    affordances: AdminDevAffordanceState;\n    lastLatencyTrace: AdminLatencyTrace | null;\n  } =>"
-          },
-          {
-            "name": "buildSnapshot",
-            "line": 525,
-            "exported": false,
-            "signature": "const buildSnapshot = (): RoomSnapshot =>"
-          },
-          {
-            "name": "isTileLocked",
-            "line": 540,
-            "exported": false,
-            "signature": "const isTileLocked = (x: number, y: number): boolean =>"
-          },
-          {
-            "name": "isTileInBounds",
-            "line": 543,
-            "exported": false,
-            "signature": "const isTileInBounds = (x: number, y: number): boolean =>"
-          },
-          {
-            "name": "isTileOccupied",
-            "line": 552,
-            "exported": false,
-            "signature": "const isTileOccupied = (x: number, y: number, excludeUserId?: string): boolean =>"
-          },
-          {
-            "name": "findAvailableSpawn",
-            "line": 566,
-            "exported": false,
-            "signature": "const findAvailableSpawn = (): { x: number; y: number } =>"
-          },
-          {
-            "name": "ensureOccupant",
-            "line": 580,
-            "exported": false,
-            "signature": "async const ensureOccupant = (user: AuthenticatedUser): Promise<{ occupant: RoomOccupant; wasNew: boolean }> =>"
-          },
-          {
-            "name": "registerConnection",
-            "line": 618,
-            "exported": false,
-            "signature": "async const registerConnection = (logger: FastifyBaseLogger, socket: Socket, user: AuthenticatedUser): Promise<{\n    snapshot: RoomSnapshot;\n    occupant: RoomOccupant;\n    inventory: InventoryItemRecord[];\n    social: { mutes: SocialMutePayload[]; reports: SocialReportPayload[] };\n    tradeLifecycle: TradeLifecycleBroadcast | null;\n  }> =>"
-          },
-          {
-            "name": "emitSocialMuteUpdate",
-            "line": 645,
-            "exported": false,
-            "signature": "const emitSocialMuteUpdate = (payload: SocialMutePayload): void =>"
-          },
-          {
-            "name": "emitSocialReportUpdate",
-            "line": 659,
-            "exported": false,
-            "signature": "const emitSocialReportUpdate = (payload: SocialReportPayload): void =>"
-          },
-          {
-            "name": "emitTradeLifecycleUpdate",
-            "line": 673,
-            "exported": false,
-            "signature": "async const emitTradeLifecycleUpdate = (event: {\n    trade: TradeLifecyclePayload;\n    negotiation: TradeNegotiationPayload;\n    actorId?: string;\n  }): Promise<void> =>"
-          },
-          {
-            "name": "unregisterConnection",
-            "line": 713,
-            "exported": false,
-            "signature": "async const unregisterConnection = (socket: Socket): Promise<void> =>"
-          },
-          {
-            "name": "broadcastOccupantMove",
-            "line": 755,
-            "exported": false,
-            "signature": "const broadcastOccupantMove = (occupant: RoomOccupant, roomSeq: number, excludeSocketId?: string): void =>"
-          },
-          {
-            "name": "broadcastItemRemoved",
-            "line": 776,
-            "exported": false,
-            "signature": "const broadcastItemRemoved = (itemId: string, roomSeq: number, excludeSocketId?: string): void =>"
-          },
-          {
-            "name": "broadcastItemAdded",
-            "line": 797,
-            "exported": false,
-            "signature": "const broadcastItemAdded = (item: RoomItem, roomSeq: number, excludeSocketId?: string): void =>"
-          },
-          {
-            "name": "pruneTypingIndicators",
-            "line": 820,
-            "exported": false,
-            "signature": "const pruneTypingIndicators = (now: number = Date.now()): void =>"
-          },
-          {
-            "name": "serialiseTypingIndicators",
-            "line": 828,
-            "exported": false,
-            "signature": "const serialiseTypingIndicators = (): ChatTypingBroadcast[] =>"
-          },
-          {
-            "name": "broadcastTypingEvent",
-            "line": 840,
-            "exported": false,
-            "signature": "const broadcastTypingEvent = (payload: ChatTypingBroadcast, excludeSocketId?: string): void =>"
-          },
-          {
-            "name": "setTypingIndicator",
-            "line": 857,
-            "exported": false,
-            "signature": "const setTypingIndicator = (userId: string, preview: string | null): TypingIndicatorState =>"
-          },
-          {
-            "name": "clearTypingIndicator",
-            "line": 872,
-            "exported": false,
-            "signature": "const clearTypingIndicator = (userId: string): void =>"
-          },
-          {
-            "name": "broadcastChatEvent",
-            "line": 876,
-            "exported": false,
-            "signature": "const broadcastChatEvent = (event: RoomChatEvent): void =>"
-          },
-          {
-            "name": "broadcastTileFlagUpdate",
-            "line": 907,
-            "exported": false,
-            "signature": "const broadcastTileFlagUpdate = (tile: TileFlagRecord, roomSeq: number, updatedBy: string): void =>"
-          },
-          {
-            "name": "broadcastAffordanceUpdate",
-            "line": 926,
-            "exported": false,
-            "signature": "const broadcastAffordanceUpdate = (state: AdminDevAffordanceState, updatedBy: string): void =>"
-          },
-          {
-            "name": "broadcastLatencyTrace",
-            "line": 943,
-            "exported": false,
-            "signature": "const broadcastLatencyTrace = (trace: AdminLatencyTrace): void =>"
-          },
-          {
-            "name": "applyTileFlagUpdateInternal",
-            "line": 954,
-            "exported": false,
-            "signature": "async const applyTileFlagUpdateInternal = (event: { tile: TileFlagRecord; roomSeq: number; updatedBy: string }, shouldPublish: boolean): Promise<void> =>"
-          },
-          {
-            "name": "applyAffordanceUpdateInternal",
-            "line": 982,
-            "exported": false,
-            "signature": "async const applyAffordanceUpdateInternal = (event: { state: AdminDevAffordanceState; updatedBy: string }, shouldPublish: boolean): Promise<void> =>"
-          },
-          {
-            "name": "applyLatencyTraceInternal",
-            "line": 1002,
-            "exported": false,
-            "signature": "async const applyLatencyTraceInternal = (event: { trace: AdminLatencyTrace }, shouldPublish: boolean): Promise<void> =>"
-          },
-          {
-            "name": "applyItemSpawnInternal",
-            "line": 1035,
-            "exported": false,
-            "signature": "async const applyItemSpawnInternal = (event: { item: RoomItemRecord; roomSeq: number; createdBy: string }, shouldPublish: boolean): Promise<void> =>"
-          },
-          {
-            "name": "applyMuteRecordInternal",
-            "line": 1054,
-            "exported": false,
-            "signature": "async const applyMuteRecordInternal = (event: { mute: SocialMutePayload }, shouldPublish: boolean): Promise<void> =>"
-          },
-          {
-            "name": "applyReportRecordInternal",
-            "line": 1071,
-            "exported": false,
-            "signature": "async const applyReportRecordInternal = (event: { report: SocialReportPayload }, shouldPublish: boolean): Promise<void> =>"
-          },
-          {
-            "name": "applyTradeLifecycleInternal",
-            "line": 1088,
-            "exported": false,
-            "signature": "async const applyTradeLifecycleInternal = (event: { trade: TradeLifecyclePayload; negotiation: TradeNegotiationPayload; actorId?: string }, shouldPublish: boolean): Promise<void> =>"
-          },
-          {
-            "name": "attemptMove",
-            "line": 1194,
-            "exported": false,
-            "signature": "async const attemptMove = (userId: string, target: { x: number; y: number }): Promise<\n    | {\n        ok: true;\n        occupant: RoomOccupant;\n        roomSeq: number;\n      }\n    | {\n        ok: false;\n        code: MoveErrorCode;\n        message: string;\n        current: { x: number; y: number };\n        roomSeq: number;\n      }\n  > =>"
-          },
-          {
-            "name": "handleAuth",
-            "line": 1274,
-            "exported": false,
-            "signature": "async const handleAuth = (logger: FastifyBaseLogger, socket: Socket, envelope: Envelope, closeWithReason: (reason: string) => void): Promise<AuthenticatedUser | null> =>"
-          },
-          {
-            "name": "handleChatSend",
-            "line": 1357,
-            "exported": false,
-            "signature": "async const handleChatSend = (logger: FastifyBaseLogger, socket: Socket, envelope: Envelope, user: AuthenticatedUser): Promise<void> =>"
-          },
-          {
-            "name": "handleTypingUpdate",
-            "line": 1423,
-            "exported": false,
-            "signature": "async const handleTypingUpdate = (logger: FastifyBaseLogger, socket: Socket, envelope: Envelope, user: AuthenticatedUser): Promise<void> =>"
-          },
-          {
-            "name": "handleChatPreferenceUpdate",
-            "line": 1473,
-            "exported": false,
-            "signature": "async const handleChatPreferenceUpdate = (logger: FastifyBaseLogger, socket: Socket, envelope: Envelope, user: AuthenticatedUser): Promise<void> =>"
-          },
-          {
-            "name": "handleItemPickup",
-            "line": 1505,
-            "exported": false,
-            "signature": "async const handleItemPickup = (logger: FastifyBaseLogger, socket: Socket, envelope: Envelope, user: AuthenticatedUser): Promise<void> =>"
-          },
-          {
-            "name": "sendError",
-            "line": 1516,
-            "exported": false,
-            "signature": "const sendError = (code:\n        | 'validation_failed'\n        | 'not_in_room'\n        | 'not_found'\n        | 'tile_blocked'\n        | 'not_on_tile'\n        | 'already_picked_up'\n        | 'persist_failed', message: string, itemId: string): void =>"
-          },
-          {
-            "name": "handleConnection",
-            "line": 1617,
-            "exported": false,
-            "signature": "const handleConnection = ({ app, socket, requestId }: ConnectionContext): void =>"
-          },
-          {
-            "name": "closeWithReason",
-            "line": 1625,
-            "exported": false,
-            "signature": "const closeWithReason = (reason: string): void =>"
-          },
-          {
-            "name": "applyTileFlagUpdate",
-            "line": 1850,
-            "exported": false,
-            "signature": "async const applyTileFlagUpdate = (event: {\n    tile: TileFlagRecord;\n    roomSeq: number;\n    updatedBy: string;\n  }): Promise<void> =>"
-          },
-          {
-            "name": "applyAffordanceUpdate",
-            "line": 1858,
-            "exported": false,
-            "signature": "async const applyAffordanceUpdate = (event: {\n    state: AdminDevAffordanceState;\n    updatedBy: string;\n  }): Promise<void> =>"
-          },
-          {
-            "name": "applyLatencyTrace",
-            "line": 1865,
-            "exported": false,
-            "signature": "async const applyLatencyTrace = (event: { trace: AdminLatencyTrace }): Promise<void> =>"
-          },
-          {
-            "name": "applyItemSpawn",
-            "line": 1869,
-            "exported": false,
-            "signature": "async const applyItemSpawn = (event: {\n    item: RoomItemRecord;\n    roomSeq: number;\n    createdBy: string;\n  }): Promise<void> =>"
-          },
-          {
-            "name": "applyMuteRecord",
-            "line": 1877,
-            "exported": false,
-            "signature": "async const applyMuteRecord = (event: { record: MuteRecord }): Promise<void> =>"
-          },
-          {
-            "name": "applyReportRecord",
-            "line": 1882,
-            "exported": false,
-            "signature": "async const applyReportRecord = (event: { record: ReportRecord }): Promise<void> =>"
-          },
-          {
-            "name": "applyTradeLifecycleUpdate",
-            "line": 1887,
-            "exported": false,
-            "signature": "async const applyTradeLifecycleUpdate = (event: {\n    trade: TradeSessionRecord;\n    actorId: string;\n  }): Promise<void> =>"
-          },
-          {
-            "name": "shutdown",
-            "line": 1899,
-            "exported": false,
-            "signature": "async const shutdown = (): Promise<void> =>"
-          }
-        ],
-        "classes": [],
-        "methods": []
-      }
+      "exports": [],
+      "symbols": []
     },
     {
       "path": "packages/server/vitest.config.ts",
       "size": 286,
-      "checksum": "a88a9a74cf5ada387c1fd54fb98ba4d07e4ec02d1927e51454295c1393f1df28",
-      "tags": [],
       "imports": [
         "vitest/config"
       ],
-      "namedExports": [
-        "default"
+      "exports": [],
+      "symbols": []
+    },
+    {
+      "path": "packages/client/src/App.tsx",
+      "size": 78381,
+      "imports": [
+        "react",
+        "./canvas/GridCanvas",
+        "./styles.css",
+        "./canvas/types",
+        "./canvas/geometry",
+        "./assets/items/plant.png",
+        "./assets/items/couch.png",
+        "./components/ProfilePanel",
+        "./components/InventoryCard",
+        "./hooks/useActionToast"
       ],
-      "symbols": {
-        "functions": [],
-        "classes": [],
-        "methods": []
-      }
+      "exports": [],
+      "symbols": [
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 157,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 170,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 176,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 195,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 200,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 209,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 215,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 229,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 235,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 241,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 332,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 508,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 517,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 522,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 527,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 533,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 538,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 543,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 582,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 585,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 600,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 605,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 637,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 665,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 694,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 699,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 734,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 738,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 749,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 757,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 761,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 770,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 777,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 783,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 784,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 793,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 794,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 803,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 809,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 891,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 913,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 919,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 957,
+          "exported": false
+        },
+        {
+          "name": "for",
+          "kind": "method",
+          "line": 964,
+          "exported": false
+        },
+        {
+          "name": "for",
+          "kind": "method",
+          "line": 975,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 988,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 991,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 993,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1001,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1005,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1012,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1016,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1036,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1146,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1148,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1207,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1211,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1235,
+          "exported": false
+        },
+        {
+          "name": "switch",
+          "kind": "method",
+          "line": 1242,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1299,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1301,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1368,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1374,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1381,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1400,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1405,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1418,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1423,
+          "exported": false
+        },
+        {
+          "name": "for",
+          "kind": "method",
+          "line": 1464,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1465,
+          "exported": false
+        },
+        {
+          "name": "for",
+          "kind": "method",
+          "line": 1474,
+          "exported": false
+        },
+        {
+          "name": "for",
+          "kind": "method",
+          "line": 1482,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1483,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1498,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1501,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1507,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1513,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1520,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1523,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1526,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1533,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1540,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1557,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1568,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1582,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1585,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1588,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1591,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1594,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1618,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1621,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1624,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1627,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1630,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1633,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1672,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1676,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1695,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1699,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1718,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1728,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1732,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1741,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1759,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1763,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1777,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1781,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1786,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1787,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1792,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1811,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1813,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1822,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1824,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1927,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1932,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1936,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1961,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1990,
+          "exported": false
+        },
+        {
+          "name": "switch",
+          "kind": "method",
+          "line": 2008,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 2043,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 2048,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 2051,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 2066,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 2074,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 2086,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 2133,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 2140,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 2431,
+          "exported": false
+        }
+      ]
+    },
+    {
+      "path": "packages/client/src/main.tsx",
+      "size": 306,
+      "imports": [
+        "react",
+        "react-dom/client",
+        "./App.js"
+      ],
+      "exports": [],
+      "symbols": [
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 7,
+          "exported": false
+        }
+      ]
+    },
+    {
+      "path": "packages/server/src/config.ts",
+      "size": 3487,
+      "imports": [
+        "zod"
+      ],
+      "exports": [
+        "ServerConfig",
+        "resolveCorsOrigins",
+        "loadConfig"
+      ],
+      "symbols": [
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 7,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 11,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 15,
+          "exported": false
+        },
+        {
+          "name": "for",
+          "kind": "method",
+          "line": 90,
+          "exported": false
+        }
+      ]
+    },
+    {
+      "path": "packages/server/src/index.ts",
+      "size": 1337,
+      "imports": [
+        "dotenv/config",
+        "./config.js",
+        "./readiness.js",
+        "./server.js"
+      ],
+      "exports": [],
+      "symbols": []
+    },
+    {
+      "path": "packages/server/src/readiness.ts",
+      "size": 436,
+      "imports": [],
+      "exports": [
+        "ReadinessController",
+        "createReadinessController"
+      ],
+      "symbols": []
+    },
+    {
+      "path": "packages/server/src/server.ts",
+      "size": 4112,
+      "imports": [
+        "node:crypto",
+        "fastify",
+        "@fastify/cors",
+        "socket.io",
+        "./readiness.js",
+        "./config.js",
+        "./api/auth.js",
+        "./db/pool.js",
+        "./db/migrations.js",
+        "./auth/store.js",
+        "./db/rooms.js",
+        "./db/chat.js",
+        "./db/items.js",
+        "./redis/pubsub.js",
+        "./metrics/registry.js",
+        "./ws/connection.js",
+        "./db/preferences.js",
+        "./db/admin.js",
+        "./db/audit.js",
+        "./api/admin.js",
+        "./db/social.js",
+        "./api/occupants.js"
+      ],
+      "exports": [
+        "CreateServerOptions",
+        "createServer"
+      ],
+      "symbols": []
+    },
+    {
+      "path": "packages/schemas/src/index.ts",
+      "size": 351,
+      "imports": [],
+      "exports": [],
+      "symbols": []
+    },
+    {
+      "path": "packages/client/src/canvas/GridCanvas.tsx",
+      "size": 36746,
+      "imports": [
+        "react",
+        "./constants",
+        "./geometry",
+        "./types",
+        "../assets/rooms/dev_room.png",
+        "../assets/avatars/avatar1.png",
+        "../assets/avatars/avatar2.png"
+      ],
+      "exports": [
+        "CanvasOccupant",
+        "CanvasItem",
+        "CanvasTypingIndicator",
+        "CanvasChatBubble"
+      ],
+      "symbols": [
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 180,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 188,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 207,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 229,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 244,
+          "exported": false
+        },
+        {
+          "name": "for",
+          "kind": "method",
+          "line": 297,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 307,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 324,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 332,
+          "exported": false
+        },
+        {
+          "name": "for",
+          "kind": "method",
+          "line": 337,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 346,
+          "exported": false
+        },
+        {
+          "name": "for",
+          "kind": "method",
+          "line": 350,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 353,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 356,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 370,
+          "exported": false
+        },
+        {
+          "name": "for",
+          "kind": "method",
+          "line": 395,
+          "exported": false
+        },
+        {
+          "name": "for",
+          "kind": "method",
+          "line": 444,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 494,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 517,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 531,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 544,
+          "exported": false
+        },
+        {
+          "name": "for",
+          "kind": "method",
+          "line": 549,
+          "exported": false
+        },
+        {
+          "name": "for",
+          "kind": "method",
+          "line": 596,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 598,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 638,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 646,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 649,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 656,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 675,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 676,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 678,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 692,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 694,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 701,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 708,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 710,
+          "exported": false
+        },
+        {
+          "name": "for",
+          "kind": "method",
+          "line": 742,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 743,
+          "exported": false
+        },
+        {
+          "name": "for",
+          "kind": "method",
+          "line": 752,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 753,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 761,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 801,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 833,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 852,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 859,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 864,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 881,
+          "exported": false
+        },
+        {
+          "name": "for",
+          "kind": "method",
+          "line": 887,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 889,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 901,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 929,
+          "exported": false
+        },
+        {
+          "name": "for",
+          "kind": "method",
+          "line": 930,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 951,
+          "exported": false
+        },
+        {
+          "name": "for",
+          "kind": "method",
+          "line": 960,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 973,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 977,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 983,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1005,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1014,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1027,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1050,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1055,
+          "exported": false
+        },
+        {
+          "name": "for",
+          "kind": "method",
+          "line": 1077,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1079,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1091,
+          "exported": false
+        },
+        {
+          "name": "for",
+          "kind": "method",
+          "line": 1099,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1101,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1125,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1128,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1146,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1162,
+          "exported": false
+        }
+      ]
+    },
+    {
+      "path": "packages/client/src/canvas/constants.ts",
+      "size": 1051,
+      "imports": [],
+      "exports": [
+        "TILE_WIDTH",
+        "TILE_HEIGHT",
+        "ROW_STEP",
+        "EVEN_ROW_COLUMNS",
+        "ODD_ROW_COLUMNS",
+        "GRID_HEIGHT",
+        "GRID_TOP_PADDING",
+        "GRID_BOTTOM_PADDING",
+        "GRID_SIDE_PADDING",
+        "GRID_LEFT_PADDING",
+        "GRID_RIGHT_PADDING",
+        "CANVAS_WIDTH",
+        "CANVAS_HEIGHT",
+        "ROW_COUNT"
+      ],
+      "symbols": [
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 24,
+          "exported": false
+        }
+      ]
+    },
+    {
+      "path": "packages/client/src/canvas/geometry.ts",
+      "size": 4513,
+      "imports": [
+        "./types"
+      ],
+      "exports": [
+        "getColumnsForRow",
+        "buildGridDefinition",
+        "isPointInsideTile",
+        "findTileAtPoint",
+        "toScreenPosition"
+      ],
+      "symbols": [
+        {
+          "name": "for",
+          "kind": "method",
+          "line": 41,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 43,
+          "exported": false
+        },
+        {
+          "name": "for",
+          "kind": "method",
+          "line": 67,
+          "exported": false
+        },
+        {
+          "name": "for",
+          "kind": "method",
+          "line": 74,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 131,
+          "exported": false
+        },
+        {
+          "name": "for",
+          "kind": "method",
+          "line": 142,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 143,
+          "exported": false
+        },
+        {
+          "name": "for",
+          "kind": "method",
+          "line": 155,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 156,
+          "exported": false
+        }
+      ]
+    },
+    {
+      "path": "packages/client/src/canvas/types.ts",
+      "size": 661,
+      "imports": [],
+      "exports": [
+        "GridTile",
+        "GridRowMetadata",
+        "GridDefinition"
+      ],
+      "symbols": []
+    },
+    {
+      "path": "packages/client/src/components/InventoryCard.tsx",
+      "size": 1338,
+      "imports": [],
+      "exports": [
+        "InventoryEntry"
+      ],
+      "symbols": []
+    },
+    {
+      "path": "packages/client/src/components/ProfilePanel.tsx",
+      "size": 3189,
+      "imports": [
+        "../ws/useRealtimeConnection"
+      ],
+      "exports": [
+        "ProfilePanelState"
+      ],
+      "symbols": [
+        {
+          "name": "switch",
+          "kind": "method",
+          "line": 19,
+          "exported": false
+        }
+      ]
+    },
+    {
+      "path": "packages/client/src/hooks/useActionToast.ts",
+      "size": 1269,
+      "imports": [
+        "react"
+      ],
+      "exports": [
+        "ActionToast",
+        "UseActionToastResult",
+        "useActionToast"
+      ],
+      "symbols": [
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 23,
+          "exported": false
+        }
+      ]
+    },
+    {
+      "path": "packages/client/src/ws/useRealtimeConnection.ts",
+      "size": 74574,
+      "imports": [
+        "react",
+        "socket.io-client"
+      ],
+      "exports": [
+        "ConnectionStatus",
+        "RealtimeConnectionState",
+        "TradeLifecycleEvent",
+        "ActionResult",
+        "OccupantProfileSummary",
+        "TradeSessionBootstrap",
+        "TradeLifecycleAcknowledgement",
+        "MuteRecordSummary",
+        "ReportRecordSummary",
+        "useRealtimeConnection"
+      ],
+      "symbols": [
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 73,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 86,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 110,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 125,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 261,
+          "exported": false
+        },
+        {
+          "name": "switch",
+          "kind": "method",
+          "line": 285,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 314,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 323,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 328,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 357,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 361,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 447,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 454,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 461,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 468,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 475,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 484,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 489,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 497,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 509,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 528,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 545,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 550,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 555,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 559,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 566,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 581,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 586,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 591,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 605,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 610,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 624,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 627,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 632,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 651,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 681,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 733,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 738,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 744,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 747,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 774,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 787,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 792,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 798,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 801,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 821,
+          "exported": false
+        },
+        {
+          "name": "switch",
+          "kind": "method",
+          "line": 828,
+          "exported": false
+        },
+        {
+          "name": "for",
+          "kind": "method",
+          "line": 838,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 840,
+          "exported": false
+        },
+        {
+          "name": "for",
+          "kind": "method",
+          "line": 846,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 848,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 864,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 900,
+          "exported": false
+        },
+        {
+          "name": "for",
+          "kind": "method",
+          "line": 910,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 912,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 933,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 956,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 958,
+          "exported": false
+        },
+        {
+          "name": "for",
+          "kind": "method",
+          "line": 978,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 979,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1017,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1023,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1025,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1048,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1054,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1056,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1082,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1090,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1115,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1136,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1145,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1153,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1158,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1184,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1205,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1211,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1225,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1231,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1238,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1255,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1275,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1307,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1343,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1360,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1366,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1386,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1397,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1412,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1429,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1478,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1484,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1495,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1503,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1507,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1508,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1521,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1543,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1552,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1562,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1567,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1577,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1587,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1599,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1610,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1627,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1638,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1642,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1647,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1652,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1657,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1690,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1703,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1712,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1717,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1729,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1735,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1746,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1751,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1756,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1762,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1770,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1772,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1781,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1785,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1796,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1797,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1816,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1821,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1826,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1842,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1847,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1856,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1857,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1864,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1894,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1898,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1916,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1921,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1928,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1929,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1944,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1949,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1965,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1966,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1974,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1990,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 2008,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 2012,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 2029,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 2037,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 2064,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 2081,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 2096,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 2110,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 2122,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 2138,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 2154,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 2174,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 2193,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 2213,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 2233,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 2256,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 2275,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 2295,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 2318,
+          "exported": false
+        }
+      ]
+    },
+    {
+      "path": "packages/server/src/api/admin.ts",
+      "size": 11409,
+      "imports": [
+        "node:crypto",
+        "fastify",
+        "zod",
+        "../auth/jwt.js",
+        "../auth/http.js",
+        "../config.js",
+        "../db/rooms.js",
+        "../db/admin.js",
+        "../ws/connection.js",
+        "../db/items.js",
+        "../db/audit.js",
+        "../auth/types.js"
+      ],
+      "exports": [
+        "adminRoutes"
+      ],
+      "symbols": [
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 73,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 95,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 103,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 118,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 123,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 128,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 136,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 161,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 166,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 171,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 179,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 204,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 209,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 215,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 241,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 246,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 252,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 296,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 301,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 307,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 321,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 327,
+          "exported": false
+        }
+      ]
+    },
+    {
+      "path": "packages/server/src/api/auth.ts",
+      "size": 1721,
+      "imports": [
+        "fastify",
+        "zod",
+        "../config.js",
+        "../auth/store.js",
+        "../auth/jwt.js"
+      ],
+      "exports": [
+        "authRoutes"
+      ],
+      "symbols": [
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 28,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 38,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 44,
+          "exported": false
+        }
+      ]
+    },
+    {
+      "path": "packages/server/src/api/occupants.ts",
+      "size": 23816,
+      "imports": [
+        "fastify",
+        "zod",
+        "../auth/jwt.js",
+        "../auth/http.js",
+        "../config.js",
+        "../db/rooms.js",
+        "../db/items.js",
+        "../db/social.js",
+        "../ws/connection.js"
+      ],
+      "exports": [
+        "occupantRoutes"
+      ],
+      "symbols": [
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 74,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 93,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 98,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 103,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 116,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 121,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 126,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 130,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 182,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 187,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 196,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 202,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 209,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 215,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 237,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 243,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 249,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 255,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 261,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 293,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 299,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 308,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 313,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 318,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 329,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 349,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 355,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 363,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 372,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 377,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 382,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 394,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 414,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 420,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 429,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 434,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 445,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 465,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 471,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 479,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 490,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 495,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 509,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 515,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 534,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 540,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 550,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 555,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 568,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 574,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 593,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 599,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 607,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 618,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 623,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 634,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 655,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 661,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 667,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 673,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 679,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 710,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 716,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 722,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 728,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 734,
+          "exported": false
+        }
+      ]
+    },
+    {
+      "path": "packages/server/src/auth/http.ts",
+      "size": 340,
+      "imports": [],
+      "exports": [
+        "extractBearerToken"
+      ],
+      "symbols": [
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 5,
+          "exported": false
+        }
+      ]
+    },
+    {
+      "path": "packages/server/src/auth/jwt.ts",
+      "size": 1591,
+      "imports": [
+        "jsonwebtoken",
+        "../config.js",
+        "./types.js"
+      ],
+      "exports": [
+        "TokenClaims",
+        "signToken",
+        "decodeToken"
+      ],
+      "symbols": [
+        {
+          "name": "assertValidClaims",
+          "kind": "function",
+          "line": 14,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 17,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 21,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 49,
+          "exported": false
+        }
+      ]
+    },
+    {
+      "path": "packages/server/src/auth/store.ts",
+      "size": 1681,
+      "imports": [
+        "argon2",
+        "pg",
+        "./types.js"
+      ],
+      "exports": [
+        "UserStore",
+        "createUserStore"
+      ],
+      "symbols": [
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 31,
+          "exported": false
+        }
+      ]
+    },
+    {
+      "path": "packages/server/src/auth/types.ts",
+      "size": 1052,
+      "imports": [],
+      "exports": [
+        "UserRecord",
+        "PublicUser",
+        "AuthenticatedUser",
+        "RoomSnapshotOccupant",
+        "RoomSnapshot"
+      ],
+      "symbols": []
+    },
+    {
+      "path": "packages/server/src/db/admin.ts",
+      "size": 5613,
+      "imports": [
+        "pg"
+      ],
+      "exports": [
+        "DevAffordanceState",
+        "LatencyTraceState",
+        "RoomAdminStateRecord",
+        "AdminStateStore",
+        "createAdminStateStore"
+      ],
+      "symbols": [
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 102,
+          "exported": false
+        }
+      ]
+    },
+    {
+      "path": "packages/server/src/db/audit.ts",
+      "size": 2461,
+      "imports": [
+        "pg"
+      ],
+      "exports": [
+        "AuditLogRecord",
+        "AuditLogStore",
+        "createAuditLogStore"
+      ],
+      "symbols": [
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 26,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 74,
+          "exported": false
+        }
+      ]
+    },
+    {
+      "path": "packages/server/src/db/chat.ts",
+      "size": 3737,
+      "imports": [
+        "pg"
+      ],
+      "exports": [
+        "ChatMessageRecord",
+        "ChatStore",
+        "createChatStore"
+      ],
+      "symbols": [
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 114,
+          "exported": false
+        }
+      ]
+    },
+    {
+      "path": "packages/server/src/db/items.ts",
+      "size": 8422,
+      "imports": [
+        "node:crypto",
+        "pg"
+      ],
+      "exports": [
+        "RoomItemRecord",
+        "InventoryItemRecord",
+        "ItemPickupFailureReason",
+        "ItemPickupResult",
+        "ItemStore",
+        "createItemStore"
+      ],
+      "symbols": [
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 194,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 199,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 203,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 227,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 247,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 298,
+          "exported": false
+        }
+      ]
+    },
+    {
+      "path": "packages/server/src/db/migrations.ts",
+      "size": 14073,
+      "imports": [
+        "pg",
+        "./social.js"
+      ],
+      "exports": [
+        "runMigrations"
+      ],
+      "symbols": [
+        {
+          "name": "for",
+          "kind": "method",
+          "line": 335,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 340,
+          "exported": false
+        },
+        {
+          "name": "for",
+          "kind": "method",
+          "line": 346,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 353,
+          "exported": false
+        }
+      ]
+    },
+    {
+      "path": "packages/server/src/db/pool.ts",
+      "size": 485,
+      "imports": [
+        "pg",
+        "../config.js"
+      ],
+      "exports": [
+        "createPgPool",
+        "DatabasePool"
+      ],
+      "symbols": []
+    },
+    {
+      "path": "packages/server/src/db/preferences.ts",
+      "size": 1618,
+      "imports": [
+        "pg"
+      ],
+      "exports": [
+        "ChatPreferenceRecord",
+        "PreferenceStore",
+        "createPreferenceStore"
+      ],
+      "symbols": []
+    },
+    {
+      "path": "packages/server/src/db/rooms.ts",
+      "size": 7185,
+      "imports": [
+        "pg",
+        "../auth/types.js"
+      ],
+      "exports": [
+        "RoomRecord",
+        "TileFlagRecord",
+        "RoomOccupantRecord",
+        "RoomStore",
+        "createRoomStore"
+      ],
+      "symbols": [
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 76,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 89,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 123,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 197,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 218,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 237,
+          "exported": false
+        }
+      ]
+    },
+    {
+      "path": "packages/server/src/db/social.ts",
+      "size": 22128,
+      "imports": [
+        "node:crypto",
+        "pg"
+      ],
+      "exports": [
+        "TRADE_MAX_SLOTS_PER_USER",
+        "TradeSessionRecord",
+        "TradeProposalRecord",
+        "MuteRecord",
+        "ReportRecord",
+        "UserProfileRecord",
+        "SocialStore",
+        "createSocialStore"
+      ],
+      "symbols": [
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 191,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 226,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 239,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 270,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 277,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 308,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 342,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 355,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 359,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 364,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 372,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 412,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 479,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 484,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 488,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 492,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 513,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 536,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 561,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 566,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 570,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 582,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 668,
+          "exported": false
+        }
+      ]
+    },
+    {
+      "path": "packages/server/src/metrics/registry.ts",
+      "size": 1115,
+      "imports": [
+        "prom-client"
+      ],
+      "exports": [
+        "MetricsBundle",
+        "createMetricsBundle"
+      ],
+      "symbols": []
+    },
+    {
+      "path": "packages/server/src/redis/pubsub.ts",
+      "size": 4954,
+      "imports": [
+        "ioredis",
+        "fastify",
+        "../config.js",
+        "../db/rooms.js",
+        "../db/admin.js",
+        "../db/items.js"
+      ],
+      "exports": [
+        "RoomChatEvent",
+        "RoomAdminEvent",
+        "RoomItemEvent",
+        "RoomSocialEvent",
+        "RoomTradeEvent",
+        "RoomEvent",
+        "RoomPubSub",
+        "createRoomPubSub"
+      ],
+      "symbols": [
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 132,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 137,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 143,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 147,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 152,
+          "exported": false
+        },
+        {
+          "name": "for",
+          "kind": "method",
+          "line": 156,
+          "exported": false
+        }
+      ]
+    },
+    {
+      "path": "packages/server/src/ws/connection.ts",
+      "size": 58004,
+      "imports": [
+        "node:crypto",
+        "fastify",
+        "socket.io",
+        "zod",
+        "../config.js",
+        "../auth/jwt.js",
+        "../auth/types.js",
+        "../db/rooms.js",
+        "../db/chat.js",
+        "../redis/pubsub.js",
+        "../metrics/registry.js",
+        "../db/preferences.js",
+        "../db/admin.js",
+        "../db/social.js"
+      ],
+      "exports": [
+        "RealtimeServer",
+        "createRealtimeServer"
+      ],
+      "symbols": [
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 317,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 328,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 378,
+          "exported": false
+        },
+        {
+          "name": "for",
+          "kind": "method",
+          "line": 402,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 407,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 414,
+          "exported": false
+        },
+        {
+          "name": "for",
+          "kind": "method",
+          "line": 440,
+          "exported": false
+        },
+        {
+          "name": "for",
+          "kind": "method",
+          "line": 444,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 460,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 465,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 470,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 491,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 544,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 554,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 558,
+          "exported": false
+        },
+        {
+          "name": "for",
+          "kind": "method",
+          "line": 567,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 584,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 591,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 647,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 661,
+          "exported": false
+        },
+        {
+          "name": "for",
+          "kind": "method",
+          "line": 682,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 695,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 715,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 733,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 761,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 782,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 808,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 822,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 845,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 877,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 890,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 891,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 964,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 973,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 993,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1022,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1045,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1062,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1079,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1098,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1108,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1109,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1116,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1124,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1132,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1140,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1148,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1150,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1162,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1164,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1176,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1179,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1212,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1254,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1281,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1344,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1364,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1373,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1430,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1438,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1480,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1537,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1544,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1550,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1555,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1561,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1579,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1580,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1628,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1638,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1648,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1666,
+          "exported": false
+        },
+        {
+          "name": "switch",
+          "kind": "method",
+          "line": 1682,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1690,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1698,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1707,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1715,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1726,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1763,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1774,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1785,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1796,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 1814,
+          "exported": false
+        }
+      ]
+    },
+    {
+      "path": "packages/schemas/src/openapi/auth.ts",
+      "size": 3069,
+      "imports": [
+        "openapi-types"
+      ],
+      "exports": [
+        "authLoginOpenApiDocument"
+      ],
+      "symbols": []
+    },
+    {
+      "path": "packages/schemas/src/rest/occupants.ts",
+      "size": 3433,
+      "imports": [
+        "zod"
+      ],
+      "exports": [
+        "occupantProfileSchema",
+        "occupantProfileResponseSchema",
+        "tradeSessionSchema",
+        "tradeParticipantSchema",
+        "tradeProposalItemSchema",
+        "tradeProposalSchema",
+        "tradeNegotiationStateSchema",
+        "tradeBootstrapResponseSchema",
+        "tradeLifecycleResponseSchema",
+        "muteRecordSchema",
+        "muteResponseSchema",
+        "reportRecordSchema",
+        "reportResponseSchema",
+        "OccupantProfile",
+        "TradeSession",
+        "TradeBootstrapResponse",
+        "TradeLifecycleResponse",
+        "TradeProposal",
+        "TradeNegotiationState",
+        "MuteRecord",
+        "MuteResponse",
+        "ReportRecord",
+        "ReportResponse"
+      ],
+      "symbols": []
+    },
+    {
+      "path": "packages/schemas/src/ws/admin.ts",
+      "size": 1872,
+      "imports": [
+        "zod"
+      ],
+      "exports": [
+        "adminDevAffordanceSchema",
+        "adminLatencyTraceSchema",
+        "adminStateSchema",
+        "adminTileFlagUpdateDataSchema",
+        "adminAffordanceUpdateDataSchema",
+        "adminLatencyTraceEventDataSchema",
+        "AdminTileFlag",
+        "AdminDevAffordanceState",
+        "AdminLatencyTrace",
+        "AdminState",
+        "AdminTileFlagUpdateData",
+        "AdminAffordanceUpdateData",
+        "AdminLatencyTraceEventData"
+      ],
+      "symbols": []
+    },
+    {
+      "path": "packages/schemas/src/ws/auth.ts",
+      "size": 463,
+      "imports": [
+        "zod"
+      ],
+      "exports": [
+        "authRequestDataSchema",
+        "authRequestJsonSchema",
+        "AuthRequestData"
+      ],
+      "symbols": []
+    },
+    {
+      "path": "packages/schemas/src/ws/chat.ts",
+      "size": 3213,
+      "imports": [
+        "zod",
+        "./envelope.js"
+      ],
+      "exports": [
+        "chatSendRequestDataSchema",
+        "chatSendRequestEnvelopeSchema",
+        "chatTypingUpdateDataSchema",
+        "chatTypingUpdateEnvelopeSchema",
+        "chatMessageBroadcastSchema",
+        "chatMessageBroadcastEnvelopeSchema",
+        "chatTypingBroadcastSchema",
+        "chatTypingBroadcastEnvelopeSchema",
+        "chatPreferencesSchema",
+        "chatPreferenceUpdateDataSchema",
+        "chatPreferenceUpdateEnvelopeSchema",
+        "chatSendRequestJsonSchema",
+        "chatMessageBroadcastJsonSchema",
+        "ChatSendRequest",
+        "ChatMessageBroadcast",
+        "ChatTypingUpdate",
+        "ChatTypingBroadcast",
+        "ChatPreferences"
+      ],
+      "symbols": []
+    },
+    {
+      "path": "packages/schemas/src/ws/envelope.ts",
+      "size": 639,
+      "imports": [
+        "zod"
+      ],
+      "exports": [
+        "MessageEnvelope",
+        "messageEnvelopeSchema",
+        "buildEnvelopeSchema"
+      ],
+      "symbols": []
+    },
+    {
+      "path": "packages/schemas/src/ws/items.ts",
+      "size": 2210,
+      "imports": [
+        "zod",
+        "./room.js"
+      ],
+      "exports": [
+        "inventoryItemSchema",
+        "itemPickupRequestDataSchema",
+        "itemPickupOkDataSchema",
+        "itemPickupErrorCodeSchema",
+        "itemPickupErrorDataSchema",
+        "roomItemRemovedDataSchema",
+        "roomItemAddedDataSchema",
+        "InventoryItem",
+        "ItemPickupRequestData",
+        "ItemPickupOkData",
+        "ItemPickupErrorData",
+        "ItemPickupErrorCode",
+        "RoomItemRemovedData",
+        "RoomItemAddedData"
+      ],
+      "symbols": []
+    },
+    {
+      "path": "packages/schemas/src/ws/move.ts",
+      "size": 2708,
+      "imports": [
+        "zod",
+        "./envelope.js"
+      ],
+      "exports": [
+        "moveRequestDataSchema",
+        "moveRequestEnvelopeSchema",
+        "moveRequestJsonSchema",
+        "moveOkDataSchema",
+        "moveOkEnvelopeSchema",
+        "moveOkJsonSchema",
+        "moveErrorCodeSchema",
+        "moveErrorDataSchema",
+        "moveErrorEnvelopeSchema",
+        "moveErrorJsonSchema",
+        "MoveErrorCode"
+      ],
+      "symbols": []
+    },
+    {
+      "path": "packages/schemas/src/ws/room.ts",
+      "size": 2377,
+      "imports": [
+        "zod",
+        "./admin.js"
+      ],
+      "exports": [
+        "roomTileFlagSchema",
+        "roomOccupantSchema",
+        "roomItemSchema",
+        "roomSnapshotSchema",
+        "roomOccupantMovedDataSchema",
+        "roomOccupantLeftDataSchema",
+        "RoomTileFlag",
+        "RoomOccupant",
+        "RoomSnapshot",
+        "RoomItem",
+        "RoomOccupantMovedData",
+        "RoomOccupantLeftData"
+      ],
+      "symbols": []
+    },
+    {
+      "path": "packages/schemas/src/ws/social.ts",
+      "size": 1156,
+      "imports": [
+        "zod"
+      ],
+      "exports": [
+        "socialMuteRecordSchema",
+        "socialReportRecordSchema",
+        "socialStateSchema",
+        "socialMuteBroadcastSchema",
+        "socialReportBroadcastSchema",
+        "SocialMuteRecord",
+        "SocialReportRecord",
+        "SocialState",
+        "SocialMuteBroadcast",
+        "SocialReportBroadcast"
+      ],
+      "symbols": []
+    },
+    {
+      "path": "packages/schemas/src/ws/trade.ts",
+      "size": 444,
+      "imports": [
+        "zod"
+      ],
+      "exports": [
+        "tradeLifecycleBroadcastSchema",
+        "TradeLifecycleBroadcast"
+      ],
+      "symbols": []
+    },
+    {
+      "path": "packages/server/src/__tests__/helpers/testStack.ts",
+      "size": 3969,
+      "imports": [
+        "ioredis",
+        "pg",
+        "@testcontainers/redis"
+      ],
+      "exports": [
+        "TestStackConfig",
+        "TestStack",
+        "startTestStack"
+      ],
+      "symbols": [
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 10,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 141,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 143,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 154,
+          "exported": false
+        },
+        {
+          "name": "if",
+          "kind": "method",
+          "line": 159,
+          "exported": false
+        }
+      ]
     }
   ]
 }

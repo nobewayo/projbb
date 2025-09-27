@@ -1,3 +1,6 @@
+// @module: server-auth-jwt
+// @tags: auth, jwt, tokens
+
 import jwt from 'jsonwebtoken';
 import type { ServerConfig } from '../config.js';
 import type { AuthenticatedUser, PublicUser } from './types.js';

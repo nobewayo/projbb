@@ -1,3 +1,6 @@
+// @module: server-readiness
+// @tags: health, lifecycle
+
 export interface ReadinessController {
   markReady(): void;
   markNotReady(): void;
@@ -16,6 +19,6 @@ export const createReadinessController = (): ReadinessController => {
     },
     isReady(): boolean {
       return ready;
-    }
+    },
   };
 };

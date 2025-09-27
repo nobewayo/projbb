@@ -50,8 +50,6 @@ import {
   type MuteResponse,
   type ReportResponse,
   type SocialState,
-  type SocialMuteBroadcast,
-  type SocialReportBroadcast,
   type SocialReportRecord,
 } from '@bitby/schemas';
 

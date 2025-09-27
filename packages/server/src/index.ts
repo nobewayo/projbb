@@ -1,3 +1,6 @@
+// @module: server-bootstrap
+// @tags: entrypoint, lifecycle, readiness
+
 import 'dotenv/config';
 import { loadConfig } from './config.js';
 import { createReadinessController } from './readiness.js';
@@ -8,7 +11,7 @@ const bootstrap = async (): Promise<void> => {
   const readiness = createReadinessController();
   const app = await createServer({ config, readiness });
 
-  const close = async () => {
+  const shutdownServer = async (): Promise<void> => {
     readiness.markNotReady();
     try {
       await app.close();
@@ -17,21 +20,18 @@ const bootstrap = async (): Promise<void> => {
     }
   };
 
-  process.on('SIGINT', () => {
-    void (async () => {
-      app.log.info('Received SIGINT, shutting down');
-      await close();
-      process.exit(0);
-    })();
-  });
+  const registerSignalHandler = (signal: NodeJS.Signals): void => {
+    process.on(signal, () => {
+      void (async () => {
+        app.log.info({ signal }, 'Received shutdown signal');
+        await shutdownServer();
+        process.exit(0);
+      })();
+    });
+  };
 
-  process.on('SIGTERM', () => {
-    void (async () => {
-      app.log.info('Received SIGTERM, shutting down');
-      await close();
-      process.exit(0);
-    })();
-  });
+  registerSignalHandler('SIGINT');
+  registerSignalHandler('SIGTERM');
 
   try {
     await app.listen({ host: config.HOST, port: config.PORT });

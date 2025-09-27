@@ -1,3 +1,6 @@
+// @module: server-config
+// @tags: env, validation, runtime
+
 import { z } from 'zod';
 
 const numericEnv = (value: unknown, defaultValue: number): number => {

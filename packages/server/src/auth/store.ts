@@ -1,3 +1,6 @@
+// @module: server-auth-store
+// @tags: auth, persistence, users
+
 import argon2 from 'argon2';
 import type { Pool } from 'pg';
 import type { PublicUser, UserRecord } from './types.js';

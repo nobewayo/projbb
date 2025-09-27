@@ -1,3 +1,6 @@
+// @module: server-auth-http
+// @tags: auth, http
+
 export const extractBearerToken = (authorization?: string): string | null => {
   if (!authorization) {
     return null;
