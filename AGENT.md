@@ -1,3 +1,49 @@
+## SIMPLE MODE ADDENDUM (do not remove)
+_Last updated: 2025-09-27T13:20:34Z_
+
+**Scope**: Chat behavior only. All your existing project rules/specs below stay intact.
+
+### Golden Rules (chat + workflow)
+- No PRs unless you explicitly ask. Push only if a remote already exists.
+- Do not wait on CI to reply. No no citations or no citations or chunk IDs, no citations or chunk IDs, line numbers, or diffs in chat.
+- Commit only if there are changes (no empty commits).
+- Pre-commit runs `pnpm codemap` and `pnpm featuremap` and stages outputs automatically.
+- Keep changes small and shippable; never edit CI or templates unless asked.
+
+### Git sanity
+- Never assume a remote. **Do not** create or modify remotes unless asked.
+- Work on the current branch; if HEAD is detached, create `work`.
+- Sync with `origin/main` **only if** both `origin` and `origin/main` exist.
+
+### End-of-session contract (chat reply format)
+Reply only with:
+
+#### Session Summary
+- <3–6 bullets>
+
+#### Next Actions (Top 3)
+1. <step>
+2. <step>
+3. <step>
+
+_Note: If a screenshot artifact exists, say where to find it. Never wait for CI._
+
+### End-of-session shell (remote-aware)
+```bash
+git add -A
+if git diff --quiet && git diff --cached --quiet; then
+  echo "No changes to commit."
+else
+  git commit -m "chore(session): update NEXT and code"
+fi
+if git remote get-url origin >/dev/null 2>&1; then
+  git push || echo "Push failed; do not reconfigure remote."
+else
+  echo "No remote; skipped push."
+fi
+```
+---
+
 
 # AGENT for projbb — Golden Rules Edition
 
@@ -15,7 +61,7 @@
 
 ## Final Message Contract (chat)
 
-When finishing a session, reply in chat **only** with this minimal format. Do **not** include citations, chunk IDs, line numbers, diffs, or images. Do **not** wait on CI. Do **not** open PRs.
+When finishing a session, reply in chat **only** with this minimal format. Do **not** include no citations or no citations or chunk IDs, no citations or chunk IDs, line numbers, diffs, or images. Do **not** wait on CI. Do **not** open PRs.
 
 ### Session Summary
 - <3–6 short bullets of what changed>
@@ -112,7 +158,7 @@ No other checks/gates are required. Don’t block on CI to write session notes.
 - Codex **does not** open or merge PRs automatically.
 - You decide when to open a PR from your working branch to `main`.
 - Keep PRs scoped. Include a short “what/why” and (optionally) link the latest **client-screenshot** artifact.
-- Remove any “changed-lines” helper; do not reference `tools/ci/diff-lines.sh`.
+- Remove any “no no citations or no citations or chunk IDs or no citations or chunk IDs” helper; do not reference `tools/ci/no no citations or no citations or chunk IDs or no citations or chunk IDs`.
 
 ---
 
